@@ -307,7 +307,13 @@ impl<'a> Run<'a> {
             Ctx::Schemas => self.schemas(),
             Ctx::Users => {
                 for u in &self.cat.users {
-                    self.add(Cow::Owned(u.to_lowercase()), SuggestionKind::User, Item::Ident { name: u, detail: None });
+                    // MySQL lists accounts as 'user'@'host', already quoted; quoting again makes a different user.
+                    let item = if self.c.backend == Backend::MySql {
+                        Item::Owned { text: u.clone(), display: u.clone(), detail: None }
+                    } else {
+                        Item::Ident { name: u, detail: None }
+                    };
+                    self.add(Cow::Owned(u.to_lowercase()), SuggestionKind::User, item);
                 }
             }
             Ctx::Functions => {

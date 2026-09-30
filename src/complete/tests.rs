@@ -465,6 +465,18 @@ fn users_after_grant_to() {
 }
 
 #[test]
+fn mysql_accounts_are_inserted_as_listed_not_backquoted() {
+    let mut cat = shop(Backend::MySql);
+    cat.users = vec!["'claude_ro'@'%'".into(), "'root'@'localhost'".into()];
+    let my = Completer::new(Backend::MySql, Arc::new(cat), CompleteOptions::default(), extras());
+    // `'claude_ro'@'%'` in backticks names a user called 'claude_ro'@'%' (quotes included): MySQL error 1410.
+    assert_eq!(texts(&run(&my, "GRANT SELECT ON shop.* TO cl‸"))[0], "'claude_ro'@'%'");
+    let all = run(&my, "GRANT SELECT ON shop.* TO ‸");
+    assert!(texts(&all).contains(&"'root'@'localhost'"));
+    assert!(texts(&all).iter().all(|t| !t.contains('`')), "{:?}", texts(&all));
+}
+
+#[test]
 fn functions_after_function_keywords() {
     let c = pg("DROP FUNCTION calc‸");
     assert_eq!(texts(&c), vec!["calc_total"]);
