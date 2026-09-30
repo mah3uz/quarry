@@ -10,6 +10,8 @@ pub(crate) struct Entry {
     pub idx: usize,
     pub key: String,
     pub visible: bool,
+    /// pg_catalog / information_schema / mysql system databases: ranked after user objects.
+    pub system: bool,
 }
 
 /// Lower-cased names precomputed once per catalog snapshot so completion never re-lowercases.
@@ -46,9 +48,11 @@ impl Index {
         let mut types = Vec::new();
         for (si, s) in catalog.schemas.iter().enumerate() {
             let vis = visible(&s.name);
-            rels.extend(s.relations.iter().enumerate().map(|(i, r)| Entry { schema: si, idx: i, key: r.name.to_lowercase(), visible: vis }));
-            funcs.extend(s.functions.iter().enumerate().map(|(i, f)| Entry { schema: si, idx: i, key: f.name.to_lowercase(), visible: vis }));
-            types.extend(s.types.iter().enumerate().map(|(i, t)| Entry { schema: si, idx: i, key: t.to_lowercase(), visible: vis }));
+            let sys = crate::tui::sidebar::is_system_schema(&s.name, backend);
+            let entry = |i: usize, key: String| Entry { schema: si, idx: i, key, visible: vis, system: sys };
+            rels.extend(s.relations.iter().enumerate().map(|(i, r)| entry(i, r.name.to_lowercase())));
+            funcs.extend(s.functions.iter().enumerate().map(|(i, f)| entry(i, f.name.to_lowercase())));
+            types.extend(s.types.iter().enumerate().map(|(i, t)| entry(i, t.to_lowercase())));
         }
         let schemas = catalog.schemas.iter().map(|s| s.name.to_lowercase()).collect();
         let keywords = lowered(keywords::keywords(backend).iter().copied().chain(COMPOUND_KEYWORDS.iter().copied()));

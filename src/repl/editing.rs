@@ -31,8 +31,10 @@ pub struct ReplCompleter {
 impl RlCompleter for ReplCompleter {
     fn complete(&mut self, line: &str, pos: usize) -> CompletionResult {
         let st = self.state.read().unwrap();
+        // Pending (not an empty Fresh) makes reedline draw nothing instead of "NO RECORDS FOUND",
+        // which matters because the menu opens on every keystroke while typing.
         let Some(completer) = st.completer.clone() else {
-            return CompletionResult::fresh(Vec::<RlSuggestion>::new());
+            return CompletionResult::Pending;
         };
         let p = st.palette.clone();
         drop(st);
@@ -56,7 +58,7 @@ impl RlCompleter for ReplCompleter {
                 };
                 let label = kind_label(s.kind);
                 let description = match &s.detail {
-                    Some(d) if !d.is_empty() => format!("{label} · {d}"),
+                    Some(d) if !d.is_empty() && d != label => format!("{label} · {d}"),
                     _ => label.to_string(),
                 };
                 RlSuggestion {
@@ -71,6 +73,9 @@ impl RlCompleter for ReplCompleter {
                 }
             })
             .collect();
+        if items.is_empty() {
+            return CompletionResult::Pending;
+        }
         CompletionResult::fresh(items)
     }
 }

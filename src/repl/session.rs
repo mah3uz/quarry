@@ -99,7 +99,10 @@ impl Session {
         let (user, host, port) = match self.spec.backend {
             Backend::Sqlite => (String::new(), String::new(), None),
             _ => (
-                info.user.clone().unwrap_or_else(|| self.spec.user_or_default()),
+                info.user
+                    .as_deref()
+                    .map(|u| u.split('@').next().unwrap_or(u).to_string())
+                    .unwrap_or_else(|| self.spec.user_or_default()),
                 info.host.clone().unwrap_or_else(|| self.spec.host_or_default().to_string()),
                 info.port.or(self.spec.port),
             ),
@@ -366,7 +369,11 @@ impl Session {
             file.push_str(&line);
         }
         let n_blocks = o.blocks.len();
+        let failed = o.result.is_err();
         for (i, b) in o.blocks.iter().enumerate() {
+            if failed && b.rows.is_empty() {
+                continue;
+            }
             let elapsed = (self.timing && i + 1 == n_blocks).then_some(o.elapsed);
             if !b.columns.is_empty() {
                 screen.push_str(&output::render(&b.columns, &b.rows, &color));
@@ -374,7 +381,7 @@ impl Session {
                     file.push_str(&output::render(&b.columns, &b.rows, &plain));
                 }
             }
-            if self.opts.format.is_machine() && !self.interactive {
+            if failed || (self.opts.format.is_machine() && !self.interactive) {
                 continue;
             }
             let status = output::render_status(&b.summary, b.rows.len(), elapsed, &color);
@@ -452,8 +459,8 @@ impl Session {
         let started = Instant::now();
         match self.rt.block_on(introspect::run(&mut self.conn, &cmd)) {
             Ok(Some(items)) => {
-                self.print_titled(items);
                 self.last = Some((started.elapsed(), true));
+                self.print_titled(items);
                 return Flow::Continue;
             }
             Ok(None) => {}

@@ -441,18 +441,28 @@ impl<'a> Run<'a> {
 
     fn functions(&mut self, schema: Option<usize>) {
         let (ix, cat) = (self.ix, self.cat);
-        for e in ix.funcs.iter().filter(|e| schema.map_or(e.visible, |s| e.schema == s)) {
-            self.add(Cow::Borrowed(e.key.as_str()), SuggestionKind::Function, Item::Func(&cat.schemas[e.schema].functions[e.idx]));
+        let base = self.group;
+        for system in [false, true] {
+            self.group = if system { base.saturating_add(1) } else { base };
+            for e in ix.funcs.iter().filter(|e| e.system == system && schema.map_or(e.visible, |s| e.schema == s)) {
+                self.add(Cow::Borrowed(e.key.as_str()), SuggestionKind::Function, Item::Func(&cat.schemas[e.schema].functions[e.idx]));
+            }
         }
+        self.group = base;
     }
 
     fn relations(&mut self, schema: Option<usize>, alias: bool) {
         let (ix, cat) = (self.ix, self.cat);
         let alias = alias && self.c.options.generate_aliases;
-        for e in ix.rels.iter().filter(|e| schema.map_or(e.visible, |s| e.schema == s)) {
-            let rel = &cat.schemas[e.schema].relations[e.idx];
-            self.add(Cow::Borrowed(e.key.as_str()), rel_kind(rel), Item::Rel { rel, alias });
+        let base = self.group;
+        for system in [false, true] {
+            self.group = if system { base.saturating_add(1) } else { base };
+            for e in ix.rels.iter().filter(|e| e.system == system && schema.map_or(e.visible, |s| e.schema == s)) {
+                let rel = &cat.schemas[e.schema].relations[e.idx];
+                self.add(Cow::Borrowed(e.key.as_str()), rel_kind(rel), Item::Rel { rel, alias });
+            }
         }
+        self.group = base;
     }
 
     fn schemas(&mut self) {

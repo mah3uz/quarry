@@ -147,6 +147,8 @@ fn build_editor(session: &Session, toggles: &Toggles) -> Result<Reedline> {
 
     let menu = IdeMenu::default()
         .with_name(MENU)
+        .with_marker(&p.paint(p.fg(th.accent).bold(), "❯ "))
+        .with_word_chars("_$")
         .with_default_border()
         .with_description_mode(DescriptionMode::PreferRight)
         .with_min_completion_width(18)
@@ -187,7 +189,7 @@ fn build_editor(session: &Session, toggles: &Toggles) -> Result<Reedline> {
         .with_validator(Box::new(ReplValidator { state: session.edit.clone() }))
         .with_edit_mode(edit_mode)
         .with_quick_completions(false)
-        .with_partial_completions(true)
+        .with_partial_completions(false)
         .with_ansi_colors(p.depth != crate::theme::ColorDepth::None);
     if session.config.main.auto_suggest {
         editor = editor.with_hinter(Box::new(DefaultHinter::default().with_style(p.fg(th.muted).italic())));
@@ -196,12 +198,17 @@ fn build_editor(session: &Session, toggles: &Toggles) -> Result<Reedline> {
 }
 
 fn add_bindings(kb: &mut Keybindings, complete_while_typing: bool) {
+    // Tab takes the highlighted (best) match or opens the menu; Enter always runs, so a menu
+    // that popped up while typing never swallows the submit.
     kb.add_binding(
         KeyModifiers::NONE,
         KeyCode::Tab,
-        ReedlineEvent::UntilFound(vec![ReedlineEvent::Menu(MENU.into()), ReedlineEvent::MenuNext]),
+        ReedlineEvent::UntilFound(vec![ReedlineEvent::MenuAccept, ReedlineEvent::Menu(MENU.into())]),
     );
+    kb.add_binding(KeyModifiers::NONE, KeyCode::Enter, ReedlineEvent::Multiple(vec![ReedlineEvent::Esc, ReedlineEvent::Enter]));
     kb.add_binding(KeyModifiers::SHIFT, KeyCode::BackTab, ReedlineEvent::MenuPrevious);
+    kb.add_binding(KeyModifiers::NONE, KeyCode::Down, ReedlineEvent::UntilFound(vec![ReedlineEvent::MenuDown, ReedlineEvent::Down]));
+    kb.add_binding(KeyModifiers::NONE, KeyCode::Up, ReedlineEvent::UntilFound(vec![ReedlineEvent::MenuUp, ReedlineEvent::Up]));
     kb.add_binding(KeyModifiers::CONTROL, KeyCode::Char(' '), ReedlineEvent::Menu(MENU.into()));
     kb.add_binding(KeyModifiers::ALT, KeyCode::Enter, ReedlineEvent::Submit);
     kb.add_binding(KeyModifiers::NONE, KeyCode::F(2), ReedlineEvent::ExecuteHostCommand(format!("{HOST}smart")));
