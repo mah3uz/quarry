@@ -1352,7 +1352,7 @@ impl App {
                 match ev {
                     EditorEvent::Changed => {
                         let typed_word = matches!(key.code, KeyCode::Char(c) if c.is_alphanumeric() || c == '_' || c == '.');
-                        if typed_word && self.config.main.auto_suggest {
+                        if typed_word && self.config.main.complete_while_typing {
                             self.update_completion(false);
                         } else {
                             self.completion = None;

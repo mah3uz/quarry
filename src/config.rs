@@ -38,15 +38,17 @@ pub struct MainConfig {
     /// upper | lower | auto
     pub keyword_casing: String,
     pub auto_suggest: bool,
+    /// Open the completion menu while typing (Tab always opens it).
+    pub complete_while_typing: bool,
     pub join_suggestions: bool,
-    pub show_toolbar: bool,
     pub enable_pager: bool,
     /// Defaults to $PAGER, then `less -SRXF`.
     pub pager: Option<String>,
     pub less_chatty: bool,
     /// Rules for confirmation, e.g. drop, truncate, shutdown, alter, unconditional_update, unconditional_delete.
     pub destructive_warning: Vec<String>,
-    /// Prompt format: \u user, \h host, \p port, \d database, \n backend name, \t tx marker, \T time, \x readonly.
+    /// `auto` (two-line themed prompt) or a format: \u user, \h host, \p port, \d database,
+    /// \t product, \n newline, \T transaction marker, \x read-only marker, \D date-time, \R time.
     pub prompt: String,
     pub prompt_continuation: String,
     pub history_size: usize,
@@ -70,8 +72,8 @@ impl Default for MainConfig {
             smart_completion: true,
             keyword_casing: "auto".into(),
             auto_suggest: true,
+            complete_while_typing: true,
             join_suggestions: true,
-            show_toolbar: true,
             enable_pager: true,
             pager: None,
             less_chatty: false,
@@ -79,7 +81,7 @@ impl Default for MainConfig {
                 .into_iter()
                 .map(String::from)
                 .collect(),
-            prompt: "\\n \\u@\\h:\\d\\t❯ ".into(),
+            prompt: "auto".into(),
             prompt_continuation: "… ".into(),
             history_size: 10_000,
             log_queries: false,
@@ -295,8 +297,8 @@ auto_suggest = true
 # Suggest JOIN clauses and conditions from foreign keys.
 join_suggestions = true
 
-# Show the bottom toolbar in the REPL.
-show_toolbar = true
+# Open the completion menu while typing (Tab always opens it).
+complete_while_typing = true
 
 # Page long results.
 enable_pager = true
@@ -313,10 +315,11 @@ less_chatty = false
 # Use [] to never ask.
 destructive_warning = ["drop", "truncate", "shutdown", "unconditional_update", "unconditional_delete"]
 
-# Prompt format. Escapes:
-#   \u user   \h host   \p port   \d database   \n backend name (PostgreSQL, MySQL, SQLite)
-#   \t transaction marker (shown inside a transaction)   \T current time   \x read-only marker
-prompt = "\\n \\u@\\h:\\d\\t❯ "
+# Prompt: "auto" draws a two-line themed prompt. Or a format with mycli-style escapes:
+#   \u user   \h host   \p port   \d database   \t product (PostgreSQL, MySQL, SQLite)
+#   \n newline   \T "*" inside a transaction   \x read-only marker   \D date-time   \R time
+# Example: prompt = "\\t \\u@\\h:\\d\\T> "
+prompt = "auto"
 prompt_continuation = "… "
 
 # Number of history entries to keep.

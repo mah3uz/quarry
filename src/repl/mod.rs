@@ -32,7 +32,7 @@ struct Toggles {
 }
 
 pub fn run(mut session: Session) -> Result<Exit> {
-    let mut toggles = Toggles { vi: session.config.main.vi, complete_while_typing: session.config.main.auto_suggest };
+    let mut toggles = Toggles { vi: session.config.main.vi, complete_while_typing: session.config.main.complete_while_typing };
     let mut editor = build_editor(&session, &toggles)?;
     if !session.config.main.less_chatty {
         print_banner(&session);
@@ -40,7 +40,7 @@ pub fn run(mut session: Session) -> Result<Exit> {
     session.refresh_catalog();
 
     loop {
-        let prompt = QPrompt::new(&session.prompt_format, &session.prompt_info(), &session.palette);
+        let prompt = QPrompt::new(&session.prompt_format, &session.config.main.prompt_continuation, &session.prompt_info(), &session.palette);
         if let Some(buf) = session.pending_buffer.take() {
             editor.run_edit_commands(&[EditCommand::InsertString(buf)]);
         }

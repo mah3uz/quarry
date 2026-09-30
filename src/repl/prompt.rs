@@ -26,13 +26,13 @@ pub struct QPrompt {
 
 impl QPrompt {
     /// `format == "auto"` draws the two-line themed prompt; anything else is expanded mycli-style.
-    pub fn new(format: &str, info: &PromptInfo, p: &Palette) -> Self {
+    pub fn new(format: &str, continuation: &str, info: &PromptInfo, p: &Palette) -> Self {
         if format.trim().is_empty() || format == "auto" {
             let (left, indicator) = fancy(info, p);
             QPrompt { left, indicator, multiline: p.muted("  · ") }
         } else {
             let expanded = expand(format, info);
-            QPrompt { left: p.accent(&expanded), indicator: String::new(), multiline: p.muted("… ") }
+            QPrompt { left: p.accent(&expanded), indicator: String::new(), multiline: p.muted(continuation) }
         }
     }
 }

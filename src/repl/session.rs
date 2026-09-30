@@ -251,6 +251,9 @@ impl Session {
     fn after_execute(&mut self, sql: &str, outcome: &Outcome) {
         let backend = self.conn.backend();
         self.last = Some((outcome.elapsed, outcome.result.is_ok()));
+        if self.config.main.log_queries {
+            log_query(&self.config.log_path(), sql, outcome);
+        }
         if outcome.result.is_err() {
             return;
         }
@@ -520,11 +523,7 @@ impl Session {
                     self.err(&format!("✗ {path}: {e}"));
                 }
             }
-            Special::PipeOnce { command } => {
-                if let Err(e) = self.sinks.pipe_once(&command) {
-                    self.err(&format!("✗ {e}"));
-                }
-            }
+            Special::PipeOnce { command } => self.sinks.pipe_once(&command),
             Special::Edit { file, query } => self.edit_external(file, query),
             Special::Source { path } => self.source_file(&path),
             Special::Clip { query } => {
@@ -879,6 +878,34 @@ impl Session {
             ))),
             Err(e) => self.err(&format!("✗ {}: {e}", dest.display())),
         }
+    }
+}
+
+fn log_query(path: &std::path::Path, sql: &str, o: &Outcome) {
+    if crate::repl::editing::is_sensitive(sql) {
+        return;
+    }
+    let _ = ensure_dir(path);
+    let mut opts = std::fs::OpenOptions::new();
+    opts.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    if let Ok(mut f) = opts.open(path) {
+        let status = match &o.result {
+            Ok(()) => "ok".to_string(),
+            Err(e) => format!("error: {}", e.message.replace('\n', " ")),
+        };
+        let _ = writeln!(
+            f,
+            "{}\t{}\t{}\t{}",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+            human_duration(o.elapsed),
+            status,
+            sql.replace('\n', " ")
+        );
     }
 }
 
