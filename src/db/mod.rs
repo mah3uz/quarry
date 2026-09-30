@@ -140,12 +140,13 @@ pub fn quote_literal(s: &str, backend: Backend) -> String {
 
 /// Quotes an identifier only when needed (keeps generated SQL readable).
 pub fn quote_ident(name: &str, backend: Backend) -> String {
-    let simple = !name.is_empty()
-        && name.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c == '_')
-        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-        && crate::sql::keywords::classify(name, backend) != crate::sql::lexer::TokenKind::Keyword;
-    let simple = simple || (backend != Backend::Postgres && is_plain_mixed(name, backend));
-    if simple {
+    let plain = !name.is_empty()
+        && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !is_reserved(name, backend);
+    // Postgres folds unquoted names to lower case, so mixed case must stay quoted there.
+    let case_safe = backend != Backend::Postgres || !name.chars().any(|c| c.is_ascii_uppercase());
+    if plain && case_safe {
         return name.to_string();
     }
     match backend {
@@ -154,11 +155,36 @@ pub fn quote_ident(name: &str, backend: Backend) -> String {
     }
 }
 
-fn is_plain_mixed(name: &str, backend: Backend) -> bool {
-    !name.is_empty()
-        && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && crate::sql::keywords::classify(name, backend) != crate::sql::lexer::TokenKind::Keyword
+const RESERVED: &[&str] = &[
+    "ALL", "ALTER", "ANALYZE", "AND", "ANY", "ARRAY", "AS", "ASC", "BETWEEN", "BOTH", "BY", "CASE", "CAST", "CHECK",
+    "COLLATE", "COLUMN", "CONSTRAINT", "CREATE", "CROSS", "CURRENT_DATE", "CURRENT_ROLE", "CURRENT_TIME",
+    "CURRENT_TIMESTAMP", "CURRENT_USER", "DEFAULT", "DEFERRABLE", "DELETE", "DESC", "DISTINCT", "DO", "DROP", "ELSE",
+    "END", "EXCEPT", "EXISTS", "FALSE", "FETCH", "FOR", "FOREIGN", "FROM", "FULL", "GRANT", "GROUP", "HAVING", "IN",
+    "INDEX", "INNER", "INSERT", "INTERSECT", "INTO", "IS", "JOIN", "KEY", "LATERAL", "LEADING", "LEFT", "LIKE", "LIMIT",
+    "LOCALTIME", "LOCALTIMESTAMP", "NATURAL", "NOT", "NULL", "OFFSET", "ON", "ONLY", "OR", "ORDER", "OUTER", "PRIMARY",
+    "REFERENCES", "RETURNING", "RIGHT", "SELECT", "SESSION_USER", "SET", "SOME", "TABLE", "THEN", "TO", "TRAILING",
+    "TRUE", "UNION", "UNIQUE", "UPDATE", "USER", "USING", "VALUES", "WHEN", "WHERE", "WINDOW", "WITH",
+];
+
+const MYSQL_RESERVED: &[&str] = &[
+    "CHANGE", "CONDITION", "DATABASE", "DATABASES", "DELAYED", "DESCRIBE", "DIV", "DUAL", "EXPLAIN", "FORCE",
+    "FULLTEXT", "IF", "IGNORE", "INTERVAL", "KEYS", "KILL", "LINES", "LOAD", "LOCK", "MATCH", "MOD", "OPTION",
+    "OUTFILE", "PARTITION", "RANGE", "READ", "REGEXP", "RENAME", "REPLACE", "REQUIRE", "RLIKE", "SCHEMA", "SHOW",
+    "SPATIAL", "SQL", "STRAIGHT_JOIN", "TERMINATED", "UNLOCK", "UNSIGNED", "USAGE", "USE", "WRITE", "XOR", "ZEROFILL",
+    "RANK", "ROW", "ROWS",
+];
+
+const SQLITE_RESERVED: &[&str] = &["AUTOINCREMENT", "GLOB", "INDEXED", "ISNULL", "NOTNULL", "PRAGMA", "RAISE", "REGEXP", "VACUUM"];
+
+fn is_reserved(name: &str, backend: Backend) -> bool {
+    let up = name.to_ascii_uppercase();
+    let up = up.as_str();
+    RESERVED.contains(&up)
+        || match backend {
+            Backend::MySql => MYSQL_RESERVED.contains(&up),
+            Backend::Sqlite => SQLITE_RESERVED.contains(&up),
+            Backend::Postgres => false,
+        }
 }
 
 /// `schema.table` with each part quoted as needed; schema omitted when `None`.
@@ -499,5 +525,22 @@ impl Connection {
     /// Runs EXPLAIN (ANALYZE if requested) and normalizes to a plan tree.
     pub async fn explain(&mut self, sql: &str, analyze: bool) -> DbResult<PlanNode> {
         dispatch!(self, c => c.explain(sql, analyze).await)
+    }
+}
+
+#[cfg(test)]
+mod quote_tests {
+    use super::*;
+
+    #[test]
+    fn only_reserved_or_unsafe_identifiers_are_quoted() {
+        assert_eq!(quote_ident("public", Backend::Postgres), "public");
+        assert_eq!(quote_ident("type", Backend::Postgres), "type");
+        assert_eq!(quote_ident("user", Backend::Postgres), "\"user\"");
+        assert_eq!(quote_ident("UserId", Backend::Postgres), "\"UserId\"", "pg folds case");
+        assert_eq!(quote_ident("UserId", Backend::MySql), "UserId");
+        assert_eq!(quote_ident("order", Backend::MySql), "`order`");
+        assert_eq!(quote_ident("my col", Backend::Sqlite), "\"my col\"");
+        assert_eq!(quote_ident("a\"b", Backend::Sqlite), "\"a\"\"b\"");
     }
 }
