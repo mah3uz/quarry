@@ -52,7 +52,9 @@ TLS modes are `disable`, `prefer` (the default), `require`, `verify-ca` and `ver
   before `FROM` has been typed), tables after `FROM`/`JOIN`, JOIN clauses suggested from foreign
   keys, `SELECT *` expansion, schemas, databases, functions with their signatures, types after `::`,
   special commands, favourites and file paths. Matching is fuzzy (`ui` finds `user_id`), and a menu
-  pops up as you type.
+  pops up as you type: `Tab` takes the highlighted match, `↑`/`↓` move through the list, and `Enter`
+  always runs the line rather than picking a suggestion. Set `complete_while_typing = false` to open
+  the menu only with `Tab`.
 - **Highlighting** from the same lexer the server dialect uses, including dollar quotes, backticks
   and `E''` strings. Matching brackets are highlighted.
 - **Multi-line editing**: a statement runs when it ends with `;` or `\G`. Trigger and procedure
@@ -81,6 +83,7 @@ TLS modes are `disable`, `prefer` (the default), `require`, `verify-ca` and `ver
 | Query | `\e` (external editor) `\i file` `\watch 2 query` `\format` `\explain [analyze] query` `\export csv file query` `\clip` `delimiter //` |
 | Favourites | `\f` `\f name args…` `\fs name query` `\fd name`, with `$1`, `$*` and `${name}` placeholders |
 | Session | `\c db-or-url` `use db` `\readonly` `\theme name` `\prompt fmt` `\refresh` `\! shell` `\tui` `\q` |
+| AI | `\llm question` (or `\ai`): Claude writes SQL for your schema and puts it in the prompt for review. It never runs by itself. |
 
 Output formats: `rounded` (the default), `psql`, `ascii`, `unicode`, `double`, `minimal`, `plain`,
 `simple`, `markdown`, `csv`, `tsv`, `json`, `jsonl`, `html`, `vertical`, `sql-insert` and `sql-update`.
@@ -112,7 +115,18 @@ Launch it with `quarry --tui <target>`, with `\tui` from the REPL, or with plain
 | Activity | Live server sessions, with kill (Postgres and MySQL). |
 | Everything else | Command palette (`Ctrl+P`), go-to-table (`Ctrl+G`), live theme picker (`Ctrl+Y`), history (`Ctrl+R`), favourites, open/save `.sql` files, export results, commit/rollback, several connections at once, mouse support. |
 
-`F1` shows every shortcut.
+`F1` shows every shortcut. Focus moves with `F6` (explorer → editor → results) or `Alt+0` for the
+explorer. `\llm` works in the editor too, and the palette has "Ask Claude to write SQL…".
+
+## Asking Claude for SQL
+
+`\llm show the ten customers who spent the most last month` sends your question to Claude,
+together with the schema (tables, columns, keys). The request uses `claude-opus-5-5` by default;
+set `llm_model` in the config to change it. The generated statement goes into the prompt (REPL) or the editor
+(TUI) for you to read and run. It needs `ANTHROPIC_API_KEY`, or `ANTHROPIC_AUTH_TOKEN`; no data rows
+are sent, only the schema and your question. If Claude declines a request on safety grounds,
+it is retried server-side on a fallback model (`fallbacks: "default"`), and a final refusal is shown
+as an error.
 
 ## Themes
 

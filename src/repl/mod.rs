@@ -62,6 +62,7 @@ pub fn run(mut session: Session) -> Result<Exit> {
             }
             Signal::HostCommand(cmd) => {
                 let rest = editor.current_buffer_contents().to_string();
+                println!();
                 match cmd.strip_prefix(HOST) {
                     Some("smart") => {
                         let mut st = session.edit.write().unwrap();
