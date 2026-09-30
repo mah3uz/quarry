@@ -18,7 +18,8 @@ commands, favourites and file paths. Matching is fuzzy, so `ui` finds `user_id`.
 and `$$` blocks work without changing the delimiter. Highlighting follows each database's dialect, with bracket
 matching, fish-style suggestions from history, and vi or Emacs keys.
 
-**Results for people and for scripts.** Rounded tables with a line between rows by default (`row_lines`), and 17 formats in all: `psql`, `ascii`,
+**Results for people and for scripts.** Rounded tables with a line between rows by default (`row_lines`), wide
+results as one framed record per row, and 17 formats in all: `psql`, `ascii`,
 Markdown, CSV, TSV, JSON, JSON Lines, HTML, SQL `INSERT` / `UPDATE` and more. Wide results turn vertical by
 themselves, long ones go through a pager, and past 1,000 rows quarry asks before fetching the rest. `Ctrl-C` cancels
 a query at the server.
@@ -32,12 +33,19 @@ editor, and favourite queries with `$1`, `$*` and `${name}` placeholders.
 `quarry --tui`, or `\tui` from the REPL on the same connection:
 
 - A schema explorer that writes SELECT, INSERT, UPDATE, DELETE, CREATE, DROP and COUNT scripts for you.
-- Tabbed editors with completion as you type, auto-closing brackets, undo and SQL formatting.
+- Tabbed editors with completion as you type, auto-closing brackets, undo and SQL formatting, and vim's modes
+  with `vi = true`.
+- Query consoles per database: <kbd>c</kbd> in the explorer opens a tab that runs in that database or schema,
+  with completion for its tables, while other tabs stay where they are.
 - A results grid for large results: select, search, copy as TSV, CSV, JSON, Markdown or SQL, and export to a file.
 - A table browser with server-side filters and sorting, where edits, inserts and deletes are staged and applied in
   one transaction after you review the SQL.
 - Structure and DDL views, an explain-plan tree, a live view of server sessions, a command palette, go-to-table,
   history, and several connections at once.
+- The mouse works everywhere: a Run button, clickable tabs, dialogs and lists, drag-to-resize panes.
+- Keys you can change under `[keys]`, with conflicts sorted out and reported, and <kbd>F1</kbd> lists every
+  shortcut, filtered as you type.
+- A lualine-style status bar and header, rounded dialogs, and a spinner while a model writes SQL.
 
 ### Connecting
 
@@ -74,7 +82,11 @@ Solarized, Rosé Pine and Kanagawa, plus your own TOML palettes and any base16 o
 
 Nerd Font icons throughout: database logos in the prompt and status bar, and icons for tables, views, keys, columns
 and functions in the explorer, tabs and completion menus. `icons = "unicode"` or `"ascii"` (or `--icons`) for
-terminals without a Nerd Font.
+terminals without a Nerd Font. `transparent = true` lets a translucent terminal show through the TUI.
+
+### Getting started with the config
+
+`quarry --default-config` prints the whole config file with every option explained, ready to save and edit.
 
 ### Install
 

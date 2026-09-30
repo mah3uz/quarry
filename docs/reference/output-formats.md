@@ -24,7 +24,7 @@ the table is too wide, and print a status line (`3 rows · 0.4 ms`) in the REPL.
 | `minimal` | | Column gaps and a `─` rule under the header |
 | `plain` | | Columns separated by spaces only |
 | `markdown` | `github`, `md`, `pipe` | A GitHub-flavoured Markdown table |
-| `vertical` | `expanded` | One `name: value` line per column, one block per row |
+| `vertical` | `expanded` | One `name: value` line per column, one block per row, like mysql's `\G` |
 
 The same result in four of them:
 
@@ -77,11 +77,32 @@ On SQLite, `.mode` accepts sqlite3's names too:
 
 ## Vertical output
 
-`\x` cycles vertical output off → on → auto, and `\x on`, `\x off`, `\x auto` set it directly. End a
-single statement with `\G` instead of `;` to show just that result vertically:
+Vertical output shows one record at a time, one line per column, which suits wide rows. With
+`expanded = "auto"` (the default) a table that's wider than the terminal switches to it on its own;
+`\x off` (or `expanded = "off"`) keeps the table and lets the pager scroll it sideways.
+
+In the boxed formats (`rounded`, `unicode`, `double`, `ascii`) the records keep the table's look,
+each one numbered in the rule above it:
 
 ```
-select id, email, name from users where id = 1\G
+╭─ 1 ────────┬─────────────────────
+│         id │ 1
+│      email │ user1@example.com
+│       name │ User 1
+├─ 2 ────────┼─────────────────────
+│         id │ 2
+│      email │ user2@example.com
+│       name │ User 2
+╰────────────┴─────────────────────
+```
+
+`\x` cycles vertical output off → on → auto, and `\x on`, `\x off`, `\x auto` set it directly. End a
+single statement with `\G` instead of `;` to show just that result vertically.
+
+The other formats, and `-F vertical` (for scripts), use mysql's layout:
+
+```
+$ quarry shop.db -F vertical -e "select id, email, name from users where id = 1"
 *************************** 1. row ***************************
    id: 1
 email: user1@example.com

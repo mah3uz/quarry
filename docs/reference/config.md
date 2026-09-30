@@ -9,6 +9,8 @@ quarry reads `~/.config/quarry/config.toml` (or `$XDG_CONFIG_HOME/quarry/config.
 time it runs it writes this file with every option and a comment explaining it. Every option is
 optional: delete a line to get the default back.
 
+- `quarry --default-config` prints that commented file, so you can start over from it any time:
+  `quarry --default-config > ~/.config/quarry/config.toml`.
 - `--config FILE` uses a different file for one run.
 - `QUARRY_CONFIG_DIR` changes the whole config directory.
 - A syntax error stops quarry with the file, line and column. Unknown keys are ignored.
@@ -39,7 +41,7 @@ optional: delete a line to get the default back.
 | `row_limit` | `1000` | Number, `0` = never ask | Ask before showing more rows than this (REPL) |
 | `timing` | `true` | `true`, `false` | Show how long each statement took |
 | `multi_line` | `true` | `true`, `false` | <kbd>Enter</kbd> runs only finished statements |
-| `vi` | `false` | `true`, `false` | Vi key bindings in the REPL |
+| `vi` | `false` | `true`, `false` | Vi keys in the REPL and [vim mode](/advanced/keybindings#vim-mode) in the TUI's editor |
 | `enable_pager` | `true` | `true`, `false` | Page output that doesn't fit the screen |
 | `pager` | not set | A command | Pager command. Not set: `$PAGER`, then `less -SRXF`. |
 | `history_size` | `10000` | Number (minimum 100) | History entries to keep |
@@ -67,7 +69,8 @@ destructive_warning = ["drop", "truncate", "shutdown", "unconditional_update", "
 
 | Key | Default | Meaning |
 |---|---|---|
-| `mouse` | `true` | Mouse support in the TUI |
+| `mouse` | `true` | [Mouse support](/guides/tui#using-the-mouse) in the TUI |
+| `transparent` | `false` | Keep the terminal's own background instead of the theme's (e.g. a translucent terminal). Also in the palette: *Toggle transparent background*. |
 
 ## `[llm]`
 
@@ -81,6 +84,19 @@ How `\llm` reaches a model. `quarry --setup-llm` writes this section for you. Se
 | `base_url` | not set | Server for the `openai` provider, e.g. `http://localhost:11434/v1` |
 
 API keys are **not** stored here; they go in `credentials.toml` in the data directory.
+
+## `[keys]`
+
+TUI key bindings, one line per action: a key or a list of keys, `[]` for none. A line replaces the
+action's default keys; a key you bind is taken away from any action that had it by default. See
+[Key bindings and vim mode](/advanced/keybindings) for the action names and the rules.
+
+```toml
+[keys]
+run_statement = ["ctrl+enter", "ctrl+e"]
+run_all = "f9"
+themes = "alt+t"
+```
 
 ## `[connections.NAME]`
 
@@ -106,6 +122,9 @@ vi = true
 keyword_casing = "upper"
 destructive_warning = ["drop", "truncate", "alter", "unconditional_update", "unconditional_delete"]
 prompt = "\\t \\u@\\h:\\d\\T> "
+
+[keys]
+run_all = "f9"
 
 [llm]
 provider = "openai"

@@ -1,0 +1,9 @@
+NerdSymbols-subset.woff2 is a subset of JetBrainsMono Nerd Font Mono (Nerd Fonts, https://www.nerdfonts.com),
+holding only the icons used in the terminal captures on this site.
+
+The font is distributed under the SIL Open Font License 1.1 (see JetBrainsMono-OFL.txt). The icons in it come from:
+
+- Material Design Icons (https://pictogrammers.com/library/mdi/), Apache License 2.0
+- Codicons (https://github.com/microsoft/vscode-codicons), CC BY 4.0
+- Devicons (https://github.com/vorillaz/devicons), MIT
+- Powerline Extra Symbols (https://github.com/ryanoasis/powerline-extra-symbols), MIT

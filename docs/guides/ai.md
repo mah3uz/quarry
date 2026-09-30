@@ -52,7 +52,7 @@ Claude Code and Codex run from a temporary folder, so they don't read your proje
 ```
 ╭─ PostgreSQL me@localhost:5432 ▸ shop
 ╰─❯ \llm customers who never ordered
-Asking claude-opus-5-5…
+⠹ Asking claude-opus-5-5…  2.1 s
 This finds customers with no matching order.
 Review the query below and press Enter to run it.
 ╰─❯ SELECT c.id, c.name FROM customers c LEFT JOIN orders o ON o.customer_id = c.id WHERE o.id IS NULL;
@@ -71,6 +71,9 @@ Type `\llm your question` in the editor and run it with <kbd>Ctrl</kbd>+<kbd>Ent
 **Ask the model to write SQL…** in the command palette (<kbd>Ctrl</kbd>+<kbd>P</kbd>). The answer
 replaces the `\llm` line (or is added at the end), and the model's explanation goes to the Messages
 tab. Run it with <kbd>Ctrl</kbd>+<kbd>Enter</kbd> when you're happy with it.
+
+While the model works, the results pane shows a spinner with your question and the time so far
+(the REPL shows the same spinner on one line, and clears it when the answer arrives).
 
 ## What is sent
 

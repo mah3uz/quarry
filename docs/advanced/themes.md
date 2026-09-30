@@ -100,3 +100,16 @@ palette, use the `ansi` theme.
 
 `NO_COLOR=1` or `--no-color` turns colour off, in the REPL and the TUI. Output to a pipe or file is
 never coloured.
+
+## Transparent background
+
+If your terminal has a translucent or image background, let it show through the TUI:
+
+```toml
+[main]
+transparent = true
+```
+
+The theme's background and panel colours go away; text, selections, the status-bar pills and
+highlights keep their colours. *Toggle transparent background* in the command palette tries it
+without editing the config. The REPL never paints a background, so it's unaffected.

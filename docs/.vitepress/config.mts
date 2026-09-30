@@ -86,7 +86,8 @@ export default defineConfig({
           { text: 'TLS and SSH tunnels', link: '/advanced/tls-ssh' },
           { text: 'Favourite queries', link: '/advanced/favorites' },
           { text: 'Themes', link: '/advanced/themes' },
-          { text: 'Prompt, keys and completion', link: '/advanced/customising' },
+          { text: 'Prompt, icons and completion', link: '/advanced/customising' },
+          { text: 'Key bindings and vim mode', link: '/advanced/keybindings' },
         ],
       },
       {

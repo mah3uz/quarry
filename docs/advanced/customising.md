@@ -1,13 +1,25 @@
 ---
-title: 'Prompt, keys and completion'
-description: 'Make the REPL yours - prompt format, vi mode, completion behaviour, pager and output defaults.'
+title: 'Prompt, icons and completion'
+description: 'Make quarry yours: start from the default config, prompt format, icons, vi mode, completion, pager and output defaults.'
 ---
 
-# Prompt, keys and completion
+# Prompt, icons and completion
 
 Everything on this page is set under `[main]` in `~/.config/quarry/config.toml`. The file created on
 first run lists every option with a comment. See [Configuration file](/reference/config) for the
 full reference.
+
+## Start from the default config
+
+`quarry --default-config` prints the full config file with every option and a comment on each.
+Save it and edit what you like:
+
+```sh
+quarry --default-config > ~/.config/quarry/config.toml
+```
+
+It overwrites the file, so if you already have saved connections, save the output somewhere else
+and copy over the parts you want.
 
 ## The prompt
 
@@ -75,6 +87,9 @@ set; for results without them use `\T ascii`.
 The REPL uses Emacs-style editing by default. `vi = true` switches to vi mode, and <kbd>F4</kbd>
 toggles between them at runtime. In vi normal mode the `❯` becomes `❮`.
 
+`vi = true` also gives the TUI's SQL editor vim's modes and keys; see
+[Key bindings and vim mode](/advanced/keybindings), which also covers changing the TUI's keys.
+
 ## Completion
 
 | Option | Default | Effect |
@@ -127,8 +142,11 @@ echo of a favourite's SQL.
 
 | Option | Default | Effect |
 |---|---|---|
-| `mouse` | `true` | Mouse support in the TUI: click, drag to select, scroll |
+| `mouse` | `true` | Mouse support in the TUI: click, drag to select or resize, scroll |
+| `transparent` | `false` | Keep the terminal's background instead of the theme's; see [Themes](/advanced/themes#transparent-background) |
 
-The TUI also reads `theme`, `icons`, `null_string`, `smart_completion`, `complete_while_typing`,
+Keys are set in their own `[keys]` table: see [Key bindings and vim mode](/advanced/keybindings).
+
+The TUI also reads `theme`, `icons`, `vi`, `null_string`, `smart_completion`, `complete_while_typing`,
 `join_suggestions`, `keyword_casing`, `auto_refresh_catalog` and `destructive_warning`. The other
 options on this page apply to the REPL only.

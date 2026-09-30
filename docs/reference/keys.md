@@ -28,17 +28,20 @@ The REPL uses Emacs-style editing by default; set `vi = true` or press <kbd>F4</
 
 ## TUI
 
-<kbd>F1</kbd> shows these inside quarry, and the command palette (<kbd>Ctrl</kbd>+<kbd>P</kbd>) lists
-every action by name.
+<kbd>F1</kbd> shows these inside quarry (type to filter), and the command palette
+(<kbd>Ctrl</kbd>+<kbd>P</kbd>) lists every action by name.
+
+The keys under **Everywhere** and **Query tab** are the defaults: you can rebind them in the config,
+see [Key bindings and vim mode](/advanced/keybindings). The keys inside each pane are fixed.
 
 ### Everywhere
 
 | Key | Does |
 |---|---|
 | <kbd>Ctrl</kbd>+<kbd>P</kbd> | Command palette |
-| <kbd>F1</kbd>, <kbd>?</kbd> | Shortcuts (<kbd>?</kbd> doesn't work while typing in the editor) |
+| <kbd>F1</kbd>, <kbd>?</kbd> | Shortcuts, filtered as you type (<kbd>?</kbd> doesn't work while typing in the editor) |
 | <kbd>Ctrl</kbd>+<kbd>O</kbd> | Connection manager |
-| <kbd>Ctrl</kbd>+<kbd>T</kbd> / <kbd>Ctrl</kbd>+<kbd>W</kbd> | New query tab / close tab |
+| <kbd>Ctrl</kbd>+<kbd>T</kbd> / <kbd>Ctrl</kbd>+<kbd>W</kbd> | New query tab (from the explorer: for the selected database) / close tab |
 | <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd>, <kbd>Ctrl</kbd>+<kbd>PgUp</kbd> / <kbd>PgDn</kbd> | Previous / next tab |
 | <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> | Go to tab 1–9 |
 | <kbd>F6</kbd> / <kbd>Shift</kbd>+<kbd>F6</kbd> | Move focus: explorer → editor → results |
@@ -59,6 +62,7 @@ every action by name.
 | <kbd>F7</kbd> / <kbd>Shift</kbd>+<kbd>F7</kbd> | Explain / explain analyze |
 | <kbd>Alt</kbd>+<kbd>F</kbd> | Format the SQL |
 | <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save as a favourite |
+| <kbd>Ctrl</kbd>+<kbd>X</kbd> | Export results to a file (outside the editor, where it's cut) |
 | <kbd>Ctrl</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | Resize the editor / results split |
 
 ### Editor
@@ -80,6 +84,9 @@ every action by name.
 | <kbd>Ctrl</kbd>+<kbd>/</kbd> | Comment or uncomment |
 | <kbd>Ctrl</kbd>+<kbd>Backspace</kbd>, <kbd>Ctrl</kbd>+<kbd>Delete</kbd> | Delete a word left / right |
 | <kbd>Esc</kbd> | Move focus to the results |
+
+With `vi = true` the editor uses vim's modes and keys instead; see
+[vim mode](/advanced/keybindings#vim-mode).
 
 In the completion menu: <kbd>↓</kbd> / <kbd>↑</kbd> (or <kbd>Ctrl</kbd>+<kbd>N</kbd> /
 <kbd>P</kbd>) move, <kbd>Tab</kbd> or <kbd>Enter</kbd> accept, <kbd>Esc</kbd> closes.
@@ -126,6 +133,7 @@ In the completion menu: <kbd>↓</kbd> / <kbd>↑</kbd> (or <kbd>Ctrl</kbd>+<kbd
 | <kbd>j</kbd> / <kbd>k</kbd>, arrows | Move |
 | <kbd>→</kbd> / <kbd>l</kbd>, <kbd>←</kbd> / <kbd>h</kbd>, <kbd>Space</kbd> | Expand, collapse, toggle |
 | <kbd>Enter</kbd> | Open a table, show a function, insert a column name, or switch database |
+| <kbd>c</kbd> | New [query console](/guides/tui#query-consoles-for-a-database) for the database or schema you're in |
 | <kbd>s</kbd> | Table structure |
 | <kbd>i</kbd> | Insert the name into the editor |
 | <kbd>g</kbd> + <kbd>s</kbd> / <kbd>i</kbd> / <kbd>u</kbd> / <kbd>d</kbd> / <kbd>c</kbd> / <kbd>x</kbd> / <kbd>n</kbd> | Write a SELECT / INSERT / UPDATE / DELETE / CREATE / DROP / COUNT |
@@ -153,20 +161,36 @@ In the completion menu: <kbd>↓</kbd> / <kbd>↑</kbd> (or <kbd>Ctrl</kbd>+<kbd
 | <kbd>Ctrl</kbd>+<kbd>U</kbd> / <kbd>Ctrl</kbd>+<kbd>K</kbd> | Delete to start / end of the input |
 | <kbd>Ctrl</kbd>+<kbd>W</kbd> | Delete a word |
 
-### Connection manager
+### Connections
 
 | Key | Does |
 |---|---|
-| <kbd>Enter</kbd> | Connect to the selected saved connection |
-| <kbd>d</kbd> | Delete it (no confirmation) |
-| <kbd>Tab</kbd> | Go to the new-connection form |
-| <kbd>Tab</kbd> / <kbd>↑</kbd> <kbd>↓</kbd> | Move between fields |
-| <kbd>←</kbd> / <kbd>→</kbd>, <kbd>Space</kbd> | Change type, TLS mode, read-only, save |
-| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Connect from any field |
+| <kbd>Enter</kbd>, click | Connect to the selected saved connection (or go to it, if it's open) |
+| <kbd>j</kbd> / <kbd>k</kbd>, arrows, wheel | Move |
+| <kbd>n</kbd>, <kbd>Tab</kbd> | New connection form |
+| <kbd>d</kbd> | Delete the selected connection (no confirmation) |
 | <kbd>Esc</kbd> | Close |
+
+In the new-connection form:
+
+| Key | Does |
+|---|---|
+| <kbd>Tab</kbd> / <kbd>↑</kbd> <kbd>↓</kbd> | Move between fields |
+| <kbd>←</kbd> / <kbd>→</kbd>, <kbd>Space</kbd> | Change the type or TLS mode, tick read-only |
+| <kbd>Enter</kbd> | Connect (from a text field), or use the **Connect** button |
+| <kbd>Esc</kbd> | Back to the list |
 
 ### Mouse
 
-With `mouse = true` (the default): click tabs, tree items and cells; drag to select in the editor
-and the grid; double-click a cell to view it; click a column header to sort a table view; scroll
-with the wheel (<kbd>Shift</kbd>+wheel scrolls sideways in the grid).
+With `mouse = true` (the default):
+
+| Do | To |
+|---|---|
+| Click | Focus a pane; pick a tab, result set, tree item, cell, list item or button |
+| Double-click a cell | View it |
+| Click a column header in a table view | Sort by it |
+| Middle-click a tab | Close it |
+| Drag in the editor or grid | Select |
+| Drag the explorer's edge or the editor/results border | Resize |
+| Wheel | Scroll; in lists, move the selection. <kbd>Shift</kbd>+wheel scrolls the grid sideways. |
+| Click outside a dialog | Close it |

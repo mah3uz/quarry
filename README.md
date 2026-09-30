@@ -116,16 +116,17 @@ Launch it with `quarry --tui <target>`, with `\tui` from the REPL, or with plain
 
 | Area | What it does |
 |---|---|
-| Explorer | Connections → databases → schemas → tables, views, functions → columns. Keys work on the selected node: `/` filters, `s` shows structure, `g`+`s/i/u/d/c/x/n` generates SELECT, INSERT, UPDATE, DELETE, CREATE, DROP or COUNT scripts, and `i` inserts the name into the editor. |
-| Query tabs | Editor with highlighting, completion as you type, bracket matching, undo and auto-indent. `Ctrl+Enter` runs the statement under the cursor, `F5` runs everything, and `Esc` cancels. |
+| Explorer | Connections → databases → schemas → tables, views, functions → columns. Keys work on the selected node: `/` filters, `s` shows structure, `g`+`s/i/u/d/c/x/n` generates SELECT, INSERT, UPDATE, DELETE, CREATE, DROP or COUNT scripts, and `i` inserts the name into the editor, and `c` opens a query console for that database. |
+| Query tabs | Editor with highlighting, completion as you type, bracket matching, undo and auto-indent, or vim's modes with `vi = true`. `Ctrl+Enter` (or the Run button) runs the statement under the cursor, `F5` runs everything, and `Esc` cancels. A tab opened from a database runs there, so you can skip the `db.` prefix. |
 | Results grid | Virtualized, so millions of rows scroll smoothly. Header stays in place. Types are colour-coded. Select with `v`/`V`, copy as TSV, CSV, JSON, Markdown or SQL, search with `/`, resize columns, and press `Enter` to view a cell (JSON is pretty-printed). |
 | Table browser | Pages load as you scroll. Filter with a `WHERE` (`f`, or `F` for the current cell's value) and sort by column (`s`). Edits, inserts and deletes are staged and shown in the grid; `Ctrl+S` shows the generated SQL and applies it in one transaction. |
 | Structure | Columns, indexes, foreign keys, referencing tables, constraints, triggers and highlighted DDL. |
 | Explain | Plan tree with bars showing how cost or time is shared, plus details per node. Analyze runs inside a transaction that is rolled back. |
 | Activity | Live server sessions, with kill (Postgres and MySQL). |
-| Everything else | Command palette (`Ctrl+P`), go-to-table (`Ctrl+G`), live theme picker (`Ctrl+Y`), history (`Ctrl+R`), favourites, open/save `.sql` files, export results, commit/rollback, several connections at once, mouse support. |
+| Everything else | Command palette (`Ctrl+P`), go-to-table (`Ctrl+G`), live theme picker (`Ctrl+Y`), history (`Ctrl+R`), favourites, open/save `.sql` files, export results, commit/rollback, several connections at once. The mouse works everywhere: buttons, tabs, dialogs, lists, and dragging borders to resize. |
 
-`F1` shows every shortcut. Focus moves with `F6` (explorer → editor → results) or `Alt+0` for the
+`F1` shows every shortcut (type to filter), and the app-wide keys can be changed under `[keys]` in
+the config. Focus moves with `F6` (explorer → editor → results) or `Alt+0` for the
 explorer. `\llm` works in the editor too, and the palette has "Ask the model to write SQL…".
 
 ## Asking a model for SQL
@@ -232,9 +233,10 @@ set `icons = "unicode"` (or `"ascii"`) in the config, or pass `--icons unicode`.
 
 ## Configuration
 
-`~/.config/quarry/config.toml` is created with comments on first run. It covers the theme, table
-format, null string, row limit, pager, destructive-warning rules, prompt format, keyword casing,
-vi mode, completion behaviour, the `\llm` provider and saved connections. Favourites are kept in `favorites.toml`, and
+`~/.config/quarry/config.toml` is created with comments on first run, and
+`quarry --default-config` prints that file any time you want to start over. It covers the theme,
+icons, table format, null string, row limit, pager, destructive-warning rules, prompt format,
+keyword casing, vi mode, completion behaviour, TUI keys, the `\llm` provider and saved connections. Favourites are kept in `favorites.toml`, and
 history in `~/.local/share/quarry/`, readable only by you.
 
 ## Development

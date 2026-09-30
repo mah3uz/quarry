@@ -10,6 +10,12 @@
   font-weight: 400;
   font-display: swap;
 }
+/* Only the Nerd Font icons that appear in the terminal captures (see docs/README.md). */
+@font-face {
+  font-family: 'Quarry Nerd Symbols';
+  src: url('./fonts/NerdSymbols-subset.woff2') format('woff2');
+  font-display: swap;
+}
 @font-face {
   font-family: 'JetBrains Mono';
   src: url('./fonts/JetBrainsMono-Bold.woff2') format('woff2');

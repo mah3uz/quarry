@@ -71,6 +71,7 @@ See [Scripts, exports and pipes](/guides/scripting).
 | `--config FILE` | | Use this config file instead of `~/.config/quarry/config.toml`. Favourites and themes are then read from next to it. |
 | `--list` | `-l` | List saved connections and exit |
 | `--save NAME` | | Save this connection under `NAME`. See [Saved connections](/advanced/saved-connections). |
+| `--default-config` | | Print the default config file, every option commented, to start customizing from. See [Configuration file](/reference/config). |
 | `--setup-llm` | | Choose how `\llm` reaches a model, test it and save it. See [Asking a model for SQL](/guides/ai). |
 | `--completions SHELL` | | Print the tab-completion script for `bash`, `zsh`, `fish`, `elvish` or `powershell`. See [Shell completion](/start/installation#shell-completion). |
 

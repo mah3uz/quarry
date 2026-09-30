@@ -87,7 +87,9 @@ Results stream from the server and print as a table:
 
 - **Rows** are separated by a line in the boxed formats; `row_lines = false` in the config turns
   that off.
-- **Wide results** switch to vertical layout automatically. `\x` cycles between on, off and auto.
+- **Wide results** (wider than the terminal) switch to [vertical layout](/reference/output-formats#vertical-output)
+  automatically: one framed record per row. `\x` cycles between on, off and auto; `\x off` keeps
+  the table and the pager scrolls it sideways.
 - **Long values** are cut at 500 characters (`max_field_width`) and end with `…`.
 - **Big results:** past 1000 rows (`row_limit`), quarry asks before fetching the rest. Say no and
   it shows the first 1000 and cancels the query at the server.

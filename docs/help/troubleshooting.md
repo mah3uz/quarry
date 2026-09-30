@@ -75,6 +75,12 @@ The connection is read-only (`--readonly`, `readonly = true`, or `\readonly on`)
 They're cut at `max_field_width` (500). Set `max_field_width = 0` for no limit, or use `\G` or a
 machine format such as `\T json`.
 
+**My result turned into one block per row**
+
+That's vertical output: the table was wider than the terminal. `\x off` (or `expanded = "off"` in
+the config) keeps the table; the pager then scrolls it sideways. See
+[Vertical output](/reference/output-formats#vertical-output).
+
 **`The result has more than 1000 rows. Fetch and show all of them?`**
 
 That's `row_limit`. Answer `y`, raise it in the config, pass `--row-limit 0`, or add a `LIMIT`.
@@ -105,6 +111,32 @@ theme, which uses your terminal's own palette.
 
 In the editor <kbd>Ctrl</kbd>+<kbd>Y</kbd> is redo. Press <kbd>Esc</kbd> to leave the editor
 first, or use *Switch theme…* in the palette.
+
+**A key I set under `[keys]` does nothing**
+
+Look at the notices when the TUI starts: a misspelt action or key, or a key already taken by another
+of your bindings, is reported there. Two keys are also limited on purpose: a plain character (like
+`?`) doesn't fire while you're typing in a text field, and the editor keeps its own shortcuts
+(<kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>V</kbd>, <kbd>Z</kbd>, …) while it has focus. <kbd>F1</kbd>
+shows the keys that are actually in effect. See
+[When keys collide](/advanced/keybindings#when-keys-collide).
+
+**An action lost its key after I changed `[keys]`**
+
+You bound its key to another action, which wins. Give it a new key under `[keys]`; the start-up
+notice names it.
+
+**Completion doesn't know the tables of another MySQL database**
+
+Databases other than the current one load when you open them in the explorer, or when you type
+`thatdb.` in the editor. A [query console](/guides/tui#query-consoles-for-a-database) for that
+database (<kbd>c</kbd> in the explorer) completes its names without the prefix.
+
+**I opened a saved connection again and it went to the open one**
+
+That's on purpose: one saved connection is open once. Open a
+[query console](/guides/tui#query-consoles-for-a-database) or a new tab (<kbd>Ctrl</kbd>+<kbd>T</kbd>)
+to work on it in parallel.
 
 **My theme setting in the config is ignored in the TUI**
 

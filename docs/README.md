@@ -24,7 +24,7 @@ Node 22.12 or newer is required (see `.node-version`).
 | `.vitepress/theme/components/HomePage.vue` | The landing page |
 | `.vitepress/theme/components/Terminal.vue` | Renders a real terminal capture as HTML; use `<Terminal capture="tui" title="…" label="…" />` in any page |
 | `.vitepress/theme/captures/` | The captures (`tmux capture-pane -e -p` output) |
-| `.vitepress/theme/fonts/` | JetBrains Mono, bundled whole so box-drawing characters line up (OFL licence alongside) |
+| `.vitepress/theme/fonts/` | JetBrains Mono, bundled whole so box-drawing characters line up, and `NerdSymbols-subset.woff2`, just the Nerd Font icons the captures use (both OFL, licence alongside) |
 | `.vitepress/og.html` | The share image's source; `just docs-og` renders it to `public/og.png` |
 | `public/` | Served as-is: logo, favicon, share image, `robots.txt` |
 | `wrangler.jsonc` | Cloudflare deployment |
@@ -32,6 +32,19 @@ Node 22.12 or newer is required (see `.node-version`).
 To add a page, create a Markdown file, start it with a `title` and `description` in the front matter
 and a `# Heading`, and add it to the sidebar in `.vitepress/config.mts`. `npm run build` fails on
 links to pages that don't exist.
+
+## Updating the terminal captures
+
+The captures are real quarry output. Recreate them in tmux with `COLORTERM=truecolor` and a clean
+`QUARRY_CONFIG_DIR` (so your own settings stay out), save them with `tmux capture-pane -e -p`, then
+rebuild the icon subset so any new icons render:
+
+```sh
+cd docs/.vitepress/theme
+U=$(python3 -c "import glob; print(','.join(sorted({'U+%X' % ord(c) for f in glob.glob('captures/*.ans') for c in open(f).read() if 0xE000 <= ord(c) <= 0xF8FF or ord(c) >= 0xF0000})))")
+pyftsubset /usr/share/fonts/TTF/JetBrainsMonoNerdFontMono-Regular.ttf --unicodes="$U" \
+  --flavor=woff2 --layout-features='' --no-hinting --output-file=fonts/NerdSymbols-subset.woff2
+```
 
 The logo files in `public/` are written by `scripts/gen_art.py` in the repository root; edit the
 mascot there.
