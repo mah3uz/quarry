@@ -184,8 +184,15 @@ impl GridState {
     pub fn push_rows(&mut self, rows: Vec<Row>) {
         let start = self.rows.len();
         self.rows.extend(rows);
+        let end = self.rows.len();
         let budget = SAMPLE_LIMIT.saturating_sub(self.sampled);
-        self.measure(start..self.rows.len().min(start + budget));
+        if budget > 0 {
+            self.measure(start..end.min(start + budget));
+        } else if end > start {
+            // Past the sample budget, the edges of each batch still catch growing values (ids, counters).
+            self.measure(start..start + 1);
+            self.measure(end - 1..end);
+        }
     }
 
     /// Replaces one cell in place (staged table edits).
@@ -1697,5 +1704,16 @@ mod tests {
         let elapsed = start.elapsed();
         assert!(elapsed < Duration::from_millis(50), "render took {elapsed:?}");
         assert!(line(&buf, 49).contains("200000"));
+    }
+
+    #[test]
+    fn widths_keep_growing_after_the_sample_budget() {
+        let mut g = GridState::new();
+        g.set_data(vec![col("n", "int8")], Vec::new());
+        for batch in 0..200 {
+            let rows = (0..256).map(|i| vec![Value::Int(batch * 256 + i)]).collect();
+            g.push_rows(rows);
+        }
+        assert!(g.column_width(0).unwrap() >= 5, "51199 must fit without truncation");
     }
 }
