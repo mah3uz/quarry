@@ -292,13 +292,13 @@ impl App {
 
     // ---------------------------------------------------------------- connections
 
-    pub fn adopt_connection(&mut self, opened: Opened, name: Option<String>) {
+    pub fn adopt_connection(&mut self, opened: Opened, name: Option<String>, meta: Option<Connection>) {
         let id = self.conns.len();
         let name = name.unwrap_or_else(|| opened.spec.label());
         let needs_shared = opened.spec.backend == Backend::Sqlite;
         let spec = opened.spec.clone();
         let info = opened.conn.info().clone();
-        let main = Worker::spawn(&self.rt, id, opened.conn, self.tx.clone());
+        let main = Worker::spawn(&self.rt, id, opened.conn, self.tx.clone(), true);
         let entry = ConnEntry {
             id,
             name: name.clone(),
@@ -315,7 +315,12 @@ impl App {
         };
         self.conns.push(Some(entry));
         self.sidebar.set_connection(id, &name, &info.version);
-        if !needs_shared {
+        if let Some(m) = meta {
+            let w = Worker::spawn(&self.rt, id, m, self.tx.clone(), false);
+            if let Some(e) = self.conn_mut(id) {
+                e.meta_worker = Some(w);
+            }
+        } else if !needs_shared {
             let tx = self.tx.clone();
             let meta_spec = spec.clone();
             self.rt.spawn(async move {
@@ -404,14 +409,7 @@ impl App {
                         Err(e) => self.toast(Level::Error, format!("Could not save connection: {e}")),
                     }
                 }
-                let conn_id = self.conns.len();
-                self.adopt_connection(c.opened, Some(name));
-                if let Some(meta) = c.meta {
-                    let w = Worker::spawn(&self.rt, conn_id, meta, self.tx.clone());
-                    if let Some(e) = self.conn_mut(conn_id) {
-                        e.meta_worker = Some(w);
-                    }
-                }
+                self.adopt_connection(c.opened, Some(name), c.meta);
             }
             Err(ConnectError::Auth(msg)) => {
                 self.pending_connects.insert(id, (name, Box::new(spec), save_as));
@@ -654,18 +652,15 @@ impl App {
         match ev {
             AppEvent::Connected { conn, name, spec, save_as, result } => self.on_connected(conn, name, *spec, save_as, result),
             AppEvent::MetaReady { conn, connection } => {
-                let w = Worker::spawn(&self.rt, conn, *connection, self.tx.clone());
+                let w = Worker::spawn(&self.rt, conn, *connection, self.tx.clone(), false);
                 if let Some(c) = self.conn_mut(conn) {
                     c.meta_worker = Some(w);
                 }
             }
-            AppEvent::State { conn, info, in_transaction } => {
+            AppEvent::State { conn, main, info, in_transaction } => {
                 if let Some(c) = self.conn_mut(conn) {
-                    let is_main = !c.main.is_busy();
-                    if is_main || c.meta_worker.is_none() {
+                    if main {
                         c.in_tx = in_transaction;
-                    }
-                    if info.database.is_some() {
                         c.info = info;
                     }
                 }

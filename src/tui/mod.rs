@@ -98,7 +98,7 @@ pub fn run(rt: &tokio::runtime::Runtime, config: Config, initial: Option<Opened>
 
     let mut app = app::App::new(rt.handle().clone(), config, tx);
     match initial {
-        Some(opened) => app.adopt_connection(opened, None),
+        Some(opened) => app.adopt_connection(opened, None, None),
         None => app.open_connection_manager(),
     }
 

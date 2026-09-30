@@ -74,7 +74,7 @@ pub enum ConnectError {
 
 pub enum AppEvent {
     Db { conn: ConnId, tag: Tag, reply: Reply },
-    State { conn: ConnId, info: ServerInfo, in_transaction: bool },
+    State { conn: ConnId, main: bool, info: ServerInfo, in_transaction: bool },
     Connected { conn: ConnId, name: String, spec: Box<ConnSpec>, save_as: Option<String>, result: Result<Box<Connected>, ConnectError> },
     MetaReady { conn: ConnId, connection: Box<Connection> },
 }
@@ -89,11 +89,11 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn spawn(rt: &Handle, id: ConnId, conn: Connection, app: AppSender) -> Worker {
+    pub fn spawn(rt: &Handle, id: ConnId, conn: Connection, app: AppSender, main: bool) -> Worker {
         let (tx, rx) = mpsc::unbounded_channel();
         let cancel = Arc::new(Mutex::new(conn.cancel_handle()));
         let busy = Arc::new(AtomicBool::new(false));
-        rt.spawn(run(id, conn, rx, app, cancel.clone(), busy.clone()));
+        rt.spawn(run(id, main, conn, rx, app, cancel.clone(), busy.clone()));
         Worker { tx, cancel, busy, rt: rt.clone() }
     }
 
@@ -119,6 +119,7 @@ fn post(app: &AppSender, id: ConnId, tag: Tag, reply: Reply) -> bool {
 
 async fn run(
     id: ConnId,
+    is_main: bool,
     mut conn: Connection,
     mut rx: mpsc::UnboundedReceiver<(Request, Tag)>,
     app: AppSender,
@@ -183,7 +184,7 @@ async fn run(
             }
         };
         busy.store(false, Ordering::Relaxed);
-        let state = AppEvent::State { conn: id, info: conn.info().clone(), in_transaction: conn.in_transaction() };
+        let state = AppEvent::State { conn: id, main: is_main, info: conn.info().clone(), in_transaction: conn.in_transaction() };
         if !alive || app.send(crate::tui::Event::App(state)).is_err() {
             break;
         }
