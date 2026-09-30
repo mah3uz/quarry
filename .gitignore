@@ -4,8 +4,4 @@
 /.claude/
 /target/
 *.swp
-
-
-# Added by cargo
-
-/target
+/demo.db
