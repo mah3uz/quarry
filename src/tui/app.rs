@@ -21,7 +21,7 @@ use crate::cli::Opened;
 use crate::complete::{CompleteOptions, Completer, Extras, KeywordCasing, Suggestion};
 use crate::config::{Config, SavedConnection};
 use crate::conn::ConnSpec;
-use crate::db::{Backend, Catalog, Column, Connection, DbError, ExecEvent, ServerInfo, Value, qualified, quote_ident};
+use crate::db::{Backend, Catalog, Connection, DbError, ExecEvent, ServerInfo, Value, qualified, quote_ident};
 use crate::output::{self, OutputOptions, TableFormat};
 use crate::special;
 use crate::sql::{classify, split};
@@ -317,8 +317,9 @@ impl App {
         self.sidebar.set_connection(id, &name, &info.version);
         if !needs_shared {
             let tx = self.tx.clone();
+            let meta_spec = spec.clone();
             self.rt.spawn(async move {
-                if let Ok(c) = Connection::connect(&spec).await {
+                if let Ok(c) = Connection::connect(&meta_spec).await {
                     let _ = tx.send(Event::App(AppEvent::MetaReady { conn: id, connection: Box::new(c) }));
                 }
             });
@@ -1172,13 +1173,13 @@ impl App {
             })
             .unwrap_or_default();
         let sql = format!("SELECT * FROM {name}{where_}{order} LIMIT {} OFFSET {}", t.page_size, t.loaded);
-        let gen = t.generation;
+        let generation = t.generation;
         let count_sql = format!("SELECT COUNT(*) FROM {name}{where_}");
         let first = t.loaded == 0;
         if let Some(c) = self.conn(conn_id) {
-            c.meta().send(Tag::Tab(tab_id, gen * 2), Request::Query(sql));
+            c.meta().send(Tag::Tab(tab_id, generation * 2), Request::Query(sql));
             if first {
-                c.meta().send(Tag::Tab(tab_id, gen * 2 + 1), Request::Query(count_sql));
+                c.meta().send(Tag::Tab(tab_id, generation * 2 + 1), Request::Query(count_sql));
             }
         }
     }

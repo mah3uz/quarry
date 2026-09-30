@@ -161,6 +161,10 @@ impl Editor {
         (self.cursor.row, self.cursor.col)
     }
 
+    pub fn backend(&self) -> Backend {
+        self.backend
+    }
+
     pub fn set_backend(&mut self, backend: Backend) {
         self.backend = backend;
         self.generation += 1;

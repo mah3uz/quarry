@@ -559,11 +559,11 @@ impl Sidebar {
                 let bg = if focused { theme.selection } else { theme.highlight };
                 buf.set_style(row_area, Style::default().bg(bg));
             }
+            let used = line.width() as u16;
             line.render(row_area, buf);
             if !node.detail.is_empty() {
                 let d = &node.detail;
                 let w = d.width() as u16;
-                let used = line.width() as u16;
                 if used + w + 2 <= row_area.width {
                     buf.set_string(row_area.x + row_area.width - w, y, d, Style::default().fg(theme.muted));
                 }
