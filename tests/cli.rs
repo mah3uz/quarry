@@ -247,3 +247,28 @@ fn save_never_writes_a_password_to_the_config() {
     assert!(!config.contains("s3cret"), "the password must not be saved: {config}");
     assert!(String::from_utf8_lossy(&o.stderr).contains("password was not saved"));
 }
+
+#[test]
+fn tab_completion_offers_saved_connections_without_passwords_or_side_effects() {
+    let dir = test_dir("complete");
+    let config = dir.join("config/config.toml");
+    std::fs::write(&config, "[connections.prod]\nurl = \"postgres://deploy:s3cret@db.internal/app\"\nreadonly = true\n").unwrap();
+    let complete = |words: &[&str]| {
+        let o = Command::new(env!("CARGO_BIN_EXE_quarry"))
+            .args(["--", "quarry"])
+            .args(words)
+            .env("COMPLETE", "fish")
+            .env("QUARRY_CONFIG_DIR", dir.join("config"))
+            .env("QUARRY_DATA_DIR", dir.join("data"))
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&o.stdout).into_owned()
+    };
+    assert_eq!(complete(&["pr"]), "prod\tpostgres://deploy@db.internal/app (read-only)\n");
+    let urls = complete(&["postgres://"]);
+    assert!(urls.contains("postgres://deploy@db.internal/app") && !urls.contains("s3cret"), "{urls}");
+    assert!(complete(&["--format", "mark"]).starts_with("markdown\t"));
+    assert!(!dir.join("data").exists(), "completing must not create the data directory");
+    assert_eq!(std::fs::read_dir(dir.join("config")).unwrap().count(), 1, "nor write anything next to the config");
+}

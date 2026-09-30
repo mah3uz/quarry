@@ -31,6 +31,10 @@ or build from source:
 cargo install --path .
 ```
 
+Tab completion for bash, zsh and fish, including your saved connections: add
+`source <(quarry --completions zsh)` (or `bash`; for fish, `quarry --completions fish | source`) to
+your shell's startup file.
+
 TLS uses rustls and SQLite is bundled, so there are no system libraries to install. SSH tunnels use
 your system `ssh` binary.
 

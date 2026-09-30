@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{ArgAction, Parser};
+use clap_complete::engine::{ArgValueCandidates, ArgValueCompleter, PathCompleter};
 
 use crate::config::{Config, SavedConnection};
 use crate::conn::ssh::Tunnel;
@@ -20,23 +21,28 @@ use crate::db::{Backend, Connection, ErrorKind};
 )]
 pub struct Args {
     /// URL (postgres://, mysql://, sqlite:), saved connection name, SQLite file, or database name
+    #[arg(add = ArgValueCompleter::new(crate::completions::target))]
     pub target: Option<String>,
     /// Database name (when TARGET is a URL without one, or pgcli-style `quarry dbname user`)
     pub extra: Option<String>,
 
-    #[arg(short = 'h', long)]
+    /// Host name or address
+    #[arg(short = 'h', long, add = ArgValueCandidates::new(crate::completions::hosts))]
     pub host: Option<String>,
-    #[arg(short = 'p', short_alias = 'P', long)]
+    /// Port (default 5432 for PostgreSQL, 3306 for MySQL)
+    #[arg(short = 'p', short_alias = 'P', long, add = ArgValueCandidates::new(crate::completions::ports))]
     pub port: Option<u16>,
-    #[arg(short = 'u', short_alias = 'U', long, alias = "username")]
+    /// User name
+    #[arg(short = 'u', short_alias = 'U', long, alias = "username", add = ArgValueCandidates::new(crate::completions::users))]
     pub user: Option<String>,
-    #[arg(short = 'd', short_alias = 'D', long, alias = "dbname")]
+    /// Database name
+    #[arg(short = 'd', short_alias = 'D', long, alias = "dbname", add = ArgValueCandidates::new(crate::completions::databases))]
     pub database: Option<String>,
     /// Unix socket path
-    #[arg(short = 'S', long)]
+    #[arg(short = 'S', long, add = ArgValueCompleter::new(PathCompleter::any()))]
     pub socket: Option<PathBuf>,
     /// Backend when connecting with flags only: postgres, mysql or sqlite
-    #[arg(long, value_parser = parse_backend)]
+    #[arg(long, value_parser = parse_backend, add = ArgValueCandidates::new(crate::completions::backends))]
     pub backend: Option<Backend>,
     /// Always prompt for a password
     #[arg(short = 'W', long = "password")]
@@ -46,28 +52,32 @@ pub struct Args {
     pub no_password: bool,
 
     /// disable | prefer | require | verify-ca | verify-full
-    #[arg(long, value_parser = parse_ssl)]
+    #[arg(long, value_parser = parse_ssl, add = ArgValueCandidates::new(crate::completions::ssl_modes))]
     pub ssl_mode: Option<SslMode>,
-    #[arg(long)]
+    /// CA certificate to trust (PEM)
+    #[arg(long, add = ArgValueCompleter::new(PathCompleter::file()))]
     pub ssl_ca: Option<PathBuf>,
-    #[arg(long)]
+    /// Client certificate (PEM)
+    #[arg(long, add = ArgValueCompleter::new(PathCompleter::file()))]
     pub ssl_cert: Option<PathBuf>,
-    #[arg(long)]
+    /// Client private key (PEM)
+    #[arg(long, add = ArgValueCompleter::new(PathCompleter::file()))]
     pub ssl_key: Option<PathBuf>,
     /// Tunnel through SSH: [user@]host[:port]
-    #[arg(long)]
+    #[arg(long, add = ArgValueCandidates::new(crate::completions::ssh_hosts))]
     pub ssh: Option<String>,
-    #[arg(long)]
+    /// Private key for the SSH tunnel
+    #[arg(long, add = ArgValueCompleter::new(PathCompleter::file()))]
     pub ssh_key: Option<PathBuf>,
 
     /// Execute SQL (repeatable) and exit
     #[arg(short = 'e', long = "execute", action = ArgAction::Append)]
     pub execute: Vec<String>,
     /// Execute SQL from a file and exit
-    #[arg(short = 'f', long)]
+    #[arg(short = 'f', long, add = ArgValueCompleter::new(PathCompleter::file()))]
     pub file: Option<PathBuf>,
     /// Output format: rounded, psql, ascii, csv, tsv, json, jsonl, markdown, html, vertical, sql-insert …
-    #[arg(short = 'F', long)]
+    #[arg(short = 'F', long, add = ArgValueCandidates::new(crate::completions::formats))]
     pub format: Option<String>,
     /// Launch the full-screen TUI
     #[arg(short = 'T', long)]
@@ -78,21 +88,28 @@ pub struct Args {
     /// SQL to run right after connecting (repeatable)
     #[arg(long = "init-command", action = ArgAction::Append)]
     pub init_command: Vec<String>,
+    /// Prompt format for this run, e.g. '\u@\d> '
     #[arg(long)]
     pub prompt: Option<String>,
-    #[arg(long)]
+    /// Colour theme for this run
+    #[arg(long, add = ArgValueCandidates::new(crate::completions::themes))]
     pub theme: Option<String>,
-    #[arg(long)]
+    /// Config file to use instead of ~/.config/quarry/config.toml
+    #[arg(long, add = ArgValueCompleter::new(PathCompleter::file()))]
     pub config: Option<PathBuf>,
     /// List saved connections
     #[arg(short = 'l', long = "list")]
     pub list: bool,
     /// Save this connection under NAME in the config
-    #[arg(long, value_name = "NAME")]
+    #[arg(long, value_name = "NAME", add = ArgValueCandidates::new(crate::completions::saved_names))]
     pub save: Option<String>,
     /// Choose how \llm reaches a model (API key, Claude Code, Codex, …) and save it
     #[arg(long)]
     pub setup_llm: bool,
+    /// Print the tab-completion script for SHELL (bash, zsh, fish, elvish, powershell)
+    #[arg(long, value_name = "SHELL", add = ArgValueCandidates::new(crate::completions::shells))]
+    pub completions: Option<String>,
+    /// Turn colour off
     #[arg(long)]
     pub no_color: bool,
     /// Skip the intro banner and goodbye message

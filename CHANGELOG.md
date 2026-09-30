@@ -46,6 +46,14 @@ environment variables or a `password_command`, and quarry asks when none of them
 `verify-full`, SSH tunnels through your own `ssh`, and saved connections with read-only mode, start-up SQL and a
 tag colour (red for production). `\c name` switches to one without restarting.
 
+### Shell completion
+
+Tab completion for bash, zsh and fish that knows your setup: saved connections (with their URLs,
+never their passwords), SQLite files, your themes, output formats, TLS modes, hosts from
+`~/.ssh/config`, and the hosts, users and databases your saved connections use. The Arch packages
+install it; elsewhere add `source <(quarry --completions zsh)` (or `bash`, or
+`quarry --completions fish | source`) to your shell's startup file.
+
 ### Staying safe
 
 `DROP`, `TRUNCATE` and `DELETE` or `UPDATE` without a `WHERE` ask first. `--readonly` blocks writes in quarry and at

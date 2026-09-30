@@ -3,7 +3,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 use quarry::cli::{self, Args, Opened};
 use quarry::config::{Config, SavedConnection};
@@ -15,7 +15,12 @@ use quarry::special::favorites::Favorites;
 use quarry::theme::{self, ColorDepth, Theme};
 
 fn main() -> ExitCode {
+    // When the shell asks for completions (`COMPLETE=<shell> quarry -- …`), answer and exit.
+    clap_complete::CompleteEnv::with_factory(Args::command).complete();
     let args = Args::parse();
+    if let Some(shell) = &args.completions {
+        return print_completion_script(shell);
+    }
     let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().worker_threads(4).build() {
         Ok(rt) => rt,
         Err(e) => {
@@ -32,6 +37,25 @@ fn main() -> ExitCode {
     };
     rt.shutdown_timeout(std::time::Duration::from_millis(200));
     code
+}
+
+/// The script to `source` in a shell's rc file; it calls back into `quarry` for every completion.
+fn print_completion_script(shell: &str) -> ExitCode {
+    // SAFETY: nothing else runs yet; the tokio runtime is started after this returns.
+    unsafe { std::env::set_var("COMPLETE", shell) };
+    match clap_complete::CompleteEnv::with_factory(Args::command).try_complete(["quarry"], None) {
+        Ok(_) => {
+            if shell == "zsh" {
+                // Installed as an autoloaded `_quarry` (site-functions), the first Tab must complete too.
+                println!("[[ $funcstack[1] == _quarry ]] && _clap_dynamic_completer_quarry \"$@\"");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("quarry: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn real_main(args: Args, rt: &tokio::runtime::Runtime) -> Result<ExitCode> {

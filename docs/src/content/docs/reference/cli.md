@@ -69,6 +69,7 @@ See [Scripts, exports and pipes](/guides/scripting/).
 | `--list` | `-l` | List saved connections and exit |
 | `--save NAME` | | Save this connection under `NAME`. See [Saved connections](/advanced/saved-connections/). |
 | `--setup-llm` | | Choose how `\llm` reaches a model, test it and save it. See [Asking a model for SQL](/guides/ai/). |
+| `--completions SHELL` | | Print the tab-completion script for `bash`, `zsh`, `fish`, `elvish` or `powershell`. See [Shell completion](/start/installation/#shell-completion). |
 
 ## Help
 

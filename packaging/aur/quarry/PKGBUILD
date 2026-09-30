@@ -43,6 +43,10 @@ check() {
 package() {
   cd "$pkgname-$pkgver"
   install -Dm755 target/release/quarry -t "$pkgdir/usr/bin"
+  install -d "$pkgdir"/usr/share/{bash-completion/completions,zsh/site-functions,fish/vendor_completions.d}
+  target/release/quarry --completions bash > "$pkgdir/usr/share/bash-completion/completions/quarry"
+  target/release/quarry --completions zsh > "$pkgdir/usr/share/zsh/site-functions/_quarry"
+  target/release/quarry --completions fish > "$pkgdir/usr/share/fish/vendor_completions.d/quarry.fish"
   install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
 }

@@ -58,6 +58,24 @@ Check that it worked:
 quarry --version
 ```
 
+## Shell completion
+
+quarry completes its options in bash, zsh and fish, and it knows your setup: <kbd>Tab</kbd> after
+`quarry` offers your saved connections (with their URLs), SQLite files and URL schemes; after
+`--theme` your themes, including your own; after `--ssh` the hosts in `~/.ssh/config`; after
+`--host`, `--user` or `--database` the values your saved connections use.
+
+The Arch packages install it for you. Otherwise add one line to your shell's startup file:
+
+| Shell | Add to | Line |
+|---|---|---|
+| bash | `~/.bashrc` | `source <(quarry --completions bash)` |
+| zsh | `~/.zshrc` (after `compinit`) | `source <(quarry --completions zsh)` |
+| fish | `~/.config/fish/config.fish` | `quarry --completions fish \| source` |
+
+The script is small and asks `quarry` for candidates each time, so new saved connections and themes
+appear without regenerating anything.
+
 ## Update
 
 Pull the latest changes and run the same command again. Cargo replaces the old binary:
