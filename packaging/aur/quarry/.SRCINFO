@@ -10,6 +10,7 @@ pkgbase = quarry
 	depends = glibc
 	optdepends = openssh: SSH tunnels (--ssh)
 	optdepends = less: paging long results
+	options = !lto
 	source = quarry-0.1.0.tar.gz::https://github.com/mah3uz/quarry/archive/refs/tags/v0.1.0.tar.gz
 	sha256sums = SKIP
 

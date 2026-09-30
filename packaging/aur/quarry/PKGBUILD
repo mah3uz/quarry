@@ -13,6 +13,8 @@ optdepends=(
   'openssh: SSH tunnels (--ssh)'
   'less: paging long results'
 )
+# makepkg's -flto turns the bundled C code (SQLite, aws-lc) into GCC LTO objects the Rust link can't resolve.
+options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
