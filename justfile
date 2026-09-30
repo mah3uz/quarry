@@ -45,14 +45,24 @@ lint:
 [group('check')]
 check: lint test
 
-# Install the quarry binary into ~/.cargo/bin
+# Build the Arch package from HEAD and install it with pacman
 [group('install')]
-install:
-    cargo install --path . --locked
+install: package
+    sudo pacman -U dist/quarry-{{pkgver}}-*-x86_64.pkg.tar.zst
 
-# Remove the installed binary (settings and history are kept)
+# Remove the installed package (settings and history are kept)
 [group('install')]
 uninstall:
+    sudo pacman -R quarry
+
+# Install the binary into ~/.cargo/bin with Cargo instead (for systems without pacman)
+[group('install')]
+install-cargo:
+    cargo install --path . --locked
+
+# Remove the binary installed with install-cargo
+[group('install')]
+uninstall-cargo:
     cargo uninstall quarry
 
 # Build the release tarball (binary, README, LICENSE) from the working tree into dist/
