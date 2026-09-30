@@ -1,4 +1,4 @@
-<p align="center"><img src="logo.svg" width="160" alt="quarry mascot: a stone database cylinder with a data crystal and a pickaxe"></p>
+<p align="center"><img src="banner.svg" alt="quarry: a fast, beautiful SQL client for the terminal, for PostgreSQL, MySQL / MariaDB and SQLite"></p>
 
 # quarry
 
@@ -235,3 +235,7 @@ QUARRY_TEST_PG=postgres://postgres@127.0.0.1/postgres QUARRY_TEST_MYSQL=mysql://
 
 The integration tests create their own `quarry_test_*` databases and drop them afterwards. If a
 server is unreachable, its tests are skipped.
+
+`logo.svg` and `banner.svg` are generated: edit the mascot in `scripts/gen_art.py` and run
+`python3 scripts/gen_art.py`. The animations leave every shape at its resting pose, so renderers
+without SVG animation still draw the static artwork.

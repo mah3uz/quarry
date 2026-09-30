@@ -1,0 +1,273 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="title desc">
+  <title id="title">quarry</title>
+  <desc id="desc">A fast, beautiful SQL client and TUI for PostgreSQL, MySQL/MariaDB and SQLite, written in Rust.</desc>
+  <defs>
+    <radialGradient id="gemglow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7dcfff" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#7dcfff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3b4261"/>
+      <stop offset="0.22" stop-color="#6b739c"/>
+      <stop offset="0.5" stop-color="#8189b6"/>
+      <stop offset="0.82" stop-color="#565f89"/>
+      <stop offset="1" stop-color="#2f3549"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d5dbf7"/>
+      <stop offset="1" stop-color="#9aa5ce"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f0c585"/>
+      <stop offset="1" stop-color="#b3874a"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e4e9ff"/>
+      <stop offset="1" stop-color="#8a94c0"/>
+    </linearGradient>
+    <linearGradient id="gemL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e0fbff"/>
+      <stop offset="1" stop-color="#7dcfff"/>
+    </linearGradient>
+    <linearGradient id="gemR" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dcfff"/>
+      <stop offset="1" stop-color="#2a8fbf"/>
+    </linearGradient>
+    <linearGradient id="bannerbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f2335"/>
+      <stop offset="1" stop-color="#13141c"/>
+    </linearGradient>
+    <radialGradient id="glowblue" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7aa2f7" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#7aa2f7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowpurple" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#bb9af7" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#bb9af7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wordmark" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7dcfff">
+        <animate attributeName="stop-color" values="#7dcfff;#7aa2f7;#bb9af7;#7dcfff" dur="8s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="0.5" stop-color="#7aa2f7">
+        <animate attributeName="stop-color" values="#7aa2f7;#bb9af7;#7dcfff;#7aa2f7" dur="8s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="1" stop-color="#bb9af7">
+        <animate attributeName="stop-color" values="#bb9af7;#7dcfff;#7aa2f7;#bb9af7" dur="8s" repeatCount="indefinite"/>
+      </stop>
+    </linearGradient>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.4" fill="#a9b1d6" fill-opacity="0.07"/>
+    </pattern>
+    <clipPath id="card"><rect width="1280" height="400" rx="28"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#card)">
+    <rect width="1280" height="400" fill="url(#bannerbg)"/>
+    <rect width="1280" height="400" fill="url(#dots)"/>
+    <ellipse cx="220" cy="210" rx="260" ry="230" fill="url(#glowblue)">
+      <animate attributeName="opacity" values="0.75;1;0.75" dur="6s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+    </ellipse>
+    <ellipse cx="1120" cy="60" rx="320" ry="220" fill="url(#glowpurple)">
+      <animate attributeName="cx" values="1120;980;1120" dur="14s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+    </ellipse>
+  </g>
+  <rect x="0.75" y="0.75" width="1278.5" height="398.5" rx="27.5" fill="none" stroke="#3b4261" stroke-width="1.5"/>
+
+  <g transform="translate(58 38) scale(0.64)">
+    <g transform="translate(-14 8)">
+      <ellipse cx="256" cy="440" rx="150" ry="20" fill="#0b0c12" opacity="0.55">
+        <animate attributeName="rx" values="150;136;150" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+        <animate attributeName="opacity" values="0.55;0.38;0.55" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+      </ellipse>
+    </g>
+
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0 0;0 -8;0 0" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+      <g transform="translate(-14 8)">
+        <!-- pickaxe, handle tucked behind the body; taps the rim, pivoting on the hand (local 0,155) -->
+        <g transform="translate(420 118) rotate(16)">
+          <rect x="-8" y="0" width="16" height="300" rx="8" fill="url(#wood)" stroke="#1a1b26" stroke-width="5"/>
+          <path d="M-74 30 Q-38 -18 0 -18 Q38 -18 74 30 Q36 2 0 4 Q-36 2 -74 30 Z" fill="url(#steel)" stroke="#1a1b26" stroke-width="5" stroke-linejoin="round"/>
+          <rect x="-14" y="-18" width="28" height="30" rx="6" fill="#565f89" stroke="#1a1b26" stroke-width="5"/>
+          <animateTransform attributeName="transform" type="rotate" additive="sum" values="0 0 155;0 0 155;7 0 155;-4 0 155;0 0 155;0 0 155" dur="4s" repeatCount="indefinite" keyTimes="0;0.62;0.74;0.8;0.9;1"/>
+        </g>
+
+        <!-- stone cylinder -->
+        <path d="M136 150 V400 A120 34 0 0 0 376 400 V150 Z" fill="url(#stone)"/>
+        <path d="M136 233 A120 34 0 0 0 376 233" fill="none" stroke="#1f2335" stroke-width="7"/>
+        <path d="M140 240 A118 33 0 0 0 372 240" fill="none" stroke="#a9b1d6" stroke-opacity="0.35" stroke-width="3"/>
+        <path d="M136 316 A120 34 0 0 0 376 316" fill="none" stroke="#1f2335" stroke-width="7"/>
+        <path d="M140 323 A118 33 0 0 0 372 323" fill="none" stroke="#a9b1d6" stroke-opacity="0.3" stroke-width="3"/>
+        <path d="M136 150 V400 A120 34 0 0 0 376 400 V150" fill="none" stroke="#1a1b26" stroke-width="6" stroke-linejoin="round"/>
+
+        <g fill="#1f2335" opacity="0.45">
+          <circle cx="162" cy="206" r="2.5"/><circle cx="344" cy="198" r="2"/><circle cx="170" cy="300" r="2"/>
+          <circle cx="232" cy="330" r="2.5"/><circle cx="300" cy="352" r="2"/><circle cx="348" cy="300" r="2.5"/>
+          <circle cx="210" cy="410" r="2.5"/><circle cx="280" cy="420" r="2"/><circle cx="330" cy="392" r="2"/>
+        </g>
+        <g fill="#c0caf5" opacity="0.3">
+          <circle cx="186" cy="196" r="2"/><circle cx="262" cy="292" r="2"/><circle cx="196" cy="352" r="2"/>
+          <circle cx="252" cy="398" r="2"/><circle cx="318" cy="326" r="1.8"/>
+        </g>
+
+        <!-- chisel marks -->
+        <path d="M136 272 l14 8 l-14 10 Z" fill="#1f2335" opacity="0.7"/>
+        <path d="M376 356 l-12 7 l12 9 Z" fill="#1f2335" opacity="0.7"/>
+        <path d="M178 372 l13 11 l-6 13 l12 9" fill="none" stroke="#2a2f45" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M318 290 l-10 9 l8 10" fill="none" stroke="#2a2f45" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+        <!-- top face -->
+        <ellipse cx="256" cy="150" rx="120" ry="34" fill="url(#top)" stroke="#1a1b26" stroke-width="6"/>
+        <path d="M150 140 L192 124 L226 142 L186 158 Z" fill="#ffffff" opacity="0.18"/>
+        <path d="M300 170 L338 160 L360 166 L330 178 Z" fill="#565f89" opacity="0.35"/>
+        <path d="M138 158 l16 -4 l-10 14 Z" fill="#2a2f45" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
+
+        <!-- face -->
+        <ellipse cx="216" cy="222" rx="13" ry="16" fill="#1a1b26">
+          <animate attributeName="ry" values="16;16;1.5;16;16" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+        </ellipse>
+        <ellipse cx="296" cy="222" rx="13" ry="16" fill="#1a1b26">
+          <animate attributeName="ry" values="16;16;1.5;16;16" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+        </ellipse>
+        <circle cx="221" cy="215" r="5" fill="#ffffff">
+          <animate attributeName="opacity" values="1;1;0;1;1" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+        </circle>
+        <circle cx="212" cy="229" r="2.2" fill="#ffffff" opacity="0.8">
+          <animate attributeName="opacity" values="0.8;0.8;0;0.8;0.8" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+        </circle>
+        <circle cx="301" cy="215" r="5" fill="#ffffff">
+          <animate attributeName="opacity" values="1;1;0;1;1" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+        </circle>
+        <circle cx="292" cy="229" r="2.2" fill="#ffffff" opacity="0.8">
+          <animate attributeName="opacity" values="0.8;0.8;0;0.8;0.8" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+        </circle>
+        <ellipse cx="186" cy="248" rx="15" ry="8" fill="#f7768e" opacity="0.45"/>
+        <ellipse cx="326" cy="248" rx="15" ry="8" fill="#f7768e" opacity="0.45"/>
+        <path d="M240 244 Q256 260 272 244" fill="none" stroke="#1a1b26" stroke-width="6" stroke-linecap="round"/>
+
+        <!-- data crystal -->
+        <circle cx="256" cy="112" r="78" fill="url(#gemglow)">
+          <animate attributeName="r" values="70;86;70" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+          <animate attributeName="opacity" values="0.7;1;0.7" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+        </circle>
+        <path d="M222 156 L210 118 L224 96 L236 150 Z" fill="url(#gemR)" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M290 156 L304 124 L292 104 L278 150 Z" fill="url(#gemR)" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M256 58 L230 98 L238 160 L256 160 Z" fill="url(#gemL)"/>
+        <path d="M256 58 L282 98 L274 160 L256 160 Z" fill="url(#gemR)"/>
+        <path d="M256 58 L282 98 L274 160 L238 160 L230 98 Z" fill="none" stroke="#1a1b26" stroke-width="5" stroke-linejoin="round"/>
+        <path d="M247 80 L239 100 L244 140" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+        <g transform="translate(256 60)">
+          <path d="M0 -14 Q0 0 14 0 Q0 0 0 14 Q0 0 -14 0 Q0 0 0 -14 Z" fill="#ffffff" transform="scale(0)">
+            <animateTransform attributeName="transform" type="scale" values="0;0;1;0;0" dur="3.2s" repeatCount="indefinite" keyTimes="0;0.35;0.45;0.55;1"/>
+          </path>
+        </g>
+
+        <!-- little stone arm and hand gripping the handle -->
+        <path d="M362 270 q10 -3 16 -2" fill="none" stroke="#1a1b26" stroke-width="20" stroke-linecap="round"/>
+        <path d="M362 270 q10 -3 16 -2" fill="none" stroke="#6b739c" stroke-width="11" stroke-linecap="round"/>
+        <circle cx="381" cy="268" r="15" fill="#737aa2" stroke="#1a1b26" stroke-width="5"/>
+        <path d="M373 263 q8 -4 15 1" fill="none" stroke="#a9b1d6" stroke-opacity="0.6" stroke-width="3" stroke-linecap="round"/>
+
+        <!-- pebbles -->
+        <path d="M112 440 l8 -14 l16 2 l6 12 Z" fill="#565f89" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M146 442 l5 -9 l10 2 l2 7 Z" fill="#737aa2" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M384 442 l6 -10 l11 2 l3 8 Z" fill="#6b739c" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
+
+        <!-- sparks on each strike -->
+        <circle cx="336" cy="128" r="3.2" fill="#e0af68" opacity="0">
+          <animate attributeName="opacity" values="0;0;1;0;0" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+          <animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 0;-16 -12;-16 -12" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+        </circle>
+        <circle cx="336" cy="128" r="3.2" fill="#ffd88a" opacity="0">
+          <animate attributeName="opacity" values="0;0;1;0;0" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+          <animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 0;-4 -20;-4 -20" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+        </circle>
+        <circle cx="336" cy="128" r="3.2" fill="#7dcfff" opacity="0">
+          <animate attributeName="opacity" values="0;0;1;0;0" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+          <animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 0;10 -14;10 -14" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+        </circle>
+      </g>
+    </g>
+
+    <g>
+      <path d="M118 108 Q118 124 134 124 Q118 124 118 140 Q118 124 102 124 Q118 124 118 108 Z" fill="#e0af68"/>
+      <animate attributeName="opacity" values="1;0.25;1" dur="2.6s" begin="0s" repeatCount="indefinite"/>
+      <animateTransform attributeName="transform" type="rotate" from="0 118 124" to="360 118 124" dur="14s" repeatCount="indefinite"/>
+    </g>
+
+    <g>
+      <path d="M84 240 Q84 250 94 250 Q84 250 84 260 Q84 250 74 250 Q84 250 84 240 Z" fill="#e0af68"/>
+      <animate attributeName="opacity" values="1;0.25;1" dur="2.2s" begin="0.9s" repeatCount="indefinite"/>
+      <animateTransform attributeName="transform" type="rotate" from="0 84 250" to="360 84 250" dur="14s" repeatCount="indefinite"/>
+    </g>
+
+    <g>
+      <path d="M446 300 Q446 309 455 309 Q446 309 446 318 Q446 309 437 309 Q446 309 446 300 Z" fill="#7dcfff"/>
+      <animate attributeName="opacity" values="1;0.25;1" dur="2.8s" begin="1.6s" repeatCount="indefinite"/>
+      <animateTransform attributeName="transform" type="rotate" from="0 446 309" to="360 446 309" dur="14s" repeatCount="indefinite"/>
+    </g>
+
+    <circle cx="150" cy="176" r="4" fill="#bb9af7">
+      <animate attributeName="r" values="4;6;4" dur="2.4s" begin="0.4s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <g font-family="Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif">
+    <text x="446" y="168" fill="url(#wordmark)" font-size="124" font-weight="800" letter-spacing="-3">quarry</text>
+    <text x="450" y="224" fill="#a9b1d6" font-size="30" font-weight="500">A fast, beautiful SQL client for the terminal</text>
+    <g transform="translate(452 262)">
+      <rect width="156" height="40" rx="20" fill="#7aa2f7" fill-opacity="0.14" stroke="#7aa2f7" stroke-opacity="0.55" stroke-width="1.5"/>
+      <circle cx="21" cy="20" r="5" fill="#7aa2f7">
+        <animate attributeName="opacity" values="1;0.35;1" dur="2.5s" begin="0.0s" repeatCount="indefinite"/>
+      </circle>
+      <text x="34" y="26.5" fill="#c0caf5" font-size="18" font-weight="600">PostgreSQL</text>
+    </g>
+
+    <g transform="translate(620 262)">
+      <rect width="212" height="40" rx="20" fill="#e0af68" fill-opacity="0.14" stroke="#e0af68" stroke-opacity="0.55" stroke-width="1.5"/>
+      <circle cx="21" cy="20" r="5" fill="#e0af68">
+        <animate attributeName="opacity" values="1;0.35;1" dur="2.5s" begin="0.5s" repeatCount="indefinite"/>
+      </circle>
+      <text x="34" y="26.5" fill="#c0caf5" font-size="18" font-weight="600">MySQL / MariaDB</text>
+    </g>
+
+    <g transform="translate(844 262)">
+      <rect width="111" height="40" rx="20" fill="#7dcfff" fill-opacity="0.14" stroke="#7dcfff" stroke-opacity="0.55" stroke-width="1.5"/>
+      <circle cx="21" cy="20" r="5" fill="#7dcfff">
+        <animate attributeName="opacity" values="1;0.35;1" dur="2.5s" begin="1.0s" repeatCount="indefinite"/>
+      </circle>
+      <text x="34" y="26.5" fill="#c0caf5" font-size="18" font-weight="600">SQLite</text>
+    </g>
+
+    <g transform="translate(967 262)">
+      <rect width="156" height="40" rx="20" fill="#bb9af7" fill-opacity="0.14" stroke="#bb9af7" stroke-opacity="0.55" stroke-width="1.5"/>
+      <circle cx="21" cy="20" r="5" fill="#bb9af7">
+        <animate attributeName="opacity" values="1;0.35;1" dur="2.5s" begin="1.5s" repeatCount="indefinite"/>
+      </circle>
+      <text x="34" y="26.5" fill="#c0caf5" font-size="18" font-weight="600">REPL + TUI</text>
+    </g>
+
+    <g transform="translate(1135 262)">
+      <rect width="89" height="40" rx="20" fill="#f7768e" fill-opacity="0.14" stroke="#f7768e" stroke-opacity="0.55" stroke-width="1.5"/>
+      <circle cx="21" cy="20" r="5" fill="#f7768e">
+        <animate attributeName="opacity" values="1;0.35;1" dur="2.5s" begin="2.0s" repeatCount="indefinite"/>
+      </circle>
+      <text x="34" y="26.5" fill="#c0caf5" font-size="18" font-weight="600">Rust</text>
+    </g>
+  </g>
+
+  <clipPath id="typed">
+    <rect x="476" y="326" width="564" height="36">
+      <animate attributeName="width" values="0;12;24;36;48;60;72;84;96;108;120;132;144;156;168;180;192;204;216;228;240;252;264;276;288;300;312;324;336;348;360;372;384;396;408;420;432;444;456;468;480;492;504;564;0;0" keyTimes="0.0000;0.0667;0.0739;0.0811;0.0883;0.0956;0.1028;0.1100;0.1172;0.1244;0.1317;0.1389;0.1461;0.1533;0.1606;0.1678;0.1750;0.1822;0.1894;0.1967;0.2039;0.2111;0.2183;0.2256;0.2328;0.2400;0.2472;0.2544;0.2617;0.2689;0.2761;0.2833;0.2906;0.2978;0.3050;0.3122;0.3194;0.3267;0.3339;0.3411;0.3483;0.3556;0.3628;0.3700;0.9333;1.0000" dur="9.0s" calcMode="discrete" repeatCount="indefinite"/>
+    </rect>
+  </clipPath>
+  <g font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="20">
+    <text x="452" y="352" fill="#9ece6a">❯</text>
+    <text y="352" clip-path="url(#typed)"><tspan x="476" fill="#bb9af7" textLength="48" lengthAdjust="spacing">\llm</tspan><tspan x="536" fill="#c0caf5" textLength="456" lengthAdjust="spacing">top 10 customers by revenue this month</tspan></text>
+    <rect x="1006" y="334" width="11" height="23" rx="2" fill="#7aa2f7">
+      <animate attributeName="x" values="478;490;502;514;526;538;550;562;574;586;598;610;622;634;646;658;670;682;694;706;718;730;742;754;766;778;790;802;814;826;838;850;862;874;886;898;910;922;934;946;958;970;982;994;478;478" keyTimes="0.0000;0.0667;0.0739;0.0811;0.0883;0.0956;0.1028;0.1100;0.1172;0.1244;0.1317;0.1389;0.1461;0.1533;0.1606;0.1678;0.1750;0.1822;0.1894;0.1967;0.2039;0.2111;0.2183;0.2256;0.2328;0.2400;0.2472;0.2544;0.2617;0.2689;0.2761;0.2833;0.2906;0.2978;0.3050;0.3122;0.3194;0.3267;0.3339;0.3411;0.3483;0.3556;0.3628;0.3700;0.9333;1.0000" dur="9.0s" calcMode="discrete" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.9;0" dur="1.1s" calcMode="discrete" repeatCount="indefinite"/>
+    </rect>
+  </g>
+</svg>

@@ -47,12 +47,15 @@
 
   <g transform="translate(-14 8)">
     <ellipse cx="256" cy="440" rx="150" ry="20" fill="#0b0c12" opacity="0.55"/>
+  </g>
 
-    <!-- pickaxe, handle tucked behind the body -->
+  <g transform="translate(-14 8)">
+    <!-- pickaxe, handle tucked behind the body; taps the rim, pivoting on the hand (local 0,155) -->
     <g transform="translate(420 118) rotate(16)">
       <rect x="-8" y="0" width="16" height="300" rx="8" fill="url(#wood)" stroke="#1a1b26" stroke-width="5"/>
       <path d="M-74 30 Q-38 -18 0 -18 Q38 -18 74 30 Q36 2 0 4 Q-36 2 -74 30 Z" fill="url(#steel)" stroke="#1a1b26" stroke-width="5" stroke-linejoin="round"/>
       <rect x="-14" y="-18" width="28" height="30" rx="6" fill="#565f89" stroke="#1a1b26" stroke-width="5"/>
+      <animateTransform attributeName="transform" type="rotate" additive="sum" values="0 0 155;0 0 155;7 0 155;-4 0 155;0 0 155;0 0 155" dur="4s" repeatCount="indefinite" keyTimes="0;0.62;0.74;0.8;0.9;1"/>
     </g>
 
     <!-- stone cylinder -->
@@ -86,24 +89,44 @@
     <path d="M138 158 l16 -4 l-10 14 Z" fill="#2a2f45" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
 
     <!-- face -->
-    <ellipse cx="216" cy="222" rx="13" ry="16" fill="#1a1b26"/>
-    <ellipse cx="296" cy="222" rx="13" ry="16" fill="#1a1b26"/>
-    <circle cx="221" cy="215" r="5" fill="#ffffff"/>
-    <circle cx="301" cy="215" r="5" fill="#ffffff"/>
-    <circle cx="212" cy="229" r="2.2" fill="#ffffff" opacity="0.8"/>
-    <circle cx="292" cy="229" r="2.2" fill="#ffffff" opacity="0.8"/>
+    <ellipse cx="216" cy="222" rx="13" ry="16" fill="#1a1b26">
+      <animate attributeName="ry" values="16;16;1.5;16;16" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+    </ellipse>
+    <ellipse cx="296" cy="222" rx="13" ry="16" fill="#1a1b26">
+      <animate attributeName="ry" values="16;16;1.5;16;16" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+    </ellipse>
+    <circle cx="221" cy="215" r="5" fill="#ffffff">
+      <animate attributeName="opacity" values="1;1;0;1;1" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+    </circle>
+    <circle cx="212" cy="229" r="2.2" fill="#ffffff" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;0.8;0;0.8;0.8" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+    </circle>
+    <circle cx="301" cy="215" r="5" fill="#ffffff">
+      <animate attributeName="opacity" values="1;1;0;1;1" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+    </circle>
+    <circle cx="292" cy="229" r="2.2" fill="#ffffff" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;0.8;0;0.8;0.8" dur="5s" repeatCount="indefinite" keyTimes="0;0.9;0.93;0.96;1"/>
+    </circle>
     <ellipse cx="186" cy="248" rx="15" ry="8" fill="#f7768e" opacity="0.45"/>
     <ellipse cx="326" cy="248" rx="15" ry="8" fill="#f7768e" opacity="0.45"/>
     <path d="M240 244 Q256 260 272 244" fill="none" stroke="#1a1b26" stroke-width="6" stroke-linecap="round"/>
 
     <!-- data crystal -->
-    <circle cx="256" cy="112" r="78" fill="url(#gemglow)"/>
+    <circle cx="256" cy="112" r="78" fill="url(#gemglow)">
+      <animate attributeName="r" values="70;86;70" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+      <animate attributeName="opacity" values="0.7;1;0.7" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
+    </circle>
     <path d="M222 156 L210 118 L224 96 L236 150 Z" fill="url(#gemR)" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
     <path d="M290 156 L304 124 L292 104 L278 150 Z" fill="url(#gemR)" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
     <path d="M256 58 L230 98 L238 160 L256 160 Z" fill="url(#gemL)"/>
     <path d="M256 58 L282 98 L274 160 L256 160 Z" fill="url(#gemR)"/>
     <path d="M256 58 L282 98 L274 160 L238 160 L230 98 Z" fill="none" stroke="#1a1b26" stroke-width="5" stroke-linejoin="round"/>
     <path d="M247 80 L239 100 L244 140" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+    <g transform="translate(256 60)">
+      <path d="M0 -14 Q0 0 14 0 Q0 0 0 14 Q0 0 -14 0 Q0 0 0 -14 Z" fill="#ffffff" transform="scale(0)">
+        <animateTransform attributeName="transform" type="scale" values="0;0;1;0;0" dur="3.2s" repeatCount="indefinite" keyTimes="0;0.35;0.45;0.55;1"/>
+      </path>
+    </g>
 
     <!-- little stone arm and hand gripping the handle -->
     <path d="M362 270 q10 -3 16 -2" fill="none" stroke="#1a1b26" stroke-width="20" stroke-linecap="round"/>
@@ -115,13 +138,41 @@
     <path d="M112 440 l8 -14 l16 2 l6 12 Z" fill="#565f89" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
     <path d="M146 442 l5 -9 l10 2 l2 7 Z" fill="#737aa2" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
     <path d="M384 442 l6 -10 l11 2 l3 8 Z" fill="#6b739c" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
+
+    <!-- sparks on each strike -->
+    <circle cx="336" cy="128" r="3.2" fill="#e0af68" opacity="0">
+      <animate attributeName="opacity" values="0;0;1;0;0" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+      <animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 0;-16 -12;-16 -12" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+    </circle>
+    <circle cx="336" cy="128" r="3.2" fill="#ffd88a" opacity="0">
+      <animate attributeName="opacity" values="0;0;1;0;0" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+      <animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 0;-4 -20;-4 -20" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+    </circle>
+    <circle cx="336" cy="128" r="3.2" fill="#7dcfff" opacity="0">
+      <animate attributeName="opacity" values="0;0;1;0;0" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+      <animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 0;10 -14;10 -14" dur="4s" repeatCount="indefinite" keyTimes="0;0.79;0.81;0.92;1"/>
+    </circle>
   </g>
 
-  <!-- sparkles -->
-  <g fill="#e0af68">
-    <path d="M118 108 Q118 124 134 124 Q118 124 118 140 Q118 124 102 124 Q118 124 118 108 Z"/>
-    <path d="M84 240 Q84 250 94 250 Q84 250 84 260 Q84 250 74 250 Q84 250 84 240 Z"/>
+  <g>
+    <path d="M118 108 Q118 124 134 124 Q118 124 118 140 Q118 124 102 124 Q118 124 118 108 Z" fill="#e0af68"/>
+    <animate attributeName="opacity" values="1;0.25;1" dur="2.6s" begin="0s" repeatCount="indefinite"/>
+    <animateTransform attributeName="transform" type="rotate" from="0 118 124" to="360 118 124" dur="14s" repeatCount="indefinite"/>
   </g>
-  <path d="M446 300 Q446 309 455 309 Q446 309 446 318 Q446 309 437 309 Q446 309 446 300 Z" fill="#7dcfff"/>
-  <circle cx="150" cy="176" r="4" fill="#bb9af7"/>
+
+  <g>
+    <path d="M84 240 Q84 250 94 250 Q84 250 84 260 Q84 250 74 250 Q84 250 84 240 Z" fill="#e0af68"/>
+    <animate attributeName="opacity" values="1;0.25;1" dur="2.2s" begin="0.9s" repeatCount="indefinite"/>
+    <animateTransform attributeName="transform" type="rotate" from="0 84 250" to="360 84 250" dur="14s" repeatCount="indefinite"/>
+  </g>
+
+  <g>
+    <path d="M446 300 Q446 309 455 309 Q446 309 446 318 Q446 309 437 309 Q446 309 446 300 Z" fill="#7dcfff"/>
+    <animate attributeName="opacity" values="1;0.25;1" dur="2.8s" begin="1.6s" repeatCount="indefinite"/>
+    <animateTransform attributeName="transform" type="rotate" from="0 446 309" to="360 446 309" dur="14s" repeatCount="indefinite"/>
+  </g>
+
+  <circle cx="150" cy="176" r="4" fill="#bb9af7">
+    <animate attributeName="r" values="4;6;4" dur="2.4s" begin="0.4s" repeatCount="indefinite"/>
+  </circle>
 </svg>
