@@ -42,6 +42,8 @@ pub struct ConnEntry {
     pub loading_catalog: bool,
     /// From the saved connection's `color`, e.g. red for production.
     pub color: Option<Color>,
+    /// Databases whose tables were requested for completion (MySQL loads only the current one up front).
+    pub requested_schemas: std::collections::HashSet<String>,
 }
 
 impl ConnEntry {
@@ -328,6 +330,7 @@ impl App {
             _tunnel: opened.tunnel,
             loading_catalog: true,
             color,
+            requested_schemas: Default::default(),
         };
         self.conns.push(Some(entry));
         self.sidebar.set_connection(id, &name, &info.version, spec.backend, info.is_mariadb);
@@ -370,6 +373,20 @@ impl App {
             c.loading_catalog = true;
             c.meta().send(Tag::Catalog, Request::LoadCatalog);
         }
+    }
+
+    fn focus_connection(&mut self, id: ConnId) {
+        self.sidebar.select_connection(id);
+        match self.tabs.iter().position(|t| t.conn == Some(id) && matches!(t.kind, TabKind::Query(_))) {
+            Some(i) => {
+                self.active = i;
+                self.focus = Focus::Main;
+            }
+            None => {
+                self.new_query_tab(Some(id), None);
+            }
+        }
+        self.completion = None;
     }
 
     pub fn open_connection_manager(&mut self) {
@@ -690,7 +707,10 @@ impl App {
                 }
             }
             Tag::Sidebar => match reply {
-                Reply::Relations(schema, Ok(rels)) => self.sidebar.set_relations(conn, &schema, &rels),
+                Reply::Relations(schema, Ok(rels)) => {
+                    self.sidebar.set_relations(conn, &schema, &rels);
+                    self.merge_relations(conn, &schema, rels);
+                }
                 Reply::Relations(_, Err(e)) => self.toast(Level::Error, e.to_string()),
                 Reply::Ddl(Ok(text)) => {
                     let title = "Definition".to_string();
@@ -715,37 +735,81 @@ impl App {
         }
     }
 
+    fn make_completer(&self, cat: Arc<Catalog>) -> Completer {
+        let casing = match self.config.main.keyword_casing.to_ascii_lowercase().as_str() {
+            "upper" => KeywordCasing::Upper,
+            "lower" => KeywordCasing::Lower,
+            _ => KeywordCasing::Auto,
+        };
+        let backend = cat.backend;
+        let extras = Extras {
+            specials: special::registry()
+                .iter()
+                .filter(|s| s.backends.is_empty() || s.backends.contains(&backend))
+                .flat_map(|s| s.names.iter().map(move |n| (n.to_string(), s.description.to_string())))
+                .collect(),
+            favorites: self.favorites.queries.keys().cloned().collect(),
+            ..Default::default()
+        };
+        let options = CompleteOptions {
+            keyword_casing: casing,
+            smart: self.config.main.smart_completion,
+            join_suggestions: self.config.main.join_suggestions,
+            ..Default::default()
+        };
+        Completer::new(backend, cat, options, extras)
+    }
+
+    /// Relations loaded lazily (a MySQL database other than the current one) join the completer's catalog.
+    fn merge_relations(&mut self, conn: ConnId, schema: &str, rels: Vec<crate::db::Relation>) {
+        let Some(old) = self.conn(conn).and_then(|c| c.catalog.clone()) else { return };
+        let mut cat = (*old).clone();
+        match cat.schemas.iter_mut().find(|s| s.name == schema) {
+            Some(s) if s.relations.iter().any(|r| !r.columns.is_empty()) => return,
+            Some(s) => s.relations = rels,
+            None => cat.schemas.push(crate::db::SchemaInfo { name: schema.to_string(), relations: rels, functions: Vec::new(), types: Vec::new() }),
+        }
+        let cat = Arc::new(cat);
+        let completer = Arc::new(self.make_completer(cat.clone()));
+        if let Some(c) = self.conn_mut(conn) {
+            c.completer = Some(completer);
+            c.catalog = Some(cat);
+        }
+        if self.editor_focused() && self.tabs.get(self.active).and_then(|t| t.conn) == Some(conn) {
+            self.update_completion(false);
+        }
+    }
+
+    /// `db.` before the cursor names a database whose tables aren't loaded yet: fetch them.
+    fn request_schema_for_completion(&mut self, conn: ConnId, before_cursor: &str) {
+        let Some(qualifier) = before_cursor
+            .trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == '$')
+            .strip_suffix('.')
+            .map(|q| q.rsplit(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$' || c == '`' || c == '"')).next().unwrap_or(""))
+            .map(|q| q.trim_matches(|c| c == '`' || c == '"').to_string())
+        else {
+            return;
+        };
+        let Some(c) = self.conn_mut(conn) else { return };
+        let Some(cat) = &c.catalog else { return };
+        let unloaded = cat.schemas.iter().any(|s| s.name == qualifier && s.relations.is_empty());
+        if unloaded && c.requested_schemas.insert(qualifier.clone()) {
+            c.meta().send(Tag::Sidebar, Request::ListRelations(qualifier));
+        }
+    }
+
     fn on_catalog(&mut self, conn: ConnId, r: Result<Catalog, DbError>) {
         let show_system = false;
         match r {
             Ok(cat) => {
-                let casing = match self.config.main.keyword_casing.to_ascii_lowercase().as_str() {
-                    "upper" => KeywordCasing::Upper,
-                    "lower" => KeywordCasing::Lower,
-                    _ => KeywordCasing::Auto,
-                };
-                let backend = cat.backend;
-                let extras = Extras {
-                    specials: special::registry()
-                        .iter()
-                        .filter(|s| s.backends.is_empty() || s.backends.contains(&backend))
-                        .flat_map(|s| s.names.iter().map(move |n| (n.to_string(), s.description.to_string())))
-                        .collect(),
-                    favorites: self.favorites.queries.keys().cloned().collect(),
-                    ..Default::default()
-                };
-                let options = CompleteOptions {
-                    keyword_casing: casing,
-                    smart: self.config.main.smart_completion,
-                    join_suggestions: self.config.main.join_suggestions,
-                    ..Default::default()
-                };
                 let cat = Arc::new(cat);
                 self.sidebar.set_catalog(conn, &cat, show_system);
+                let completer = Arc::new(self.make_completer(cat.clone()));
                 if let Some(c) = self.conn_mut(conn) {
-                    c.completer = Some(Arc::new(Completer::new(backend, cat.clone(), options, extras)));
+                    c.completer = Some(completer);
                     c.catalog = Some(cat);
                     c.loading_catalog = false;
+                    c.requested_schemas.clear();
                 }
             }
             Err(e) => {
@@ -1971,6 +2035,9 @@ impl App {
         let cursor = q.editor.cursor_byte();
         let word = q.editor.word_before_cursor().to_string();
         let after_dot = text[..cursor].ends_with('.');
+        if let Some(conn) = conn {
+            self.request_schema_for_completion(conn, &text[..cursor]);
+        }
         if !explicit && word.is_empty() && !after_dot {
             self.completion = None;
             return;
@@ -2088,6 +2155,15 @@ impl App {
                     self.overlay = None;
                 }
                 ConnectEvent::Connect { spec, save_as, name } => {
+                    if let Some(id) = open_conn_named(&self.conns, &name, spec.backend) {
+                        self.overlay = None;
+                        self.focus_connection(id);
+                        self.toast(Level::Info, format!("Already connected to {name}"));
+                        return;
+                    }
+                    if self.pending_connects.values().any(|(n, _, _)| *n == name) {
+                        return;
+                    }
                     form.busy = true;
                     self.start_connect(name, *spec, save_as);
                 }
@@ -2766,6 +2842,11 @@ impl App {
             self.on_grid_event(tab_id, ev, backend);
         }
     }
+}
+
+/// Saved connection names are unique, so a second connect to the same name reuses the open one.
+fn open_conn_named(conns: &[Option<ConnEntry>], name: &str, backend: Backend) -> Option<ConnId> {
+    conns.iter().flatten().find(|c| c.name == name && c.backend() == backend).map(|c| c.id)
 }
 
 fn original_where(t: &TableTab, row: usize, pk: &[usize], backend: Backend) -> String {

@@ -616,24 +616,35 @@ impl MyConn {
         self.conn.query("SHOW DATABASES").await.map_err(my_err)
     }
 
+    /// With columns, so completion works in databases other than the current one.
     pub async fn list_relations(&mut self, schema: &str) -> DbResult<Vec<Relation>> {
         let sql = format!(
-            "SELECT TABLE_NAME, TABLE_TYPE, TABLE_COMMENT, TABLE_ROWS FROM information_schema.TABLES
-             WHERE TABLE_SCHEMA = {} ORDER BY 1",
+            "SELECT t.TABLE_NAME, t.TABLE_TYPE, t.TABLE_COMMENT, t.TABLE_ROWS, {COLUMN_FIELDS}
+             FROM information_schema.TABLES t
+             LEFT JOIN information_schema.COLUMNS c ON c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME
+             WHERE t.TABLE_SCHEMA = {}
+             ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION",
             lit(schema)
         );
         let rows: Vec<MyRow> = self.conn.query(sql).await.map_err(my_err)?;
-        Ok(rows
-            .iter()
-            .map(|r| Relation {
-                schema: schema.to_string(),
-                name: gs(r, 0),
-                kind: rel_kind(&gs(r, 1)),
-                columns: Vec::new(),
-                comment: go(r, 2).filter(|c| !c.is_empty()),
-                row_estimate: gi(r, 3),
-            })
-            .collect())
+        let mut relations: Vec<Relation> = Vec::new();
+        for r in &rows {
+            let name = gs(r, 0);
+            if relations.last().is_none_or(|rel| rel.name != name) {
+                relations.push(Relation {
+                    schema: schema.to_string(),
+                    name,
+                    kind: rel_kind(&gs(r, 1)),
+                    columns: Vec::new(),
+                    comment: go(r, 2).filter(|c| !c.is_empty()),
+                    row_estimate: gi(r, 3),
+                });
+            }
+            if go(r, 4).is_some() {
+                relations.last_mut().expect("pushed above").columns.push(column_info(r, 4));
+            }
+        }
+        Ok(relations)
     }
 
     fn schema_or_current(&self, schema: Option<&str>) -> DbResult<String> {

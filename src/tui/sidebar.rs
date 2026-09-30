@@ -276,6 +276,12 @@ impl Sidebar {
         self.selected_node().map(|n| n.conn)
     }
 
+    pub fn select_connection(&mut self, conn: ConnId) {
+        if let Some(i) = self.rows.iter().position(|r| r.path.len() == 1 && self.roots.get(r.path[0]).is_some_and(|n| n.conn == conn)) {
+            self.selected = i;
+        }
+    }
+
     fn rebuild_rows(&mut self) {
         let filter = self.filter_text.to_lowercase();
         let mut rows = Vec::new();

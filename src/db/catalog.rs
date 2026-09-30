@@ -44,7 +44,7 @@ pub struct Relation {
     pub schema: String,
     pub name: String,
     pub kind: RelKind,
-    /// Empty when loaded via `list_relations` (lazy).
+    /// Empty when loaded via `list_relations` on PostgreSQL and SQLite (lazy).
     pub columns: Vec<ColumnInfo>,
     pub comment: Option<String>,
     pub row_estimate: Option<i64>,

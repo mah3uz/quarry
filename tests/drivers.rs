@@ -758,6 +758,10 @@ async fn my_catalog_loads_current_database_eagerly() {
     assert!(cat.users.iter().any(|u| u.starts_with("'root'@")), "{:?}", cat.users);
     let rels = c.list_relations("mysql").await.unwrap();
     assert!(rels.iter().any(|r| r.name == "user"));
+    // Other databases load lazily; their columns are what completion offers after `db.table.`.
+    let user = rels.iter().find(|r| r.name == "user").unwrap();
+    assert!(user.columns.iter().any(|col| col.name == "Host"), "{:?}", user.columns);
+    assert_eq!(rels.iter().filter(|r| r.name == "user").count(), 1, "one relation per table, not per column");
     db.drop(c).await;
 }
 
