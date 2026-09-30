@@ -78,12 +78,15 @@ Results stream from the server and print as a table:
 ╭─────────┬────────╮
 │ status  │ orders │
 ├─────────┼────────┤
-│ shipped │    667 │
 │ paid    │    667 │
+├─────────┼────────┤
+│ shipped │    667 │
 ╰─────────┴────────╯
 2 rows · 0.57 ms
 ```
 
+- **Rows** are separated by a line in the boxed formats; `row_lines = false` in the config turns
+  that off.
 - **Wide results** switch to vertical layout automatically. `\x` cycles between on, off and auto.
 - **Long values** are cut at 500 characters (`max_field_width`) and end with `…`.
 - **Big results:** past 1000 rows (`row_limit`), quarry asks before fetching the rest. Say no and

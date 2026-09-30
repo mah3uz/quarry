@@ -182,6 +182,7 @@ fn make_session(
         backend,
         table_name: None,
         align_numbers: true,
+        row_lines: config.main.row_lines,
     };
     let favorites = Favorites::load(config.favorites_path()).unwrap_or_else(|e| {
         eprintln!("quarry: could not load favorites: {e:#}");

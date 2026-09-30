@@ -119,6 +119,8 @@ pub struct OutputOptions {
     pub table_name: Option<String>,
     /// Right-align numeric columns.
     pub align_numbers: bool,
+    /// A rule between rows, in the boxed formats (rounded, unicode, double, ascii).
+    pub row_lines: bool,
 }
 
 impl Default for OutputOptions {
@@ -134,6 +136,7 @@ impl Default for OutputOptions {
             backend: Backend::Postgres,
             table_name: None,
             align_numbers: true,
+            row_lines: false,
         }
     }
 }

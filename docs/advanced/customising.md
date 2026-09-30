@@ -78,6 +78,7 @@ If someone else changes the schema, `\refresh` reloads the names quarry complete
 | Option | Default | Effect |
 |---|---|---|
 | `table_format` | `"rounded"` | Default [output format](/reference/output-formats). `\T` changes it for the session. |
+| `row_lines` | `true` | A line between rows in the boxed formats. `false` gives a more compact table. |
 | `expanded` | `"auto"` | `on`, `off`, or `auto`: vertical when a table is wider than the terminal. `\x` changes it. |
 | `max_field_width` | `500` | Cut longer values and add `…`. `0` means no limit. Never applies to machine formats. |
 | `row_limit` | `1000` | Ask before showing more rows than this. `0` never asks. `--row-limit` overrides. |

@@ -18,7 +18,7 @@ commands, favourites and file paths. Matching is fuzzy, so `ui` finds `user_id`.
 and `$$` blocks work without changing the delimiter. Highlighting follows each database's dialect, with bracket
 matching, fish-style suggestions from history, and vi or Emacs keys.
 
-**Results for people and for scripts.** Rounded tables by default, with 17 formats in all: `psql`, `ascii`,
+**Results for people and for scripts.** Rounded tables with a line between rows by default (`row_lines`), and 17 formats in all: `psql`, `ascii`,
 Markdown, CSV, TSV, JSON, JSON Lines, HTML, SQL `INSERT` / `UPDATE` and more. Wide results turn vertical by
 themselves, long ones go through a pager, and past 1,000 rows quarry asks before fetching the rest. `Ctrl-C` cancels
 a query at the server.

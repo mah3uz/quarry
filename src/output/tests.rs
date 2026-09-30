@@ -45,6 +45,25 @@ fn rounded_golden_numbers_right_aligned_cjk_double_width_multiline_split() {
 }
 
 #[test]
+fn row_lines_separate_every_row_but_not_the_lines_of_one_multiline_cell() {
+    let (c, r) = sample();
+    let expected = "\
+╭────┬────────┬───────┬────────╮
+│ id │ name   │ note  │ amount │
+├────┼────────┼───────┼────────┤
+│  1 │ alice  │ NULL  │  12.50 │
+├────┼────────┼───────┼────────┤
+│ 22 │ 日本語 │ two   │      3 │
+│    │        │ lines │        │
+╰────┴────────┴───────┴────────╯
+";
+    let lines = OutputOptions { row_lines: true, ..opts(TableFormat::Rounded) };
+    assert_eq!(render(&c, &r, &lines), expected);
+    let psql = OutputOptions { row_lines: true, ..opts(TableFormat::Psql) };
+    assert_eq!(render(&c, &r, &psql), render(&c, &r, &opts(TableFormat::Psql)), "psql has no box to draw rules in");
+}
+
+#[test]
 fn psql_golden_centered_header_no_trailing_spaces() {
     let (c, r) = sample();
     let expected = concat!(

@@ -34,9 +34,13 @@ rounded                   ascii                     markdown              psql
 │ status │ orders │       | status | orders |       |--------|-------:|   --------+--------
 ├────────┼────────┤       +--------+--------+       | new    |    666 |    new    |    666
 │ new    │    666 │       | new    |    666 |       | paid   |    667 |    paid   |    667
+├────────┼────────┤       +--------+--------+
 │ paid   │    667 │       | paid   |    667 |
 ╰────────┴────────╯       +--------+--------+
 ```
+
+In the boxed formats (`rounded`, `unicode`, `double`, `ascii`) a line separates the rows. Set
+`row_lines = false` in the config for a more compact table.
 
 ## Machine formats
 

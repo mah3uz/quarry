@@ -2796,6 +2796,7 @@ fn render_grid(grid: &GridState, format: TableFormat, table: String, backend: Ba
         backend,
         table_name: Some(table),
         align_numbers: true,
+        row_lines: false,
     };
     output::render(grid.columns(), grid.rows(), &opts)
 }

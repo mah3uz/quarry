@@ -57,7 +57,9 @@ select title, year from books order by year;
 │ title                     │ year │
 ├───────────────────────────┼──────┤
 │ Dune                      │ 1965 │
+├───────────────────────────┼──────┤
 │ The Left Hand of Darkness │ 1969 │
+├───────────────────────────┼──────┤
 │ Neuromancer               │ 1984 │
 ╰───────────────────────────┴──────╯
 3 rows · 0.31 ms

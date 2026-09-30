@@ -30,6 +30,7 @@ struct Cell<'a> {
     style: Style,
 }
 
+#[derive(Clone, Copy)]
 struct Rule {
     left: &'static str,
     fill: &'static str,
@@ -43,6 +44,8 @@ struct Frame {
     bottom: Option<Rule>,
     left: &'static str,
     sep: &'static str,
+    /// Drawn between rows when row_lines is on (the boxed formats only).
+    row: Option<Rule>,
     right: &'static str,
     /// Rule fill per column = column width + `pad`.
     pad: usize,
@@ -55,8 +58,9 @@ const fn rule(left: &'static str, fill: &'static str, cross: &'static str, right
 }
 
 fn frame(format: TableFormat) -> Frame {
-    let boxed = |top, head, bottom, left, sep, right| Frame {
+    let boxed = |top, head: Option<Rule>, bottom, left, sep, right| Frame {
         top,
+        row: head,
         head,
         bottom,
         left,
@@ -106,6 +110,7 @@ fn frame(format: TableFormat) -> Frame {
             left: " ",
             sep: " | ",
             right: " ",
+            row: None,
             pad: 2,
             center_header: true,
             markdown: false,
@@ -117,6 +122,7 @@ fn frame(format: TableFormat) -> Frame {
             left: "| ",
             sep: " | ",
             right: " |",
+            row: None,
             pad: 2,
             center_header: false,
             markdown: true,
@@ -132,6 +138,7 @@ fn frame(format: TableFormat) -> Frame {
             left: "",
             sep: "  ",
             right: "",
+            row: None,
             pad: 0,
             center_header: false,
             markdown: false,
@@ -400,7 +407,11 @@ fn render_table(grid: &Grid, fr: &Frame, paint: &Paint, opts: &OutputOptions, to
     } else if let Some(r) = &fr.head {
         push_rule(&mut out, r, &grid.widths, fr.pad, paint);
     }
-    for cells in grid.rows().filter(|c| !c.is_empty()) {
+    let between = fr.row.as_ref().filter(|_| opts.row_lines);
+    for (i, cells) in grid.rows().filter(|c| !c.is_empty()).enumerate() {
+        if let (Some(r), true) = (between, i > 0) {
+            push_rule(&mut out, r, &grid.widths, fr.pad, paint);
+        }
         row.write(&mut out, cells, &aligns, false);
     }
     if let Some(r) = &fr.bottom {

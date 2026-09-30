@@ -26,6 +26,8 @@ pub struct Config {
 pub struct MainConfig {
     pub theme: String,
     pub table_format: String,
+    /// A line between result rows in the boxed table formats.
+    pub row_lines: bool,
     /// on | off | auto
     pub expanded: String,
     pub null_string: String,
@@ -64,6 +66,7 @@ impl Default for MainConfig {
         MainConfig {
             theme: "tokyo-night".into(),
             table_format: "rounded".into(),
+            row_lines: true,
             expanded: "auto".into(),
             null_string: "NULL".into(),
             max_field_width: Some(500),
@@ -293,6 +296,9 @@ theme = "tokyo-night"
 # Result table format: rounded, psql, ascii, unicode, double, minimal, plain, simple, markdown,
 # csv, tsv, json, jsonl, html, vertical, sql-insert, sql-update. Change at runtime with \T.
 table_format = "rounded"
+
+# Draw a line between result rows in the boxed formats (rounded, unicode, double, ascii).
+row_lines = true
 
 # Expanded (vertical, one column per line) output: on | off | auto.
 # auto switches to vertical when a table is wider than the terminal. Toggle with \x.
