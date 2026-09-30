@@ -52,7 +52,9 @@ impl TerminalGuard {
                 )
             );
         }
-        let term = Terminal::new(CrosstermBackend::new(out))?;
+        let mut term = Terminal::new(CrosstermBackend::new(out))?;
+        // The first diff assumes a blank screen; after the REPL that is not guaranteed.
+        term.clear()?;
         Ok((term, TerminalGuard { enhanced }))
     }
 }

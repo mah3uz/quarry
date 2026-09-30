@@ -516,7 +516,7 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &App, theme: &Theme) {
                 put(buf, " ⇄ ssh ", Style::default().fg(theme.accent2));
             }
             if c.info.tls {
-                put(buf, " 🔒︎ ", Style::default().fg(theme.success));
+                put(buf, " TLS ", Style::default().fg(theme.success));
             }
         }
         None => put(buf, "  not connected ", Style::default().fg(theme.muted)),

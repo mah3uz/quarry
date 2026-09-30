@@ -192,7 +192,9 @@ impl Sidebar {
             if lazy {
                 sn.lazy = true;
             } else {
-                sn.children = schema_children(conn, &s.name, &s.relations, &s.functions);
+                // SQLite only reports built-in functions; listing them would bury the tables.
+                let funcs: &[crate::db::FunctionInfo] = if cat.backend == Backend::Sqlite { &[] } else { &s.functions };
+                sn.children = schema_children(conn, &s.name, &s.relations, funcs);
                 sn.detail = s.relations.len().to_string();
             }
             if cat.backend == Backend::MySql && cat.current_database.as_deref() == Some(s.name.as_str()) {
@@ -694,7 +696,7 @@ fn schema_children(conn: ConnId, schema: &str, rels: &[Relation], funcs: &[crate
                 NodeKind::Relation { schema: schema.to_string(), name: r.name.clone(), kind: r.kind },
                 r.name.clone(),
             );
-            if let Some(est) = r.row_estimate.filter(|e| *e >= 0) {
+            if let Some(est) = r.row_estimate.filter(|e| *e > 0) {
                 n.detail = compact_count(est);
             }
             for c in &r.columns {

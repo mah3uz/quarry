@@ -603,7 +603,8 @@ impl ConnectForm {
     }
 
     pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> Option<(u16, u16)> {
-        let area = centered(screen, 100, 24);
+        let rows = (self.visible_fields().len() + 5).max(self.saved.len() + 4) as u16;
+        let area = centered(screen, 100, rows.min(30));
         let inner = frame(area, buf, theme, "Connections", theme.border_focus);
         let list_w = if self.saved.is_empty() { 0 } else { 30.min(inner.width / 3) };
         let mut cursor = None;
