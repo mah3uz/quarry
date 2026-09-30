@@ -4,6 +4,8 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ## Unreleased
 
+## 0.1.0 - 2026-10-01 02:40 +06:00
+
 The first release of quarry: a SQL client for the terminal, for **PostgreSQL**, **MySQL / MariaDB** and **SQLite**,
 with a smart REPL and a full-screen TUI in one binary. Nothing else to install: TLS is built in and SQLite is
 bundled.
