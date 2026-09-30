@@ -73,73 +73,17 @@ const flecks = Array.from({ length: 46 }, (_, i) => {
   }
 })
 
-// A headlamp on the rock face: it follows the pointer, or wanders slowly when the pointer is
-// elsewhere, lighting the rock and making the crystals glint. The lamp is a disc moved by
-// transform; the bright crystals inside it are shifted back the other way so they stay in place.
-// Nothing is redrawn as it moves. Still with reduced motion, and stopped while off screen.
+// Off screen, the section's CSS animations pause.
 const face = ref<HTMLElement | null>(null)
-const lampEl = ref<HTMLElement | null>(null)
-const glintEl = ref<SVGSVGElement | null>(null)
-const LAMP = 230
-let stopLamp = () => {}
+let stopWatching = () => {}
 onMounted(() => {
   const el = face.value
-  const lamp = lampEl.value
-  const glints = glintEl.value
-  if (!el || !lamp || !glints) return
-  let rect = el.getBoundingClientRect()
-  const pos = { x: rect.width * 0.1, y: rect.height * 0.5 }
-  const place = () => {
-    const x = pos.x - LAMP
-    const y = pos.y - LAMP
-    lamp.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
-    glints.style.transform = `translate3d(${(-x).toFixed(1)}px, ${(-y).toFixed(1)}px, 0)`
-  }
-  const size = () => {
-    rect = el.getBoundingClientRect()
-    glints.style.width = `${rect.width}px`
-    glints.style.height = `${rect.height}px`
-  }
-  size()
-  place()
-  addEventListener('resize', size)
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    stopLamp = () => removeEventListener('resize', size)
-    return
-  }
-  let target: { x: number; y: number } | null = null
-  let raf = 0
-  const tick = (t: number) => {
-    // idling, sweep the whole face: the terminal covers the middle, the rock shows at the sides
-    const goal = target ?? { x: rect.width * (0.5 + 0.47 * Math.sin(t / 5200)), y: rect.height * (0.48 + 0.3 * Math.sin(t / 3700)) }
-    pos.x += (goal.x - pos.x) * (target ? 0.14 : 0.02)
-    pos.y += (goal.y - pos.y) * (target ? 0.14 : 0.02)
-    place()
-    raf = requestAnimationFrame(tick)
-  }
-  const move = (e: PointerEvent) => {
-    rect = el.getBoundingClientRect()
-    target = { x: e.clientX - rect.left, y: e.clientY - rect.top }
-  }
-  const leave = () => (target = null)
-  // off screen, nothing runs: the lamp stops and the CSS animations pause
-  const seen = new IntersectionObserver(([entry]) => {
-    cancelAnimationFrame(raf)
-    el.classList.toggle('asleep', !entry.isIntersecting)
-    if (entry.isIntersecting) raf = requestAnimationFrame(tick)
-  })
-  el.addEventListener('pointermove', move)
-  el.addEventListener('pointerleave', leave)
+  if (!el) return
+  const seen = new IntersectionObserver(([entry]) => el.classList.toggle('asleep', !entry.isIntersecting))
   seen.observe(el)
-  stopLamp = () => {
-    cancelAnimationFrame(raf)
-    seen.disconnect()
-    el.removeEventListener('pointermove', move)
-    el.removeEventListener('pointerleave', leave)
-    removeEventListener('resize', size)
-  }
+  stopWatching = () => seen.disconnect()
 })
-onBeforeUnmount(() => stopLamp())
+onBeforeUnmount(() => stopWatching())
 
 const features = [
   {
@@ -193,9 +137,9 @@ const features = [
     <main>
       <section class="hero">
         <div class="copy">
-          <h1>A SQL client that lives in your terminal.</h1>
+          <h1>A modern SQL client, smart and fast <span class="zoom" aria-hidden="true">🏎️💨</span> that lives in your terminal.</h1>
           <p class="lede">
-            quarry talks to PostgreSQL, MySQL / MariaDB and SQLite. Type SQL in a REPL that knows your
+            Full-featured for PostgreSQL, MySQL / MariaDB and SQLite. Type SQL in a REPL that knows your
             schema, or explore in a full-screen TUI. One small binary, nothing else to install.
           </p>
           <div class="actions">
@@ -242,11 +186,6 @@ const features = [
             <path class="pulse" :d="vein" pathLength="1" />
             <path class="pulse late" :d="vein" pathLength="1" />
           </svg>
-          <div ref="lampEl" class="lamp">
-            <svg ref="glintEl" class="glints" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
-              <path v-for="f in flecks" :key="f.key" :d="f.d" />
-            </svg>
-          </div>
         </div>
         <div class="set">
           <Terminal capture="repl" title="quarry shop.db"
@@ -409,6 +348,21 @@ a {
   gap: 48px;
   padding-top: clamp(32px, 6vw, 88px);
   padding-bottom: 48px;
+}
+/* The headline's 🏎️💨: a little smaller than the words, mirrored so the car faces the way the
+   text reads, and it drives in once on load. */
+.zoom {
+  display: inline-block;
+  font-size: 0.7em;
+  line-height: 1;
+  transform: scaleX(-1);
+  animation: zoom 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s both;
+}
+@keyframes zoom {
+  from {
+    transform: translateX(-0.8em) scaleX(-1);
+    opacity: 0;
+  }
 }
 h1 {
   margin: 0;
@@ -612,7 +566,7 @@ h1 {
 .dark .vein-glow {
   opacity: 0.12;
 }
-/* Crystals twinkle faintly on their own and glint where the lamp shines. */
+/* Crystals twinkle faintly in the rock. */
 .flecks path {
   fill: #16a8d8;
   opacity: 0.12;
@@ -652,39 +606,7 @@ h1 {
 @keyframes seam {
   to { stroke-dashoffset: 0; }
 }
-/* The headlamp: a soft disc of light, moved by transform. */
-.lamp {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 460px;
-  height: 460px;
-  border-radius: 50%;
-  overflow: hidden;
-  will-change: transform;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.2) 55%, transparent);
-  -webkit-mask-image: radial-gradient(closest-side, #000 35%, transparent);
-  mask-image: radial-gradient(closest-side, #000 35%, transparent);
-}
-.dark .lamp {
-  background: radial-gradient(closest-side, rgba(170, 200, 255, 0.16), rgba(170, 200, 255, 0.06) 55%, transparent);
-}
-.glints {
-  position: absolute;
-  left: 0;
-  top: 0;
-  will-change: transform;
-}
-.glints path {
-  fill: #0f93c2;
-}
-.dark .glints path {
-  fill: #eefcff;
-  stroke: rgba(76, 198, 238, 0.55);
-  stroke-width: 3;
-  paint-order: stroke;
-}
-/* Off screen, the animations pause (the class is set by the lamp's observer). */
+/* Off screen, the animations pause (the class is set by an observer in the script). */
 .face.asleep .rock * {
   animation-play-state: paused;
 }
@@ -908,7 +830,8 @@ dd {
     transition: none;
   }
   .flecks path,
-  .band {
+  .band,
+  .zoom {
     animation: none;
   }
   .pulse {
