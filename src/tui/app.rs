@@ -54,7 +54,7 @@ impl ConnEntry {
     pub fn short_label(&self) -> String {
         let db = self.info.database.clone().or(self.spec.database.clone()).unwrap_or_default();
         match self.spec.backend {
-            Backend::Sqlite => self.spec.label(),
+            Backend::Sqlite => self.name.clone(),
             _ if db.is_empty() => self.name.clone(),
             _ => format!("{} ▸ {db}", self.name),
         }
@@ -287,7 +287,7 @@ impl App {
 
     pub fn adopt_connection(&mut self, opened: Opened, name: Option<String>, meta: Option<Connection>) {
         let id = self.conns.len();
-        let name = name.unwrap_or_else(|| opened.spec.label());
+        let name = name.unwrap_or_else(|| default_conn_name(&opened.spec));
         let needs_shared = opened.spec.backend == Backend::Sqlite;
         let spec = opened.spec.clone();
         let info = opened.conn.info().clone();
@@ -1217,6 +1217,7 @@ impl App {
             KeyCode::PageUp if ctrl => Command::PrevTab,
             KeyCode::Right if alt => Command::NextTab,
             KeyCode::Left if alt => Command::PrevTab,
+            KeyCode::Char('0') if alt => Command::FocusSidebar,
             KeyCode::Char(c @ '1'..='9') if alt => {
                 let i = (c as usize) - ('1' as usize);
                 if i < self.tabs.len() {
@@ -2747,6 +2748,13 @@ impl QueryTab {
 
     pub fn exec_offsets(&self) -> &[usize] {
         &self.exec_starts
+    }
+}
+
+fn default_conn_name(spec: &ConnSpec) -> String {
+    match spec.backend {
+        Backend::Sqlite => spec.label(),
+        _ => format!("{}@{}", spec.user_or_default(), spec.host.as_deref().unwrap_or("localhost")),
     }
 }
 

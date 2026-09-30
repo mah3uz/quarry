@@ -90,12 +90,8 @@ fn draw_header(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
 
 fn draw_sidebar(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
     let focused = app.focus == Focus::Sidebar;
-    let block = Block::default()
-        .borders(Borders::RIGHT)
-        .border_style(Style::default().fg(if focused { theme.border_focus } else { theme.border }))
-        .style(Style::default().bg(theme.surface));
-    let inner = block.inner(area);
-    block.render(area, buf);
+    buf.set_style(area, Style::default().bg(theme.surface));
+    let inner = Rect { width: area.width.saturating_sub(1), ..area };
     let title_style = if focused {
         Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
     } else {
@@ -608,7 +604,7 @@ fn draw_completion(buf: &mut Buffer, screen: Rect, app: &mut App, theme: &Theme)
 }
 
 fn draw_toasts(buf: &mut Buffer, screen: Rect, app: &App, theme: &Theme) {
-    let mut y = screen.y + 2;
+    let mut y = (screen.y + screen.height).saturating_sub(3);
     for t in app.toasts.iter().rev() {
         let (icon, color) = match t.level {
             Level::Info => ("ℹ", theme.info),
@@ -625,10 +621,10 @@ fn draw_toasts(buf: &mut Buffer, screen: Rect, app: &App, theme: &Theme) {
         buf.set_string(x, y, "▌", Style::default().fg(color).bg(theme.surface));
         buf.set_string(x + 1, y, format!(" {icon} "), Style::default().fg(color).bg(theme.surface).add_modifier(Modifier::BOLD));
         buf.set_string(x + 4, y, &text, Style::default().fg(theme.fg).bg(theme.surface));
-        y += 1;
-        if y > screen.y + screen.height / 2 {
+        if y <= screen.y + screen.height / 2 {
             break;
         }
+        y -= 1;
     }
 }
 

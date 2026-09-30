@@ -352,7 +352,7 @@ impl GridState {
 
     fn fit_column(&mut self, col: usize) {
         let cap = FIT_MAX_WIDTH as usize;
-        let mut w = text_width(&self.columns[col].name, cap);
+        let mut w = text_width(&self.columns[col].name, cap) + 2;
         for row in &self.rows {
             if let Some(v) = row.get(col) {
                 w = w.max(text_width(&cell_text(v, &self.null_text), cap));
@@ -1063,8 +1063,9 @@ fn decimal_digits(mut n: u64) -> u16 {
     d
 }
 
+/// Leaves two columns for the ` ▲` sort indicator so short headers never truncate when sorted.
 fn header_width(name: &str) -> u16 {
-    (text_width(name, AUTO_MAX_WIDTH as usize) as u16).clamp(MIN_WIDTH, AUTO_MAX_WIDTH)
+    (text_width(name, AUTO_MAX_WIDTH as usize) as u16 + 2).clamp(MIN_WIDTH, AUTO_MAX_WIDTH)
 }
 
 /// Grid display text. Bytes are always a truncated hex preview so huge blobs stay cheap.

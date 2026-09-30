@@ -249,6 +249,7 @@ pub const HELP: &[(&str, &[(&str, &str)])] = &[
         ("Alt+←/→ · Ctrl+PgUp/PgDn", "Previous / next tab"),
         ("Alt+1…9", "Jump to tab"),
         ("F6 / Shift+F6", "Cycle focus: explorer · editor · results"),
+        ("Alt+0", "Focus explorer"),
         ("Ctrl+B", "Toggle explorer"),
         ("Ctrl+G", "Go to table (fuzzy)"),
         ("Ctrl+Y", "Switch theme (live preview)"),

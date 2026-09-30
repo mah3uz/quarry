@@ -262,22 +262,21 @@ impl StructureTab {
     pub fn load_section(&mut self) {
         let Some(d) = &self.details else { return };
         let txt = |s: &str| Value::Text(s.to_string());
-        let opt = |s: &Option<String>| s.clone().map(Value::Text).unwrap_or(Value::Null);
+        let opt = |s: &Option<String>| Value::Text(s.clone().unwrap_or_default());
         let yes = |b: bool| Value::Text(if b { "✓".into() } else { String::new() });
         let (cols, rows): (Vec<&str>, Vec<Row>) = match self.section {
             StructSection::Columns => (
-                vec!["#", "name", "type", "nullable", "default", "key", "comment"],
+                vec!["name", "type", "nullable", "default", "key", "comment"],
                 d.columns
                     .iter()
-                    .enumerate()
-                    .map(|(i, c)| {
+                    .map(|c| {
                         let key = match (c.primary_key, c.auto) {
                             (true, true) => "PK · auto",
                             (true, false) => "PK",
                             (false, true) => "auto",
                             _ => "",
                         };
-                        vec![Value::Int(i as i64 + 1), txt(&c.name), txt(&c.data_type), yes(c.nullable), opt(&c.default), txt(key), opt(&c.comment)]
+                        vec![txt(&c.name), txt(&c.data_type), yes(c.nullable), opt(&c.default), txt(key), opt(&c.comment)]
                     })
                     .collect(),
             ),
