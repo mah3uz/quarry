@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget, Widget};
 use unicode_width::UnicodeWidthStr;
@@ -57,11 +57,13 @@ pub struct Node {
     pub children: Vec<Node>,
     /// Children are fetched on first expansion (MySQL non-current databases).
     pub lazy: bool,
+    /// Connection roots only: the saved connection's tag color.
+    pub color: Option<Color>,
 }
 
 impl Node {
     fn new(conn: ConnId, kind: NodeKind, label: impl Into<String>) -> Node {
-        Node { conn, kind, label: label.into(), detail: String::new(), expanded: false, children: Vec::new(), lazy: false }
+        Node { conn, kind, label: label.into(), detail: String::new(), expanded: false, children: Vec::new(), lazy: false, color: None }
     }
 
     fn key(&self, parent: &str) -> String {
@@ -138,6 +140,12 @@ impl Sidebar {
             }
         }
         self.rebuild_rows();
+    }
+
+    pub fn set_connection_color(&mut self, conn: ConnId, color: Option<Color>) {
+        if let Some(r) = self.roots.iter_mut().find(|r| r.conn == conn) {
+            r.color = color;
+        }
     }
 
     pub fn remove_connection(&mut self, conn: ConnId) {
@@ -580,7 +588,7 @@ fn node_line<'a>(node: &'a Node, row: &Row, theme: &Theme, filter: &str) -> Line
     let arrow = if node.expandable() { if node.expanded { "▾ " } else { "▸ " } } else { "  " };
     spans.push(Span::styled(arrow, Style::default().fg(theme.muted)));
     let (icon, style) = match &node.kind {
-        NodeKind::Connection => ("◆ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+        NodeKind::Connection => ("◆ ", Style::default().fg(node.color.unwrap_or(theme.accent)).add_modifier(Modifier::BOLD)),
         NodeKind::DatabasesGroup => ("⛁ ", Style::default().fg(theme.muted)),
         NodeKind::Database { current: true, .. } => ("● ", Style::default().fg(theme.success)),
         NodeKind::Database { .. } => ("○ ", Style::default().fg(theme.fg)),

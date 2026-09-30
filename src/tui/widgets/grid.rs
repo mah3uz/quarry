@@ -12,7 +12,7 @@ use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Stateful
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::db::{Backend, Column, Row, TypeKind, Value, quote_ident};
+use crate::db::{Column, Row, TypeKind, Value};
 use crate::theme::Theme;
 
 const MIN_WIDTH: u16 = 3;
@@ -872,83 +872,6 @@ impl GridState {
         }
         lines.join("\n")
     }
-
-    /// Selection rectangle as RFC 4180 CSV. NULL → empty field.
-    pub fn copy_as_csv(&self, include_header: bool) -> String {
-        let Some((rows, cols)) = self.selection_range() else { return String::new() };
-        let mut w = csv::WriterBuilder::new().from_writer(Vec::new());
-        if include_header {
-            let _ = w.write_record(self.columns[cols.clone()].iter().map(|c| c.name.as_str()));
-        }
-        for row in &self.rows[rows] {
-            let _ =
-                w.write_record(cols.clone().map(|c| row.get(c).map_or(Cow::Borrowed(""), Value::display).into_owned()));
-        }
-        String::from_utf8(w.into_inner().unwrap_or_default()).unwrap_or_default()
-    }
-
-    /// Selected rows (all columns) as a JSON array of objects, keys in column order.
-    pub fn copy_as_json(&self) -> String {
-        let mut out = String::from("[");
-        for (i, row) in self.rows[self.selected_rows()].iter().enumerate() {
-            out.push_str(if i == 0 { "\n  {" } else { ",\n  {" });
-            for (c, col) in self.columns.iter().enumerate() {
-                if c > 0 {
-                    out.push_str(", ");
-                }
-                out.push_str(&serde_json::to_string(&col.name).unwrap_or_default());
-                out.push_str(": ");
-                out.push_str(&json_value(row.get(c).unwrap_or(&Value::Null), col.kind));
-            }
-            out.push('}');
-        }
-        out.push_str(if out.len() > 1 { "\n]" } else { "]" });
-        out
-    }
-
-    /// One `INSERT` per selected row (all columns). `table` is used verbatim so callers can pass a
-    /// qualified, already-quoted name (e.g. from `db::qualified`).
-    pub fn copy_as_sql_insert(&self, table: &str, backend: Backend) -> String {
-        let cols: Vec<_> = self.columns.iter().map(|c| quote_ident(&c.name, backend)).collect();
-        let cols = cols.join(", ");
-        let mut out = String::new();
-        for row in &self.rows[self.selected_rows()] {
-            let values: Vec<_> = self
-                .columns
-                .iter()
-                .enumerate()
-                .map(|(c, col)| sql_value(row.get(c).unwrap_or(&Value::Null), col.kind, backend))
-                .collect();
-            let _ = writeln!(out, "INSERT INTO {table} ({cols}) VALUES ({});", values.join(", "));
-        }
-        out
-    }
-
-    /// Selection rectangle as a GitHub-flavoured markdown table (numeric columns right-aligned).
-    pub fn copy_as_markdown(&self) -> String {
-        let Some((rows, cols)) = self.selection_range() else { return String::new() };
-        let md = |s: &str| s.replace('|', "\\|").replace("\r\n", "<br>").replace(['\n', '\r'], "<br>");
-        let mut out = String::from("|");
-        for col in &self.columns[cols.clone()] {
-            let _ = write!(out, " {} |", md(&col.name));
-        }
-        out.push_str("\n|");
-        for col in &self.columns[cols.clone()] {
-            out.push_str(if col.kind.is_numeric() { " ---: |" } else { " --- |" });
-        }
-        for row in &self.rows[rows] {
-            out.push_str("\n|");
-            for c in cols.clone() {
-                let text = row.get(c).map_or(Cow::Borrowed(""), |v| match v {
-                    Value::Null => Cow::Borrowed(self.null_text.as_str()),
-                    v => v.display(),
-                });
-                let _ = write!(out, " {} |", md(&text));
-            }
-        }
-        out.push('\n');
-        out
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1192,38 +1115,6 @@ fn tsv_field(s: &str) -> Cow<'_, str> {
     }
 }
 
-/// Postgres' text protocol delivers numbers as `Value::Text`; keep them numeric in generated output.
-fn numeric_text(s: &str, kind: TypeKind) -> bool {
-    kind.is_numeric() && serde_json::from_str::<serde_json::Number>(s).is_ok()
-}
-
-fn json_value(v: &Value, kind: TypeKind) -> String {
-    let string = |s: &str| serde_json::to_string(s).unwrap_or_default();
-    match v {
-        Value::Null => "null".into(),
-        Value::Bool(b) => b.to_string(),
-        Value::Int(i) => i.to_string(),
-        Value::UInt(u) => u.to_string(),
-        Value::Float(f) if f.is_finite() => serde_json::to_string(f).unwrap_or_default(),
-        Value::Float(f) => string(&f.to_string()),
-        Value::Text(s) if numeric_text(s, kind) => s.clone(),
-        Value::Text(s) if kind == TypeKind::Bool && matches!(s.as_str(), "t" | "true" | "f" | "false") => {
-            s.starts_with('t').to_string()
-        }
-        Value::Text(s) if kind == TypeKind::Json => {
-            serde_json::from_str::<serde_json::Value>(s).map_or_else(|_| string(s), |j| j.to_string())
-        }
-        v => string(&v.display()),
-    }
-}
-
-fn sql_value(v: &Value, kind: TypeKind, backend: Backend) -> String {
-    match v {
-        Value::Text(s) if numeric_text(s, kind) => s.clone(),
-        v => v.to_sql_literal(backend),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1451,76 +1342,27 @@ mod tests {
 
     // Copies must round-trip through the target format: quotes/tabs/newlines escaped, NULL kept distinct.
     #[test]
-    fn shift_selection_copies_as_tsv_and_csv() {
+    fn shift_selection_copies_as_tsv() {
         let mut g = people();
         g.handle_key(shift(KeyCode::Right));
         g.handle_key(shift(KeyCode::Down));
         assert_eq!(g.selection_range(), Some((0..2, 0..2)));
         assert_eq!(g.copy_cells_tsv(true), "id\tname\n1\tO'Brien\n2\t\"tab\there\"");
-        assert_eq!(g.copy_as_csv(false), "1,O'Brien\n2,tab\there\n");
 
         press(&mut g, &[KeyCode::Char('j')]);
         assert_eq!(g.selection_range(), Some((2..3, 1..2)), "plain move drops a shift selection");
         assert_eq!(g.copy_cells_tsv(false), "back\\slash \"q\"");
-        assert_eq!(g.copy_as_csv(true), "name\n\"back\\slash \"\"q\"\"\"\n");
     }
 
     #[test]
-    fn visual_row_mode_copies_whole_rows_as_json() {
+    fn visual_row_mode_selects_whole_rows() {
         let mut g = people();
         press(&mut g, &[KeyCode::Char('l'), KeyCode::Char('V'), KeyCode::Char('j')]);
         assert_eq!(g.selection_range(), Some((0..2, 0..4)));
-        assert_eq!(
-            g.copy_as_json(),
-            "[\n  {\"id\": 1, \"name\": \"O'Brien\", \"active\": true, \"meta\": {\"a\":1}},\n  \
-             {\"id\": 2, \"name\": \"tab\\there\", \"active\": false, \"meta\": null}\n]"
-        );
         assert_eq!(g.copy_rows_tsv(false).lines().count(), 2);
         assert_eq!(g.handle_key(key(KeyCode::Char('D'))), GridEvent::DeleteRows(0..2));
         assert_eq!(g.handle_key(key(KeyCode::Esc)), GridEvent::Handled);
         assert_eq!(g.handle_key(key(KeyCode::Esc)), GridEvent::Unhandled);
-    }
-
-    #[test]
-    fn pg_text_numbers_stay_numeric_in_json_and_sql() {
-        let mut g = GridState::new();
-        g.set_data(vec![col("n", "numeric"), col("b", "bool")], vec![vec![text("12.50"), text("t")]]);
-        assert_eq!(g.copy_as_json(), "[\n  {\"n\": 12.50, \"b\": true}\n]");
-        assert_eq!(g.copy_as_sql_insert("t", Backend::Postgres), "INSERT INTO t (n, b) VALUES (12.50, 't');\n");
-    }
-
-    #[test]
-    fn sql_insert_escapes_per_backend() {
-        let mut g = people();
-        press(&mut g, &[KeyCode::Char('V'), KeyCode::Char('G')]);
-        let pg = g.copy_as_sql_insert("people", Backend::Postgres);
-        let my = g.copy_as_sql_insert("people", Backend::MySql);
-        assert_eq!(pg.lines().count(), 3);
-        assert!(
-            pg.starts_with("INSERT INTO people (id, name, active, meta) VALUES (1, 'O''Brien', TRUE, '{\"a\": 1}');"),
-            "{pg}"
-        );
-        assert!(pg.contains("VALUES (3, 'back\\slash \"q\"', NULL, '[1,2]');"), "{pg}");
-        assert!(my.contains("VALUES (1, 'O''Brien', 1, '{\"a\": 1}');"), "{my}");
-        assert!(my.contains("'back\\\\slash \"q\"'"), "{my}");
-
-        g.set_data(vec![col("Order", "int"), col("select", "text")], vec![vec![Value::Int(1), text("x")]]);
-        assert_eq!(
-            g.copy_as_sql_insert("t", Backend::Postgres),
-            "INSERT INTO t (\"Order\", \"select\") VALUES (1, 'x');\n"
-        );
-        assert!(g.copy_as_sql_insert("t", Backend::MySql).contains("`select`"));
-    }
-
-    #[test]
-    fn markdown_escapes_pipes_and_aligns_numbers() {
-        let mut g = GridState::new();
-        g.set_data(
-            vec![col("n", "int"), col("s", "text")],
-            vec![vec![Value::Int(1), text("a|b\nc")], vec![Value::Null, Value::Null]],
-        );
-        press(&mut g, &[KeyCode::Char('v'), KeyCode::Char('j'), KeyCode::Char('l')]);
-        assert_eq!(g.copy_as_markdown(), "| n | s |\n| ---: | --- |\n| 1 | a\\|b<br>c |\n| NULL | NULL |\n");
     }
 
     #[test]

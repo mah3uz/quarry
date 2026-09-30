@@ -147,15 +147,13 @@ In the REPL, `\c` (or `\connect`, `use`) switches without restarting:
 ```
 \c other_db                           # same server, another database
 use other_db                          # MySQL style
+\c prod                               # a saved connection
 \c postgres://me@other-host/app       # a different server
 \c                                    # show where you are connected
 ```
 
-On SQLite, `\c file.db` (or `.open file.db`) opens another file.
-
-:::caution
-`\c` does not look up saved connection names. Pass a URL, or restart quarry with the name.
-:::
+A saved connection name wins over a database with the same name. On SQLite, `\c file.db` (or
+`.open file.db`) opens another file.
 
 ## Starting without a target
 

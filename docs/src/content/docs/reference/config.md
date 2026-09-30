@@ -88,6 +88,7 @@ One table per saved connection. See [Saved connections](/advanced/saved-connecti
 | `password_command` | not set | Shell command that prints the password |
 | `ssh` | not set | SSH tunnel: `[user@]host[:port]` |
 | `readonly` | `false` | Open in read-only mode |
+| `color` | not set | Tag colour in the TUI, e.g. `"red"`: `"#rrggbb"` or a colour name |
 | `init_commands` | `[]` | SQL to run after connecting |
 
 ## A complete example

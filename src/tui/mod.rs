@@ -76,7 +76,17 @@ fn restore_terminal(enhanced: bool) {
 }
 
 /// Runs the full-screen interface. `initial` is an already-open connection (from args or `\tui`).
-pub fn run(rt: &tokio::runtime::Runtime, config: Config, initial: Option<Opened>) -> Result<()> {
+/// Choices for this session only (from the command line, or the REPL's current theme) that win over
+/// the saved TUI state and the config.
+#[derive(Debug, Default)]
+pub struct Overrides {
+    pub theme: Option<String>,
+    pub no_color: bool,
+    /// The saved connection the initial connection came from, for its name and color.
+    pub connection_name: Option<String>,
+}
+
+pub fn run(rt: &tokio::runtime::Runtime, config: Config, initial: Option<Opened>, overrides: Overrides) -> Result<()> {
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         restore_terminal(true);
@@ -94,9 +104,10 @@ pub fn run(rt: &tokio::runtime::Runtime, config: Config, initial: Option<Opened>
         }
     });
 
-    let mut app = app::App::new(rt.handle().clone(), config, tx);
+    let name = overrides.connection_name.clone();
+    let mut app = app::App::new(rt.handle().clone(), config, tx, overrides);
     match initial {
-        Some(opened) => app.adopt_connection(opened, None, None),
+        Some(opened) => app.adopt_connection(opened, name, None),
         None => app.open_connection_manager(),
     }
 

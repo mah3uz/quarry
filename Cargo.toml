@@ -15,7 +15,6 @@ dirs = "7.0.0"
 futures-util = "0.3.34"
 mysql_async = { version = "0.37.1", default-features = false, features = ["minimal", "rustls-tls"] }
 nu-ansi-term = "0.50"
-nucleo-matcher = "0.3.1"
 percent-encoding = "2.3.2"
 ratatui = "0.30.2"
 reedline = "0.52.0"

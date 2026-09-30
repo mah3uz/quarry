@@ -263,7 +263,7 @@ pub const HELP: &[(&str, &[(&str, &str)])] = &[
         ("Ctrl+Space", "Completion (also as you type)"),
         ("F7 / Shift+F7", "Explain / explain analyze"),
         ("Alt+F", "Format SQL"),
-        ("Ctrl+S", "Save query as favorite / to file"),
+        ("Ctrl+S", "Save query as favorite"),
         ("Ctrl+/", "Toggle comment"),
         ("Ctrl+Z / Ctrl+Y", "Undo / redo"),
         ("Ctrl+↑/↓", "Resize editor / results split"),

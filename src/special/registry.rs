@@ -71,7 +71,7 @@ pub(super) static COMMANDS: &[CommandSpec] = &[
     cmd(&["\\f", "\\n"], "\\f [name [args…]]", "List favorite queries, or run one with arguments.", Favorites, ALL),
     cmd(&["\\fs", "\\ns"], "\\fs name query", "Save a favorite ($1…$9, $* and ${name} are placeholders).", Favorites, ALL),
     cmd(&["\\fd", "\\nd"], "\\fd name", "Delete a favorite query.", Favorites, ALL),
-    cmd(&["\\c", "\\connect", "use", "\\u", ".open"], "\\c [database|url]", "Connect to another database (no argument: reconnect).", Connection, ALL),
+    cmd(&["\\c", "\\connect", "use", "\\u", ".open"], "\\c [name|database|url]", "Connect to a saved connection, another database or a URL (no argument: show the connection).", Connection, ALL),
 ];
 
 pub(super) fn lookup(name: &str) -> Option<&'static CommandSpec> {

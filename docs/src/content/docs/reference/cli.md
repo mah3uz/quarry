@@ -55,9 +55,9 @@ See [Scripts, exports and pipes](/guides/scripting/).
 | Option | Short | Meaning |
 |---|---|---|
 | `--tui` | `-T` | Open the full-screen TUI. Ignored in scripts. |
-| `--theme NAME` | | Colour theme for this session (REPL) |
+| `--theme NAME` | | Colour theme for this run |
 | `--prompt FORMAT` | | Prompt format for this session. See [the prompt](/advanced/customising/#the-prompt). |
-| `--no-color` | | No colour (REPL) |
+| `--no-color` | | No colour |
 | `--less-chatty` | | Skip the banner and the goodbye message |
 | `--row-limit N` | | Ask before showing more than `N` rows. `0` never asks. |
 

@@ -9,7 +9,8 @@ use quarry::cli::{self, Args, Opened};
 use quarry::config::{Config, SavedConnection};
 use quarry::output::{Expanded, OutputOptions, TableFormat};
 use quarry::output::sink::Sinks;
-use quarry::repl::{self, Exit, session::Session, style::Palette};
+use quarry::repl::{self, Exit, style::Palette};
+use quarry::repl::session::{Flow, Session};
 use quarry::special::favorites::Favorites;
 use quarry::theme::{self, ColorDepth, Theme};
 
@@ -68,11 +69,17 @@ fn real_main(args: Args, rt: &tokio::runtime::Runtime) -> Result<ExitCode> {
         if batch {
             bail!("no connection given (pass a URL, a saved connection name or a SQLite file)");
         }
-        return quarry::tui::run(rt, config, None).map(|_| ExitCode::SUCCESS);
+        return quarry::tui::run(rt, config, None, tui_overrides(&args, None, None)).map(|_| ExitCode::SUCCESS);
     };
 
     if let Some(name) = &args.save {
         let url = args.target.clone().filter(|t| t.contains(':') || t.contains('.')).unwrap_or_else(|| resolved.spec.display_url());
+        let (url, had_password) = quarry::conn::url::strip_password(&url);
+        if had_password {
+            eprintln!(
+                "quarry: the password was not saved; use password_command in the config, ~/.pgpass or ~/.my.cnf"
+            );
+        }
         config.connections.insert(
             name.clone(),
             SavedConnection { url, readonly: resolved.spec.readonly, ssh: args.ssh.clone(), ..Default::default() },
@@ -89,7 +96,8 @@ fn real_main(args: Args, rt: &tokio::runtime::Runtime) -> Result<ExitCode> {
     ))?;
 
     if args.tui && !batch {
-        return quarry::tui::run(rt, config, Some(opened)).map(|_| ExitCode::SUCCESS);
+        let overrides = tui_overrides(&args, None, resolved.saved_name.clone());
+        return quarry::tui::run(rt, config, Some(opened), overrides).map(|_| ExitCode::SUCCESS);
     }
 
     let format = match &args.format {
@@ -97,7 +105,11 @@ fn real_main(args: Args, rt: &tokio::runtime::Runtime) -> Result<ExitCode> {
         None if batch && !std::io::stdout().is_terminal() => TableFormat::Tsv,
         None => TableFormat::parse(&config.main.table_format).unwrap_or(TableFormat::Rounded),
     };
+    for w in &config.warnings {
+        eprintln!("quarry: warning: {w}");
+    }
     let mut session = make_session(rt, opened, config, theme, depth, format, !batch);
+    session.saved_name = resolved.saved_name.clone();
     session.continue_on_error = args.continue_on_error;
 
     if batch {
@@ -107,10 +119,16 @@ fn real_main(args: Args, rt: &tokio::runtime::Runtime) -> Result<ExitCode> {
         Exit::Quit => Ok(ExitCode::SUCCESS),
         Exit::Tui(s) => {
             let s = *s;
+            let overrides = tui_overrides(&args, Some(s.opts.theme.name.clone()), s.saved_name.clone());
             let opened = Opened { conn: s.conn, spec: s.spec, tunnel: s.tunnel };
-            quarry::tui::run(rt, s.config, Some(opened)).map(|_| ExitCode::SUCCESS)
+            quarry::tui::run(rt, s.config, Some(opened), overrides).map(|_| ExitCode::SUCCESS)
         }
     }
+}
+
+/// `theme` is the REPL's current theme when switching with `\tui`, so the TUI keeps it.
+fn tui_overrides(args: &Args, theme: Option<String>, connection_name: Option<String>) -> quarry::tui::Overrides {
+    quarry::tui::Overrides { theme: theme.or_else(|| args.theme.clone()), no_color: args.no_color, connection_name }
 }
 
 fn make_session(
@@ -167,16 +185,20 @@ fn make_session(
         pending_buffer: None,
         continue_on_error: false,
         history_snapshot: Vec::new(),
+        saved_name: None,
         config,
     }
 }
 
 fn run_batch(session: &mut Session, args: &Args) -> ExitCode {
+    let status = |ok: bool| if ok { ExitCode::SUCCESS } else { ExitCode::FAILURE };
     let mut ok = true;
     for sql in &args.execute {
         let backend = session.conn.backend();
         if quarry::special::parse(sql.trim(), backend).is_some() {
-            session.handle_input(sql);
+            if let Flow::Quit = session.handle_input(sql) {
+                return status(ok);
+            }
             continue;
         }
         ok &= session.run_sql(sql, None);
@@ -184,53 +206,26 @@ fn run_batch(session: &mut Session, args: &Args) -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
-    if let Some(path) = &args.file {
-        match std::fs::read_to_string(path) {
-            Ok(text) => ok &= run_script(session, &text),
+    let script = match (&args.file, args.execute.is_empty()) {
+        (Some(path), _) => match std::fs::read_to_string(path) {
+            Ok(text) => text,
             Err(e) => {
                 eprintln!("quarry: {}: {e}", path.display());
                 return ExitCode::FAILURE;
             }
+        },
+        (None, true) => {
+            let mut text = String::new();
+            if let Err(e) = std::io::stdin().read_to_string(&mut text) {
+                eprintln!("quarry: reading stdin: {e}");
+                return ExitCode::FAILURE;
+            }
+            text
         }
-    }
-    if args.execute.is_empty() && args.file.is_none() {
-        let mut text = String::new();
-        if let Err(e) = std::io::stdin().read_to_string(&mut text) {
-            eprintln!("quarry: reading stdin: {e}");
-            return ExitCode::FAILURE;
-        }
-        ok &= run_script(session, &text);
-    }
-    if ok { ExitCode::SUCCESS } else { ExitCode::FAILURE }
-}
-
-/// Scripts may mix SQL with special commands (one per line), like mysql/psql input files.
-fn run_script(session: &mut Session, text: &str) -> bool {
-    let backend = session.conn.backend();
-    let mut sql = String::new();
-    let mut ok = true;
-    let flush = |session: &mut Session, sql: &mut String| -> bool {
-        let r = sql.trim().is_empty() || session.run_sql(sql, None);
-        sql.clear();
-        r
+        (None, false) => return status(ok),
     };
-    for line in text.lines() {
-        let t = line.trim();
-        let at_boundary = sql.trim().is_empty() || quarry::sql::split::ends_with_terminator(&sql, backend, ";");
-        let is_cmd = at_boundary
-            && !t.is_empty()
-            && (t.starts_with('\\') || t.starts_with('.') || t.to_ascii_lowercase().starts_with("delimiter "))
-            && quarry::special::submits_immediately(t, backend);
-        if is_cmd || t.to_ascii_lowercase().starts_with("delimiter ") {
-            ok &= flush(session, &mut sql);
-            session.handle_input(t);
-            continue;
-        }
-        sql.push_str(line);
-        sql.push('\n');
-    }
-    ok &= flush(session, &mut sql);
-    ok
+    let (script_ok, _) = session.run_script(&script);
+    status(ok && script_ok)
 }
 
 fn list_connections(config: &Config) {

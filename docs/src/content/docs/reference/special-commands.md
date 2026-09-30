@@ -32,7 +32,7 @@ On SQLite the dot commands (`.tables`, `.schema`, …) work too, and a few MySQL
 | `\! command` | `system` | Run a shell command |
 | `\echo text` | | Print text |
 | `\e [file]` or `query \e` | `\edit` | Edit the last query, a given query, or a file in `$VISUAL` / `$EDITOR`. The text comes back to the prompt. |
-| `\i file` | `source`, `\ir`, `\.`, `.read`, `\include` | Run the SQL in a file. Special commands in the file are not run. |
+| `\i file` | `source`, `\ir`, `\.`, `.read`, `\include` | Run a file, like `-f`: SQL, plus special commands on their own lines. Stops at the first error, and a `\q` in the file quits. |
 | `\history [n]` | | Show the last `n` statements (default 20) |
 | `\llm question` | `\ai` | Ask the configured model to write SQL. See [Asking a model for SQL](/guides/ai/). |
 | `\theme [name]` | | List themes, or switch to one |
@@ -108,12 +108,13 @@ See [Favourite queries](/advanced/favorites/).
 
 | Command | Aliases | Does |
 |---|---|---|
-| `\c [database \| url]` | `\connect`, `use`, `\u`, `.open` | Switch to another database or server. Without an argument, show the current connection. |
+| `\c [name \| database \| url]` | `\connect`, `use`, `\u`, `.open` | Switch to a saved connection, another database, or another server. Without an argument, show the current connection. |
 
+- `\c prod` opens the saved connection `prod`, with its password command, tunnel and start-up SQL.
+  A saved name wins over a database with the same name.
 - `\c other_db` switches database on the same server (PostgreSQL reconnects; MySQL runs `USE`).
 - `\c postgres://…` connects to a different server.
 - On SQLite, `\c file.db` or `.open file.db` opens another file (creating it if needed).
-- Saved connection names are **not** looked up; use a URL.
 - `use db` is not a command on SQLite; there it goes to the server as SQL.
 
 ## Statement terminators

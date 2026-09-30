@@ -235,10 +235,10 @@ impl Config {
         if with_password.is_empty() || !group_or_world_accessible(path) {
             return Vec::new();
         }
+        let file = path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
         vec![format!(
-            "{} is readable by other users and contains passwords (connections: {}); run `chmod 600 {}` \
+            "{file} is readable by other users and contains passwords (connections: {}); run `chmod 600 {}` \
              or use password_command instead",
-            path.display(),
             with_password.join(", "),
             path.display()
         )]
@@ -283,8 +283,9 @@ pub const DEFAULT_CONFIG: &str = r##"# quarry configuration.
 [main]
 # Color theme. Built-in: tokyo-night, tokyo-night-storm, tokyo-night-day, catppuccin-mocha,
 # catppuccin-macchiato, catppuccin-frappe, catppuccin-latte, gruvbox-dark, gruvbox-light, dracula,
-# nord, one-dark, solarized-dark, solarized-light, rose-pine, rose-pine-dawn, kanagawa, everforest,
-# github-dark, github-light, monokai, ansi (16 terminal colors).
+# nord, one-dark, solarized-dark, solarized-light, rose-pine, rose-pine-moon, rose-pine-dawn,
+# kanagawa, everforest-dark, everforest-light, github-dark, github-light, monokai, ayu-dark,
+# nightfox, material-ocean, ansi (16 terminal colors).
 # Custom themes: put <name>.toml (quarry palette) or base16/base24 <name>.yaml schemes in the
 # `themes/` directory next to this file and use <name> here. Switch at runtime with \theme.
 theme = "tokyo-night"
@@ -418,6 +419,17 @@ mod tests {
             for key in table.keys() {
                 assert!(DEFAULT_CONFIG.contains(&format!("{key} =")), "option `{key}` is not documented");
             }
+        }
+    }
+
+    #[test]
+    fn default_file_lists_every_builtin_theme() {
+        let listed: String = DEFAULT_CONFIG.lines().filter(|l| l.starts_with('#')).collect::<Vec<_>>().join(" ");
+        for name in crate::theme::builtin_names() {
+            assert!(
+                listed.split(|c: char| !(c.is_alphanumeric() || c == '-')).any(|w| w == *name),
+                "theme `{name}` is missing from the list in DEFAULT_CONFIG"
+            );
         }
     }
 

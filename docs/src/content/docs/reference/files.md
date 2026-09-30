@@ -35,8 +35,8 @@ With `--config FILE`, `favorites.toml` and `themes/` are read from the directory
 
 ## Permissions
 
-`config.toml`, `favorites.toml`, `history.txt`, `quarry.log`, `credentials.toml`, and files you write
-with `\o`, `tee` and `\export`, are created readable only by you (mode 600).
+`config.toml`, `favorites.toml`, `history.txt`, `quarry.log`, `credentials.toml`, `ui-state.toml`, and
+files you write with `\o`, `tee` and `\export`, are created readable only by you (mode 600).
 
 ## Starting fresh
 

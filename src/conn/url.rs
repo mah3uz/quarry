@@ -276,8 +276,47 @@ pub fn expand_tilde(p: &str) -> PathBuf {
     PathBuf::from(p)
 }
 
+/// `input` without a password, whether in the userinfo or a `password=` parameter, for saving to
+/// the config. The flag says whether one was removed.
+pub fn strip_password(input: &str) -> (String, bool) {
+    let Ok(mut u) = url::Url::parse(input) else { return (input.to_string(), false) };
+    if !u.has_authority() {
+        return (input.to_string(), false);
+    }
+    let mut removed = u.password().is_some();
+    if removed {
+        let _ = u.set_password(None);
+    }
+    let pairs: Vec<(String, String)> = u.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
+    if pairs.iter().any(|(k, _)| k.eq_ignore_ascii_case("password")) {
+        removed = true;
+        let kept: Vec<_> = pairs.into_iter().filter(|(k, _)| !k.eq_ignore_ascii_case("password")).collect();
+        if kept.is_empty() {
+            u.set_query(None);
+        } else {
+            u.query_pairs_mut().clear().extend_pairs(kept);
+        }
+    }
+    if !removed {
+        return (input.to_string(), false);
+    }
+    (u.to_string(), true)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn saving_a_url_drops_its_password_but_keeps_everything_else() {
+        let (url, removed) = strip_password("postgres://me:s3cret@db.example.com:5432/app?sslmode=require");
+        assert!(removed);
+        assert_eq!(url, "postgres://me@db.example.com:5432/app?sslmode=require");
+        let (url, removed) = strip_password("mysql://root@127.0.0.1/shop?password=s3cret&charset=utf8mb4");
+        assert!(removed);
+        assert_eq!(url, "mysql://root@127.0.0.1/shop?charset=utf8mb4");
+        assert_eq!(strip_password("postgres://me@h/app"), ("postgres://me@h/app".into(), false));
+        assert_eq!(strip_password("data.db"), ("data.db".into(), false));
+    }
+
     use super::*;
 
     #[test]

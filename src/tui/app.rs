@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{Event as CEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use tokio::runtime::Handle;
 
@@ -40,6 +40,8 @@ pub struct ConnEntry {
     pub completer: Option<Arc<Completer>>,
     pub _tunnel: Option<crate::conn::ssh::Tunnel>,
     pub loading_catalog: bool,
+    /// From the saved connection's `color`, e.g. red for production.
+    pub color: Option<Color>,
 }
 
 impl ConnEntry {
@@ -196,12 +198,13 @@ pub struct App {
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 impl App {
-    pub fn new(rt: Handle, config: Config, tx: AppSender) -> App {
-        let depth = ColorDepth::detect();
-        let theme_name = load_ui_state().theme.unwrap_or_else(|| config.main.theme.clone());
+    pub fn new(rt: Handle, config: Config, tx: AppSender, overrides: super::Overrides) -> App {
+        let depth = if overrides.no_color { ColorDepth::None } else { ColorDepth::detect() };
+        let theme_name = overrides.theme.or_else(|| load_ui_state().theme).unwrap_or_else(|| config.main.theme.clone());
         let theme = crate::theme::load(&theme_name, &config.themes_dir()).unwrap_or_default();
         let favorites = special::favorites::Favorites::load(config.favorites_path()).unwrap_or_default();
-        App {
+        let warnings = config.warnings.clone();
+        let mut app = App {
             rt,
             theme: theme.adapted(depth),
             depth,
@@ -224,7 +227,11 @@ impl App {
             pending_connects: HashMap::new(),
             max_rows: 200_000,
             config,
+        };
+        for w in warnings {
+            app.toast(Level::Warning, w);
         }
+        app
     }
 
     pub fn spinner(&self) -> &'static str {
@@ -288,12 +295,24 @@ impl App {
 
     // ---------------------------------------------------------------- connections
 
+    fn saved_color(&mut self, name: &str) -> Option<Color> {
+        let text = self.config.connections.get(name)?.color.clone()?;
+        match crate::theme::parse_color(&text) {
+            Some(c) => Some(crate::theme::adapt(c, self.depth)),
+            None => {
+                self.toast(Level::Warning, format!("Connection '{name}': unknown color '{text}' (use \"#rrggbb\" or a name like red)"));
+                None
+            }
+        }
+    }
+
     pub fn adopt_connection(&mut self, opened: Opened, name: Option<String>, meta: Option<Connection>) {
         let id = self.conns.len();
         let name = name.unwrap_or_else(|| default_conn_name(&opened.spec));
         let needs_shared = opened.spec.backend == Backend::Sqlite;
         let spec = opened.spec.clone();
         let info = opened.conn.info().clone();
+        let color = self.saved_color(&name);
         let main = Worker::spawn(&self.rt, id, opened.conn, self.tx.clone(), true);
         let entry = ConnEntry {
             id,
@@ -308,9 +327,11 @@ impl App {
             completer: None,
             _tunnel: opened.tunnel,
             loading_catalog: true,
+            color,
         };
         self.conns.push(Some(entry));
         self.sidebar.set_connection(id, &name, &info.version);
+        self.sidebar.set_connection_color(id, color);
         if let Some(m) = meta {
             let w = Worker::spawn(&self.rt, id, m, self.tx.clone(), false);
             if let Some(e) = self.conn_mut(id) {
@@ -2201,19 +2222,7 @@ impl App {
             "txt" => TableFormat::Ascii,
             _ => TableFormat::Csv,
         };
-        let opts = OutputOptions {
-            format,
-            expanded: crate::output::Expanded::Off,
-            null_string: String::new(),
-            max_field_width: None,
-            terminal_width: usize::MAX / 4,
-            color: ColorDepth::None,
-            theme: Arc::new(self.theme.clone()),
-            backend,
-            table_name: Some(table),
-            align_numbers: true,
-        };
-        let text = output::render(grid.columns(), grid.rows(), &opts);
+        let text = render_grid(grid, format, table, backend, &self.theme);
         let rows = grid.row_count();
         match crate::repl::session::write_private(&dest, &text) {
             Ok(()) => self.toast(Level::Success, format!("Exported {rows} rows → {}", dest.display())),
@@ -2240,9 +2249,9 @@ impl App {
         add("Next tab", "Alt+→", Command::NextTab);
         add("Previous tab", "Alt+←", Command::PrevTab);
         add("Go to table…", "Ctrl+G", Command::GoToTable);
-        add("Table structure", "s", Command::Structure);
+        add("Table structure", "s in explorer", Command::Structure);
         add("Toggle explorer", "Ctrl+B", Command::ToggleSidebar);
-        add("Focus explorer", "F6", Command::FocusSidebar);
+        add("Focus explorer", "Alt+0", Command::FocusSidebar);
         add("Focus editor", "", Command::FocusEditor);
         add("Focus results", "", Command::FocusResults);
         add("Commit transaction", "", Command::Commit);
@@ -2251,7 +2260,7 @@ impl App {
         add("Query history", "Ctrl+R", Command::History);
         add("Switch theme…", "Ctrl+Y", Command::Themes);
         add("Connections…", "Ctrl+O", Command::Connections);
-        add("Refresh schema", "r", Command::Refresh);
+        add("Refresh schema", "r in explorer", Command::Refresh);
         add("Export results to file…", "Ctrl+X", Command::Export);
         add("Copy results as CSV", "", Command::Copy(TableFormat::Csv));
         add("Copy results as JSON", "", Command::Copy(TableFormat::Json));
@@ -2394,13 +2403,14 @@ impl App {
             Command::Copy(format) => {
                 let Some(tab) = self.tabs.get(self.active) else { return };
                 let backend = tab.conn.and_then(|c| self.conn(c)).map(|c| c.backend()).unwrap_or(Backend::Postgres);
-                let text = match &tab.kind {
-                    TabKind::Query(q) => grid_copy(&q.grid, format, "query_result", backend),
-                    TabKind::Table(t) => grid_copy(&t.grid, format, &qualified(Some(&t.schema), &t.name, backend), backend),
-                    _ => None,
+                let (grid, table) = match &tab.kind {
+                    TabKind::Query(q) => (&q.grid, "query_result".to_string()),
+                    TabKind::Table(t) => (&t.grid, qualified(Some(&t.schema), &t.name, backend)),
+                    _ => return,
                 };
-                if let Some(t) = text {
-                    self.copy_to_clipboard(t);
+                if grid.column_count() > 0 {
+                    let text = render_grid(grid, format, table, backend, &self.theme);
+                    self.copy_to_clipboard(text);
                 }
             }
             Command::SaveFavorite => {
@@ -2773,17 +2783,21 @@ fn original_where(t: &TableTab, row: usize, pk: &[usize], backend: Backend) -> S
         .join(" AND ")
 }
 
-fn grid_copy(grid: &GridState, format: TableFormat, table: &str, backend: Backend) -> Option<String> {
-    if grid.column_count() == 0 {
-        return None;
-    }
-    Some(match format {
-        TableFormat::Csv => grid.copy_as_csv(true),
-        TableFormat::Json => grid.copy_as_json(),
-        TableFormat::Markdown => grid.copy_as_markdown(),
-        TableFormat::SqlInsert => grid.copy_as_sql_insert(table, backend),
-        _ => grid.copy_cells_tsv(true),
-    })
+/// Every row in the grid in `format`, for export and "Copy results as …".
+fn render_grid(grid: &GridState, format: TableFormat, table: String, backend: Backend, theme: &Theme) -> String {
+    let opts = OutputOptions {
+        format,
+        expanded: crate::output::Expanded::Off,
+        null_string: String::new(),
+        max_field_width: None,
+        terminal_width: usize::MAX / 4,
+        color: ColorDepth::None,
+        theme: Arc::new(theme.clone()),
+        backend,
+        table_name: Some(table),
+        align_numbers: true,
+    };
+    output::render(grid.columns(), grid.rows(), &opts)
 }
 
 fn pretty_value(s: &str) -> String {
@@ -2865,11 +2879,7 @@ fn load_ui_state() -> UiState {
 }
 
 fn save_ui_state(st: &UiState) {
-    let p = ui_state_path();
-    if let Some(d) = p.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
     if let Ok(s) = toml::to_string(st) {
-        let _ = std::fs::write(p, s);
+        let _ = crate::config::write_private(&ui_state_path(), &s);
     }
 }

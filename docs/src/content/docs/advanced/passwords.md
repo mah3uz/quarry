@@ -96,8 +96,7 @@ password_command = "secret-tool lookup service prod-db"            # GNOME Keyri
 
 ## Keeping secrets out of history
 
-quarry doesn't save statements containing `password`, `identified by`, `secret` or `encrypted` to
-its history or query log. This is a keyword check, so a line like `\c postgres://me:pw@host/db` is
-saved. Use a password file or `password_command` rather than passwords in URLs.
+quarry doesn't save statements containing `password`, `identified by`, `secret` or `encrypted`, or
+a URL with a password in it such as `\c postgres://me:pw@host/db`, to its history or query log.
 
 Connection URLs printed by quarry (`--list`, errors, `\c` messages) never include the password.

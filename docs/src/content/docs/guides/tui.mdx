@@ -81,8 +81,8 @@ rows (the Messages tab says so).
 **Export** writes the rows in the grid to a file, choosing the format from the extension: `.csv`,
 `.tsv`, `.json`, `.jsonl`, `.md`, `.html`, `.sql` (INSERT statements) or `.txt`.
 
-The palette also has **Copy results as CSV / JSON / Markdown / SQL INSERT**. These copy the current
-selection (or the row under the cursor), not the whole result.
+The palette also has **Copy results as CSV / JSON / Markdown / SQL INSERT**, which copy the whole
+result to the clipboard. <kbd>y</kbd> and <kbd>Y</kbd> copy just the selection.
 
 ## The explorer
 
@@ -149,8 +149,8 @@ transaction asks first, and the transaction is rolled back.
 - The TUI doesn't restore your tabs or editor text between runs. Only the theme is remembered.
 - Quitting asks for confirmation if a query is running, a transaction is open, or a table view has
   unapplied edits.
-- `--theme`, `--no-color`, `row_limit`, `table_format` and the pager settings apply to the REPL, not
-  the TUI.
+- `--theme` and `--no-color` apply to the TUI too. After `\tui`, the TUI keeps the REPL's theme.
+- `row_limit`, `table_format`, `timing`, `vi` and the pager settings apply to the REPL, not the TUI.
 
 ## Related
 

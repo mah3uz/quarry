@@ -133,6 +133,15 @@ pub fn is_complete(line: &str, backend: Backend, delimiter: &str, multi_line: bo
 pub fn is_sensitive(sql: &str) -> bool {
     let lower = sql.to_ascii_lowercase();
     ["identified by", "password", "set password", "encrypted", "secret"].iter().any(|k| lower.contains(k))
+        || has_url_password(sql)
+}
+
+/// A connection URL with a password in it (`scheme://user:password@host`), as typed after `\c`.
+fn has_url_password(text: &str) -> bool {
+    text.match_indices("://").any(|(i, _)| {
+        let authority = text[i + 3..].split(|c: char| c == '/' || c == '?' || c.is_whitespace()).next().unwrap_or("");
+        authority.rsplit_once('@').is_some_and(|(userinfo, _)| userinfo.contains(':'))
+    })
 }
 
 pub struct SafeHistory<H: History> {
@@ -202,5 +211,8 @@ mod tests {
         assert!(is_sensitive("CREATE USER bob IDENTIFIED BY 'x'"));
         assert!(is_sensitive("alter role bob with password 'x'"));
         assert!(!is_sensitive("select * from users"));
+        assert!(is_sensitive("\\c postgres://me:hunter2@db.example.com/app"), "a password typed in a URL");
+        assert!(!is_sensitive("\\c postgres://me@db.example.com:5432/app"), "a user and a port are not a password");
+        assert!(!is_sensitive("select 'a@b:c' from t"));
     }
 }

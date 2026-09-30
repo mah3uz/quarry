@@ -89,10 +89,12 @@ an interrupt.
 
 - **Passwords are never printed or logged.** Connection URLs shown by quarry leave the password out.
 - **History skips secrets.** Statements containing `password`, `identified by`, `secret` or
-  `encrypted` are not saved to history or the query log. This is a simple word check: a `\c` URL with
-  a password in it *would* be saved, so prefer `~/.pgpass`, `~/.my.cnf` or `password_command`.
-- **Files are private.** History, the query log, exports, favourites, credentials and the config are
-  written with mode 600.
+  `encrypted`, and URLs with a password in them, are not saved to history or the query log.
+- **Saved connections leave passwords out.** `--save` strips the password from the URL and tells you
+  where to keep it instead. quarry warns at start-up if `config.toml` holds a password and other
+  users can read it.
+- **Files are private.** History, the query log, exports, favourites, credentials, the TUI state and
+  the config are written with mode 600.
 - **API keys live apart from your config**, in the data directory. See [Asking a model for
   SQL](/guides/ai/#api-keys).
 

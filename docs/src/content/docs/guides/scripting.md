@@ -25,7 +25,8 @@ such as `-e "\dt"` or `-e "describe users"`.
 
 In a file or on stdin, lines that start with `\` (or `.` on SQLite), and `delimiter` lines, are run
 as special commands when they appear between statements. Everything else is sent to the server as
-SQL. Word forms such as `use db` are sent as SQL there too.
+SQL. Word forms such as `use db` are sent as SQL there too. A `\q` stops the script. `\i file` in the
+REPL runs a file the same way.
 
 ## Output
 
@@ -51,7 +52,7 @@ only the data. The table formats also print a status line such as `3 rows`. See
 
 In a script, quarry doesn't page, truncate long values, switch to vertical layout, ask before large
 results, or ask for confirmation before destructive statements. Colour is off when stdout isn't a
-terminal; `--no-color` or `NO_COLOR=1` turns it off in the REPL as well.
+terminal; `--no-color` or `NO_COLOR=1` turns it off everywhere.
 
 ## Errors and exit codes
 

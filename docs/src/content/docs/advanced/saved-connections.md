@@ -36,6 +36,7 @@ url = "postgres://deploy@db.internal:5432/app?sslmode=verify-full"
 password_command = "pass show db/prod"
 ssh = "deploy@bastion.example.com:22"
 readonly = true
+color = "red"
 init_commands = ["SET search_path TO app, public", "SET statement_timeout = '30s'"]
 ```
 
@@ -45,6 +46,7 @@ init_commands = ["SET search_path TO app, public", "SET statement_timeout = '30s
 | `password_command` | A shell command whose output is the password. See [Passwords](/advanced/passwords/#password_command). |
 | `ssh` | Tunnel through SSH: `[user@]host[:port]`. See [SSH tunnels](/advanced/tls-ssh/#ssh-tunnels). |
 | `readonly` | `true` opens the connection in [read-only mode](/guides/safety/#read-only-mode) |
+| `color` | Tag colour in the TUI, e.g. `"red"` for production: the connection's name in the explorer and its label in the status bar are drawn in it. `"#rrggbb"` or a colour name. |
 | `init_commands` | SQL to run right after connecting, in order |
 
 Flags on the command line still apply on top: `quarry prod -d other_db` connects to `other_db`, and
@@ -53,16 +55,16 @@ Flags on the command line still apply on top: `quarry prod -d other_db` connects
 ## What `--save` stores
 
 - The target as you typed it, if it contains `:` or `.` (a URL or a file name). Otherwise, the URL
-  quarry built from your flags, without the password.
+  quarry built from your flags.
 - `readonly` and `--ssh`.
 
-It doesn't store `--ssh-key`, TLS flags, `--init-command` or a password prompted for at connect
-time. Add those by hand if you need them.
+**Passwords are never saved.** If the URL contains one (`me:secret@…` or `?password=`), quarry
+removes it and says so; give the password a home in a
+[`password_command`](/advanced/passwords/#password_command), `~/.pgpass` or `~/.my.cnf`. `--save` also
+doesn't store `--ssh-key`, TLS flags or `--init-command`. Add those by hand if you need them.
 
-:::caution
-If the URL you save contains a password, the password is written to `config.toml`. Prefer a
-`password_command`, `~/.pgpass` or `~/.my.cnf`, and keep the file private (`chmod 600`).
-:::
+If you write a password into a `url` by hand, keep the file private (`chmod 600`); quarry warns at
+start-up when it isn't.
 
 Saving rewrites `config.toml`, so comments you added are lost. The previous file is kept as
 `config.toml.bak`.
@@ -76,6 +78,6 @@ connection manager. The TUI doesn't ask for confirmation, but the previous confi
 ## Using them
 
 - `quarry NAME` in a terminal. Add `--tui` to open the TUI.
+- `\c NAME` in the REPL, to switch to it without restarting.
 - The TUI's connection manager (<kbd>Ctrl</kbd>+<kbd>O</kbd>), where read-only connections are
   marked `ʀ`.
-- Saved names are **not** understood by `\c` in the REPL. Use a URL there.

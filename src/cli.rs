@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{ArgAction, Parser};
 
-use crate::config::Config;
+use crate::config::{Config, SavedConnection};
 use crate::conn::ssh::Tunnel;
 use crate::conn::{ConnSpec, SshSpec, SslMode, passfile};
 use crate::db::{Backend, Connection, ErrorKind};
@@ -137,20 +137,25 @@ impl Args {
     }
 }
 
+/// A saved connection's spec, with its read-only, SSH and start-up settings, plus its password command.
+pub fn saved_spec(name: &str, saved: &SavedConnection) -> Result<(ConnSpec, Option<String>)> {
+    let mut spec = ConnSpec::parse(&saved.url).map_err(|e| anyhow!("saved connection '{name}': {e}"))?;
+    spec.readonly |= saved.readonly;
+    if let Some(ssh) = &saved.ssh {
+        spec.ssh = SshSpec::parse(ssh);
+    }
+    spec.init_commands.extend(saved.init_commands.iter().cloned());
+    Ok((spec, saved.password_command.clone()))
+}
+
 /// Returns None when nothing identifies a connection (→ TUI connection manager).
 pub fn resolve(args: &Args, config: &Config) -> Result<Option<Resolved>> {
     let mut password_command = None;
     let mut saved_name = None;
     let mut spec = match args.target.as_deref() {
         Some(t) if config.connections.contains_key(t) => {
-            let saved = &config.connections[t];
-            let mut spec = ConnSpec::parse(&saved.url).map_err(|e| anyhow!("saved connection '{t}': {e}"))?;
-            spec.readonly |= saved.readonly;
-            if let Some(ssh) = &saved.ssh {
-                spec.ssh = SshSpec::parse(ssh);
-            }
-            spec.init_commands.extend(saved.init_commands.iter().cloned());
-            password_command = saved.password_command.clone();
+            let (spec, command) = saved_spec(t, &config.connections[t])?;
+            password_command = command;
             saved_name = Some(t.to_string());
             spec
         }

@@ -50,7 +50,7 @@ Other defaults come from `~/.my.cnf`. See [Passwords and secrets](/advanced/pass
 
 | Variable | Meaning |
 |---|---|
-| `NO_COLOR` | Any non-empty value turns colour off in the REPL |
+| `NO_COLOR` | Any non-empty value turns colour off |
 | `COLORTERM` | `truecolor` or `24bit` enables 24-bit colour |
 | `TERM` | Used to detect colour support. `dumb` turns colour off. |
 | `PAGER` | Pager, when the config doesn't set one |

@@ -21,6 +21,30 @@ fn quarry(args: &[&str], stdin: Option<&str>) -> Output {
     child.wait_with_output().unwrap()
 }
 
+/// Like `quarry`, but with its own config and data dirs so tests can write config without colliding.
+fn quarry_in(dir: &std::path::Path, args: &[&str], stdin: &str) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_quarry"))
+        .args(args)
+        .env("QUARRY_CONFIG_DIR", dir.join("config"))
+        .env("QUARRY_DATA_DIR", dir.join("data"))
+        .env("NO_COLOR", "1")
+        .env_remove("PAGER")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn quarry");
+    child.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+    child.wait_with_output().unwrap()
+}
+
+fn test_dir(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("quarry-cli-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("config")).unwrap();
+    dir
+}
+
 fn stdout(o: &Output) -> String {
     String::from_utf8_lossy(&o.stdout).into_owned()
 }
@@ -155,4 +179,71 @@ fn mysql_batch_roundtrip() {
     let o = quarry(&[&url, "-F", "json", "-e", "select 42 as answer, 'x' as t"], None);
     let v: serde_json::Value = serde_json::from_str(&stdout(&o)).unwrap();
     assert_eq!(v, serde_json::json!([{"answer": 42, "t": "x"}]));
+}
+
+#[test]
+fn backslash_c_opens_saved_connections_by_name() {
+    let dir = test_dir("saved-c");
+    let other = dir.join("other.db");
+    quarry(&[other.to_str().unwrap(), "-e", "create table t (name text)", "-e", "insert into t values ('from other')"], None);
+    std::fs::write(dir.join("config/config.toml"), format!("[connections.other]\nurl = \"{}\"\n", other.display())).unwrap();
+
+    let o = quarry_in(&dir, &[dir.join("main.db").to_str().unwrap()], "\\c other\nselect name from t;\n");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(stdout(&o).contains("from other"), "\\c should switch to the saved connection: {}", stdout(&o));
+}
+
+#[test]
+fn include_runs_special_commands_like_a_script_file() {
+    let dir = test_dir("include");
+    let script = dir.join("inc.sql");
+    std::fs::write(&script, "create table included (id integer);\n\\dt\n").unwrap();
+    let include = format!("\\i {}", script.display());
+    let o = quarry_in(&dir, &[dir.join("a.db").to_str().unwrap(), "-e", &include], "");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(stdout(&o).contains("included"), "\\dt inside the file should list the new table: {}", stdout(&o));
+}
+
+#[test]
+fn quit_stops_a_script() {
+    let dir = test_dir("quit");
+    let o = quarry_in(&dir, &[":memory:"], "select 'before' as v;\n\\q\nselect 'after' as v;\n");
+    assert!(o.status.success());
+    assert!(stdout(&o).contains("before") && !stdout(&o).contains("after"), "{}", stdout(&o));
+}
+
+#[test]
+fn a_failure_stops_the_rest_of_the_script_unless_asked_to_continue() {
+    let dir = test_dir("stop");
+    let script = "select * from missing;\n\\echo still running\nselect 'later' as v;\n";
+    let o = quarry_in(&dir, &[":memory:"], script);
+    assert!(!o.status.success());
+    assert!(!stdout(&o).contains("still running") && !stdout(&o).contains("later"), "{}", stdout(&o));
+
+    let o = quarry_in(&dir, &[":memory:", "--continue-on-error"], script);
+    assert!(!o.status.success(), "a failure is still reported in the exit status");
+    assert!(stdout(&o).contains("still running") && stdout(&o).contains("later"), "{}", stdout(&o));
+}
+
+#[cfg(unix)]
+#[test]
+fn config_warnings_are_shown_not_swallowed() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = test_dir("warn");
+    let config = dir.join("config/config.toml");
+    std::fs::write(&config, "[connections.leaky]\nurl = \"postgres://me:secret@db/app\"\n").unwrap();
+    std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let o = quarry_in(&dir, &[":memory:", "-e", "select 1"], "");
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("readable by other users") && err.contains("leaky"), "{err}");
+}
+
+#[test]
+fn save_never_writes_a_password_to_the_config() {
+    let dir = test_dir("save");
+    let o = quarry_in(&dir, &["postgres://me:s3cret@127.0.0.1:1/app?sslmode=disable", "--save", "leaky", "-w", "-e", "select 1"], "");
+    let config = std::fs::read_to_string(dir.join("config/config.toml")).unwrap();
+    assert!(config.contains("[connections.leaky]") && config.contains("sslmode=disable"), "{config}");
+    assert!(!config.contains("s3cret"), "the password must not be saved: {config}");
+    assert!(String::from_utf8_lossy(&o.stderr).contains("password was not saved"));
 }

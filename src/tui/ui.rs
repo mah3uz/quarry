@@ -501,7 +501,11 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &App, theme: &Theme) {
             };
             put(buf, " ", Style::default());
             put(buf, &format!(" {tag} "), Style::default().fg(color).add_modifier(Modifier::BOLD).bg(theme.highlight));
-            put(buf, &format!(" {} ", c.short_label()), Style::default().fg(theme.fg).bg(theme.surface));
+            let label = match c.color {
+                Some(color) => Style::default().fg(theme.bg).bg(color).add_modifier(Modifier::BOLD),
+                None => Style::default().fg(theme.fg).bg(theme.surface),
+            };
+            put(buf, &format!(" {} ", c.short_label()), label);
             if c.in_tx {
                 put(buf, " TX ", Style::default().bg(theme.warning).fg(theme.bg).add_modifier(Modifier::BOLD));
                 put(buf, " ", Style::default());

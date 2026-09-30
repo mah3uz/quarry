@@ -630,7 +630,7 @@ pub fn list_all(themes_dir: &Path) -> Vec<String> {
     out
 }
 
-fn parse_color(s: &str) -> Option<Color> {
+pub fn parse_color(s: &str) -> Option<Color> {
     let s = s.trim();
     if let Some(hex) = s.strip_prefix('#') {
         return (hex.len() == 6).then(|| u32::from_str_radix(hex, 16).ok().map(rgb)).flatten();

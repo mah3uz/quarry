@@ -69,6 +69,8 @@ pub struct Session {
     pub continue_on_error: bool,
     /// History entries (most recent last) for `\history`; filled by the REPL loop.
     pub history_snapshot: Vec<String>,
+    /// The saved connection this session is on, if it was opened by name.
+    pub saved_name: Option<String>,
 }
 
 impl Session {
@@ -531,7 +533,7 @@ impl Session {
             }
             Special::PipeOnce { command } => self.sinks.pipe_once(&command),
             Special::Edit { file, query } => self.edit_external(file, query),
-            Special::Source { path } => self.source_file(&path),
+            Special::Source { path } => return self.source_file(&path),
             Special::Clip { query } => {
                 let text = query.or_else(|| self.last_query.clone()).unwrap_or_default();
                 match arboard::Clipboard::new().and_then(|mut c| c.set_text(text)) {
@@ -769,7 +771,20 @@ impl Session {
             self.msg(&format!("You are connected to {} {}", p.accent(&self.spec.display_url()), p.muted(&format!("(database {db})"))));
             return;
         };
-        let new_spec = if target.contains("://") || crate::conn::url::looks_like_sqlite_path(&target)
+        let mut password_command = None;
+        let saved_name = self.config.connections.contains_key(&target).then(|| target.clone());
+        let new_spec = if let Some(saved) = self.config.connections.get(&target) {
+            match crate::cli::saved_spec(&target, saved) {
+                Ok((spec, command)) => {
+                    password_command = command;
+                    Some(spec)
+                }
+                Err(e) => {
+                    self.err(&format!("✗ {e:#}"));
+                    return;
+                }
+            }
+        } else if target.contains("://") || crate::conn::url::looks_like_sqlite_path(&target)
             || (self.conn.backend() == Backend::Sqlite)
         {
             match ConnSpec::parse(&target).or_else(|_| Ok::<_, String>(ConnSpec::sqlite(crate::conn::url::expand_tilde(&target)))) {
@@ -788,9 +803,15 @@ impl Session {
             None
         };
         match new_spec {
-            Some(spec) => match self.rt.block_on(crate::cli::open(spec, None, false, true)) {
+            Some(mut spec) => {
+                if spec.backend != Backend::Sqlite {
+                    crate::conn::passfile::apply_defaults(&mut spec);
+                }
+                match self.rt.block_on(crate::cli::open(spec, password_command.as_deref(), false, true)) {
                 Ok(opened) => {
                     self.conn = opened.conn;
+                    self.saved_name = saved_name;
+                    self.readonly |= opened.spec.readonly;
                     self.spec = opened.spec;
                     self.tunnel = opened.tunnel;
                     self.edit.write().unwrap().backend = self.conn.backend();
@@ -799,7 +820,8 @@ impl Session {
                     self.refresh_catalog();
                 }
                 Err(e) => self.err(&format!("✗ {e:#}")),
-            },
+                }
+            }
             None => match self.rt.block_on(self.conn.change_database(&target)) {
                 Ok(()) => {
                     self.spec.database = Some(target.clone());
@@ -841,16 +863,58 @@ impl Session {
         }
     }
 
-    pub fn source_file(&mut self, path: &str) {
+    pub fn source_file(&mut self, path: &str) -> Flow {
         let p = crate::conn::url::expand_tilde(path);
         match std::fs::read_to_string(&p) {
             Ok(text) => {
                 let saved = self.last_query.clone();
-                self.run_sql(&text, None);
+                let (_, flow) = self.run_script(&text);
                 self.last_query = saved;
+                flow
             }
-            Err(e) => self.err(&format!("✗ {}: {e}", p.display())),
+            Err(e) => {
+                self.err(&format!("✗ {}: {e}", p.display()));
+                Flow::Continue
+            }
         }
+    }
+
+    /// Runs a script that mixes SQL with special commands on their own lines, as psql and mysql input
+    /// files do. Stops at the first error (unless continue_on_error) or at `\q`, which it passes on.
+    pub fn run_script(&mut self, text: &str) -> (bool, Flow) {
+        let backend = self.conn.backend();
+        let mut sql = String::new();
+        let mut ok = true;
+        for line in text.lines() {
+            let t = line.trim();
+            let delimiter = self.edit.read().unwrap().delimiter.clone();
+            let at_boundary = sql.trim().is_empty() || split::ends_with_terminator(&sql, backend, &delimiter);
+            let is_delimiter = t.to_ascii_lowercase().starts_with("delimiter ");
+            let is_cmd = is_delimiter
+                || (at_boundary && (t.starts_with('\\') || t.starts_with('.')) && special::submits_immediately(t, backend));
+            if !is_cmd {
+                sql.push_str(line);
+                sql.push('\n');
+                continue;
+            }
+            if !self.run_script_sql(&mut sql) {
+                ok = false;
+                if !self.continue_on_error {
+                    return (false, Flow::Continue);
+                }
+            }
+            if let Flow::Quit = self.handle_input(t) {
+                return (ok, Flow::Quit);
+            }
+        }
+        ok &= self.run_script_sql(&mut sql);
+        (ok, Flow::Continue)
+    }
+
+    fn run_script_sql(&mut self, sql: &mut String) -> bool {
+        let ok = sql.trim().is_empty() || self.run_sql(sql, None);
+        sql.clear();
+        ok
     }
 
     fn watch(&mut self, query: &str, seconds: f64, clear: bool) {

@@ -28,12 +28,13 @@ both work. Family names work as shortcuts too: `catppuccin` means mocha, `gruvbo
 | Where | How | Remembered? |
 |---|---|---|
 | Config | `theme = "catppuccin-mocha"` under `[main]` | Yes |
-| Command line | `--theme dracula` | No, and REPL only |
+| Command line | `--theme dracula` | No, this run only (REPL and TUI) |
 | REPL | `\theme` lists themes, `\theme nord` switches | No |
 | TUI | <kbd>Ctrl</kbd>+<kbd>Y</kbd> outside the editor, or *Switch theme…* in the palette. Themes preview as you move; <kbd>Enter</kbd> keeps one, <kbd>Esc</kbd> goes back. | Yes, for the TUI |
 
 The theme you pick in the TUI is saved in `~/.local/share/quarry/ui-state.toml` and takes precedence
-over the config for the TUI from then on. Delete that file to go back to the config's theme.
+over the config for the TUI from then on. Delete that file to go back to the config's theme. `--theme`
+wins over both for one run, and `\tui` carries the REPL's current theme into the TUI.
 
 ## Your own theme
 
@@ -95,5 +96,5 @@ quarry detects what your terminal can show:
 Colours are mapped to the nearest one your terminal supports. For an exact match with your terminal's
 palette, use the `ansi` theme.
 
-`NO_COLOR=1` or `--no-color` turns colour off in the REPL. Output to a pipe or file is never
-coloured.
+`NO_COLOR=1` or `--no-color` turns colour off, in the REPL and the TUI. Output to a pipe or file is
+never coloured.

@@ -40,10 +40,6 @@ works on its own first.
 Through a tunnel quarry connects to `127.0.0.1`, so the host name check fails. Use `verify-ca`
 instead. See [TLS and SSH tunnels](/advanced/tls-ssh/).
 
-**`\c prod` connects to a database called "prod"**
-
-`\c` doesn't look up saved connections. Use the URL, or start quarry with `quarry prod`.
-
 ## Typing and running
 
 **<kbd>Enter</kbd> adds a new line instead of running**
