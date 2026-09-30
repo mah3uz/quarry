@@ -361,7 +361,6 @@ OUTPUTS = {
     # The docs site can't read files outside docs/, so it gets its own copies.
     "docs/public/logo.svg": logo,
     "docs/public/favicon.svg": logo,
-    "docs/src/assets/logo.svg": logo,
 }
 
 if __name__ == "__main__":

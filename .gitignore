@@ -19,8 +19,9 @@
 
 # Docs site
 docs/node_modules/
-docs/dist/
-docs/.astro/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+docs/.wrangler/
 
 # Local scratch data
 /demo.db

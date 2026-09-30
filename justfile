@@ -251,8 +251,19 @@ docs-build: docs-deps
 docs-preview: docs-build
     npm --prefix docs run preview
 
+# Re-render the share image (docs/public/og.png) from docs/.vitepress/og.html
+[group('docs')]
+docs-og: docs-deps
+    cd docs && chromium --headless=new --disable-gpu --hide-scrollbars --allow-file-access-from-files \
+      --window-size=1200,630 --virtual-time-budget=3000 --screenshot="$PWD/public/og.png" "file://$PWD/.vitepress/og.html"
+
+# Build the docs site and deploy it to Cloudflare (quarry.asmechanics.com); needs `wrangler login` once
+[group('docs')]
+docs-deploy: docs-build
+    cd docs && npx wrangler deploy
+
 # Remove build output (Rust, release files and docs)
 [group('clean')]
 clean:
     cargo clean
-    rm -rf dist docs/dist docs/.astro
+    rm -rf dist docs/.vitepress/dist docs/.vitepress/cache

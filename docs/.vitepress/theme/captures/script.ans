@@ -1,0 +1,9 @@
+[38;2;158;206;106m$[0m quarry shop.db -F csv -e "select id, email, name from users where meta like '%pro%' limit 4"
+id,email,name
+3,user3@example.com,User 3
+6,user6@example.com,User 6
+9,user9@example.com,User 9
+12,user12@example.com,User 12
+[38;2;158;206;106m$[0m quarry shop.db -e "select count(*) from orders" > count.tsv && cat count.tsv
+count(*)
+2000

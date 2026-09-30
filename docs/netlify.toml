@@ -1,4 +1,0 @@
-# Netlify: set the site's base directory to `docs`; this file is read from there.
-[build]
-  command = "npm run build"
-  publish = "dist"

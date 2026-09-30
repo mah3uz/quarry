@@ -1,46 +1,49 @@
 # quarry documentation
 
-The site for [quarry](../README.md), built with [Astro Starlight](https://starlight.astro.build).
+The site for [quarry](../README.md) at https://quarry.asmechanics.com, built with
+[VitePress](https://vitepress.dev).
 
 ```sh
 npm install
-npm run dev       # live preview at http://localhost:4321
-npm run build     # static site in dist/
-npm run preview   # serve dist/ locally
+npm run dev       # live preview at http://localhost:5173
+npm run build     # static site in .vitepress/dist
+npm run preview   # serve the build
 ```
 
+From the repository root, `just docs`, `just docs-build` and `just docs-deploy` do the same.
 Node 22.12 or newer is required (see `.node-version`).
 
 ## Where things are
 
 | Path | Contents |
 |---|---|
-| `src/content/docs/` | The pages, in Markdown (`.md`) or MDX (`.mdx` when a page uses components) |
-| `astro.config.mjs` | Site title, sidebar order and theme settings |
-| `src/styles/theme.css` | Colours (Tokyo Night) and fonts |
-| `src/components/Terminal.astro` | Renders a real terminal capture as HTML |
-| `src/captures/` | Terminal captures (`tmux capture-pane -e -p` output) used on the home page and TUI guide |
-| `src/assets/fonts/` | JetBrains Mono, bundled whole so box-drawing characters render everywhere (OFL licence alongside) |
-| `public/` | Files served as-is: the favicon and logo |
+| `index.md` | The landing page. It has no VitePress layout (`layout: false`) and renders `HomePage.vue`. |
+| `start/`, `guides/`, `advanced/`, `reference/`, `help/` | The documentation pages, in Markdown |
+| `.vitepress/config.mts` | Navigation, sidebar, search, SEO tags and the sitemap |
+| `.vitepress/theme/style.css` | Colours, type and the styling of doc pages |
+| `.vitepress/theme/components/HomePage.vue` | The landing page |
+| `.vitepress/theme/components/Terminal.vue` | Renders a real terminal capture as HTML; use `<Terminal capture="tui" title="…" label="…" />` in any page |
+| `.vitepress/theme/captures/` | The captures (`tmux capture-pane -e -p` output) |
+| `.vitepress/theme/fonts/` | JetBrains Mono, bundled whole so box-drawing characters line up (OFL licence alongside) |
+| `.vitepress/og.html` | The share image's source; `just docs-og` renders it to `public/og.png` |
+| `public/` | Served as-is: logo, favicon, share image, `robots.txt` |
+| `wrangler.jsonc` | Cloudflare deployment |
 
-To add a page, create a Markdown file under `src/content/docs/` and add its slug to the sidebar in
-`astro.config.mjs`. The logo files (`public/logo.svg`, `public/favicon.svg`, `src/assets/logo.svg`)
-are written by `scripts/gen_art.py` in the repository root; edit the mascot there.
+To add a page, create a Markdown file, start it with a `title` and `description` in the front matter
+and a `# Heading`, and add it to the sidebar in `.vitepress/config.mts`. `npm run build` fails on
+links to pages that don't exist.
+
+The logo files in `public/` are written by `scripts/gen_art.py` in the repository root; edit the
+mascot there.
 
 ## Deploying
 
-The build output is a static site in `dist/`, so any static host works.
+The site is a Cloudflare Worker that serves the static build, on the custom domain
+`quarry.asmechanics.com` (see `wrangler.jsonc`):
 
-**Cloudflare Pages:** create a project from the repository with
+```sh
+npx wrangler login     # once
+just docs-deploy       # build and upload
+```
 
-- Root directory: `docs`
-- Build command: `npm run build`
-- Build output directory: `dist`
-
-**Netlify:** create a site from the repository and set the base directory to `docs`. The build
-command and publish directory come from `netlify.toml`.
-
-Both read the Node version from `.node-version`.
-
-Once the site has a URL, set `site` in `astro.config.mjs` so Astro can generate a sitemap and
-canonical links.
+`npx wrangler deploy --dry-run` checks the configuration without uploading anything.

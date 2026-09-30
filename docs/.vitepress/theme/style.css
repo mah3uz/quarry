@@ -1,0 +1,188 @@
+/*
+ * quarry's palette comes from its mascot: shale and limestone for the ground, slate for the stone,
+ * a cut crystal for the brand colour, and the ochre of the pickaxe handle as the one warm accent.
+ */
+
+/* The whole JetBrains Mono (not a subset), so box-drawing output lines up everywhere. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --q-shale: #151823;
+  --q-limestone: #f4f6f9;
+  --q-slate: #6b739c;
+  --q-crystal: #0a78a8;
+  --q-crystal-bright: #16a8d8;
+  --q-ochre: #a86b0c;
+
+  --vp-font-family-base: 'Recursive Variable', ui-sans-serif, system-ui, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --vp-c-bg: #fbfcfd;
+  --vp-c-bg-alt: var(--q-limestone);
+  --vp-c-bg-soft: #eef1f6;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-divider: #e3e7ef;
+  --vp-c-gutter: #e3e7ef;
+  --vp-c-border: #d6dbe6;
+
+  --vp-c-text-1: #1a1e2c;
+  --vp-c-text-2: #4a5170;
+  --vp-c-text-3: #7a82a6;
+
+  --vp-c-brand-1: var(--q-crystal);
+  --vp-c-brand-2: #0b8bc2;
+  --vp-c-brand-3: var(--q-crystal);
+  --vp-c-brand-soft: rgba(22, 168, 216, 0.12);
+
+  --vp-c-tip-1: var(--q-crystal);
+  --vp-c-tip-soft: rgba(22, 168, 216, 0.1);
+  --vp-c-warning-1: var(--q-ochre);
+  --vp-c-warning-soft: rgba(217, 154, 43, 0.14);
+
+  --vp-code-bg: #e9edf4;
+  --vp-code-color: #283049;
+  --vp-code-block-bg: #f1f4f8;
+  --vp-code-block-divider-color: #e3e7ef;
+  --vp-code-tab-divider: #e3e7ef;
+
+  --vp-button-brand-bg: var(--q-crystal);
+  --vp-button-brand-hover-bg: #0b8bc2;
+  --vp-button-brand-active-bg: #0a6c98;
+
+  --vp-home-hero-name-color: var(--vp-c-text-1);
+  --vp-nav-logo-height: 30px;
+  --vp-layout-max-width: 1400px;
+}
+
+.dark {
+  --vp-c-bg: var(--q-shale);
+  --vp-c-bg-alt: #11131c;
+  --vp-c-bg-soft: #1c2030;
+  --vp-c-bg-elv: #1c2030;
+  --vp-c-divider: rgba(160, 172, 220, 0.12);
+  --vp-c-gutter: #0d0f16;
+  --vp-c-border: rgba(160, 172, 220, 0.22);
+
+  --vp-c-text-1: #eceff8;
+  --vp-c-text-2: #a9b0cc;
+  --vp-c-text-3: #737b9f;
+
+  --vp-c-brand-1: #4cc6ee;
+  --vp-c-brand-2: #7ad6f3;
+  --vp-c-brand-3: #16a8d8;
+  --vp-c-brand-soft: rgba(76, 198, 238, 0.14);
+
+  --vp-c-tip-1: #4cc6ee;
+  --vp-c-tip-soft: rgba(76, 198, 238, 0.1);
+  --vp-c-warning-1: #e0a64a;
+  --vp-c-warning-soft: rgba(224, 166, 74, 0.12);
+
+  --vp-code-bg: #232839;
+  --vp-code-color: #d5dbf2;
+  --vp-code-block-bg: #0f1119;
+  --vp-code-block-divider-color: rgba(160, 172, 220, 0.12);
+  --vp-code-tab-divider: rgba(160, 172, 220, 0.12);
+
+  --vp-button-brand-bg: #1698c6;
+  --vp-button-brand-hover-bg: #16a8d8;
+  --vp-button-brand-active-bg: #1287b0;
+  --vp-button-brand-text: #06121a;
+  --vp-button-brand-hover-text: #06121a;
+}
+
+/* Recursive: plain and linear for reading; a touch of its casual axis for headings. */
+body {
+  font-variation-settings: 'CASL' 0, 'MONO' 0;
+}
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  font-variation-settings: 'CASL' 0.35, 'MONO' 0;
+  letter-spacing: -0.015em;
+}
+.vp-doc h1 {
+  font-weight: 800;
+}
+.vp-doc h2 {
+  font-weight: 750;
+  border-top-color: var(--vp-c-divider);
+}
+.vp-doc p,
+.vp-doc li {
+  line-height: 1.72;
+}
+
+/* Code blocks stand apart from the page in both themes. */
+.vp-doc div[class*='language-'] {
+  border: 1px solid var(--vp-code-block-divider-color);
+}
+
+/* Keyboard keys: <kbd>Ctrl</kbd>+<kbd>P</kbd> */
+.vp-doc kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0.05em 0.45em;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.8em;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-border);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* Reference tables are for scanning. */
+.vp-doc table {
+  display: table;
+  width: 100%;
+  font-size: 14px;
+}
+.vp-doc td,
+.vp-doc th {
+  vertical-align: top;
+}
+.vp-doc td:first-child code {
+  white-space: nowrap;
+}
+
+/* Tip and warning boxes: a coloured edge, not a heavy fill. */
+.vp-doc .custom-block {
+  border-width: 0 0 0 3px;
+  border-radius: 0 10px 10px 0;
+}
+.vp-doc .custom-block.tip {
+  border-color: var(--vp-c-tip-1);
+}
+.vp-doc .custom-block.warning {
+  border-color: var(--vp-c-warning-1);
+}
+.vp-doc .custom-block.info {
+  border-color: var(--vp-c-text-3);
+}
+
+/* The nav wordmark in the same voice as the home page. */
+.VPNavBarTitle .title {
+  font-variation-settings: 'CASL' 0.6;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 19px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
+}

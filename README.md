@@ -250,5 +250,5 @@ server is unreachable, its tests are skipped.
 `just art` (or `python3 scripts/gen_art.py`). The animations leave every shape at its resting pose, so renderers
 without SVG animation still draw the static artwork.
 
-The documentation site lives in `docs/` (Astro Starlight). `just docs` previews it; see
-[`docs/README.md`](docs/README.md) for deploying it to Cloudflare Pages or Netlify.
+The documentation site, https://quarry.asmechanics.com, lives in `docs/` (VitePress). `just docs`
+previews it and `just docs-deploy` publishes it to Cloudflare; see [`docs/README.md`](docs/README.md).

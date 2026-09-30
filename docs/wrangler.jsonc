@@ -1,0 +1,13 @@
+// Cloudflare Workers static assets: `just docs-deploy` builds the site and uploads it.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "quarry-docs",
+  "compatibility_date": "2026-09-30",
+  "assets": {
+    "directory": "./.vitepress/dist",
+    // VitePress writes /guides/repl as guides/repl.html (cleanUrls) and a 404.html for everything else.
+    "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "quarry.asmechanics.com", "custom_domain": true }]
+}

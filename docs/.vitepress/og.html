@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- The 1200x630 share image (public/og.png). Regenerate with `just docs-og`. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: 'Recursive';
+    src: url('../node_modules/@fontsource-variable/recursive/files/recursive-latin-full-normal.woff2') format('woff2');
+    font-weight: 300 1000;
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: url('theme/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    position: relative;
+    background: #151823;
+    color: #eceff8;
+    font-family: 'Recursive', sans-serif;
+  }
+  svg.strata { position: absolute; inset: auto 0 0 0; width: 1200px; height: 260px; }
+  .copy { position: absolute; left: 76px; top: 70px; width: 680px; }
+  .brand { display: flex; align-items: center; gap: 14px; font-size: 34px; font-weight: 850;
+    font-variation-settings: 'CASL' 0.8; letter-spacing: -0.02em; }
+  .brand img { width: 52px; height: 52px; }
+  h1 { margin: 44px 0 0; font-size: 70px; line-height: 1.02; font-weight: 850;
+    font-variation-settings: 'CASL' 1; letter-spacing: -0.035em; }
+  p { margin: 26px 0 0; font-size: 27px; line-height: 1.45; color: #a9b0cc; }
+  .url { position: absolute; left: 76px; bottom: 58px; font-family: 'JetBrains Mono', monospace;
+    font-size: 22px; color: #4cc6ee; }
+  .mascot { position: absolute; right: 60px; top: 96px; width: 380px; height: 380px; }
+</style>
+</head>
+<body>
+  <svg class="strata" viewBox="0 0 1200 260" preserveAspectRatio="none">
+    <path d="M0,260 L0,40 C200,20 380,70 600,44 S980,18 1200,46 L1200,260 Z" fill="#1b1f2e"/>
+    <path d="M0,260 L0,98 C220,82 400,122 640,100 S1000,74 1200,104 L1200,260 Z" fill="#202436"/>
+    <path d="M0,260 L0,150 C240,136 420,176 660,152 S1010,130 1200,158 L1200,260 Z" fill="#262b40"/>
+    <path d="M0,260 L0,204 C230,190 430,226 680,206 S1020,186 1200,210 L1200,260 Z" fill="#2c3149"/>
+    <path d="M0,124 C220,106 400,146 640,124 S1000,96 1200,128" fill="none" stroke="#4cc6ee" stroke-width="2.5" opacity="0.8"/>
+  </svg>
+  <div class="copy">
+    <div class="brand"><img src="../public/logo.svg" alt="">quarry</div>
+    <h1>A SQL client that lives in your terminal.</h1>
+    <p>A smart REPL and a full-screen TUI for PostgreSQL, MySQL / MariaDB and SQLite.</p>
+  </div>
+  <img class="mascot" src="../public/logo.svg" alt="">
+  <div class="url">quarry.asmechanics.com</div>
+</body>
+</html>
