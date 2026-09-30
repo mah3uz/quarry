@@ -116,7 +116,7 @@ const features = [
         </div>
       </section>
 
-      <section class="mode">
+      <section class="mode wide">
         <div class="text">
           <h2>Go full-screen when you want to look around</h2>
           <p>
@@ -410,7 +410,8 @@ h1 {
   filter: drop-shadow(0 0 6px rgba(76, 198, 238, 0.6));
 }
 .set {
-  max-width: 920px;
+  --term-max: 17px;
+  max-width: 1000px;
   margin: 0 auto;
 }
 .set :deep(.terminal) {
@@ -428,8 +429,26 @@ h1 {
   align-items: center;
   margin-top: 104px;
 }
+.mode {
+  --term-max: 15px;
+}
 .mode.flip {
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 0.75fr);
+}
+/* The TUI needs the whole width to be readable: heading and text above, the capture below. */
+.mode.wide {
+  --term-max: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 32px;
+}
+.mode.wide .text {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  column-gap: 56px;
+  align-items: start;
+}
+.mode.wide .text h2 {
+  grid-row: span 2;
 }
 .mode.flip .text {
   order: 2;
@@ -572,6 +591,9 @@ dd {
   }
   .mode.flip .text {
     order: 0;
+  }
+  .mode.wide .text {
+    grid-template-columns: minmax(0, 1fr);
   }
   .mascot {
     grid-row: 1;

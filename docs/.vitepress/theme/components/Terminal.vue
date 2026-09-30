@@ -181,8 +181,8 @@ pre {
   color: var(--term-fg);
   background: var(--term-bg);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  /* JetBrains Mono's cells are 0.6em wide: fit the widest line to the frame, up to 13px. */
-  font-size: min(13px, calc((100cqi - 36px) / var(--cols) / 0.6));
+  /* JetBrains Mono's cells are 0.6em wide: fit the widest line to the frame, up to --term-max. */
+  font-size: min(var(--term-max, 14px), calc((100cqi - 36px) / var(--cols) / 0.6));
   line-height: 1.22;
   white-space: pre;
   word-break: normal;
