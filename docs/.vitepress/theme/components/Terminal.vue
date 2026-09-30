@@ -37,13 +37,18 @@ function cells(cp: number): number {
     : 1
 }
 
+// Powerline half circles, the rounded ends of quarry's status-bar pills. A font draws them to its own
+// height, which never quite matches the line box a background fills, so they're drawn with CSS.
+const CAPS: Record<number, string> = { 0xe0b6: 'cap-l', 0xe0b4: 'cap-r' }
+
 // Characters outside ASCII and box drawing may come from a fallback font of another width; pinning
 // each to its cell width keeps the terminal grid aligned whatever font draws it.
 function cellText(text: string): string {
   let out = ''
   for (const ch of text) {
     const cp = ch.codePointAt(0)!
-    if (cp < 0x80 || (cp >= 0x2500 && cp <= 0x259f)) out += escapeHtml(ch)
+    if (CAPS[cp]) out += `<span class="cell w1 cap ${CAPS[cp]}"></span>`
+    else if (cp < 0x80 || (cp >= 0x2500 && cp <= 0x259f)) out += escapeHtml(ch)
     else out += `<span class="cell w${cells(cp)}">${escapeHtml(ch)}</span>`
   }
   return out
@@ -66,7 +71,12 @@ function toHtml(input: string): string {
       italic && 'font-style:italic',
       underline && 'text-decoration:underline',
     ].filter(Boolean).join(';')
-    html += style ? `<span style="${style}">${cellText(text)}</span>` : cellText(text)
+    const cls = b ? ' class="bg"' : ''
+    // one span per line: a background block is a single line tall
+    html += text
+      .split('\n')
+      .map((part) => (style && part ? `<span${cls} style="${style}">${cellText(part)}</span>` : cellText(part)))
+      .join('\n')
   }
 
   const apply = (params: string) => {
@@ -198,5 +208,27 @@ pre :deep(.w1) {
 }
 pre :deep(.w2) {
   width: 2ch;
+}
+/* A background fills the whole line, as in a terminal, not just the glyphs' height. */
+pre :deep(.bg),
+pre :deep(.cap) {
+  display: inline-block;
+  height: 1.22em;
+  vertical-align: top;
+}
+pre :deep(.cap) {
+  position: relative;
+}
+pre :deep(.cap)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+}
+pre :deep(.cap-l)::before {
+  border-radius: 100% 0 0 100% / 50% 0 0 50%;
+}
+pre :deep(.cap-r)::before {
+  border-radius: 0 100% 100% 0 / 0 50% 50% 0;
 }
 </style>
