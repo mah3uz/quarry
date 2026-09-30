@@ -289,6 +289,8 @@ pub struct Notice {
 
 /// Streamed output of executing one statement. Order: `Columns` (only for row-returning statements),
 /// zero or more `Rows` batches, then exactly one `Done`. `Notice` may appear anywhere.
+/// A statement producing several result sets (MySQL `CALL`) emits a new `Columns` before each
+/// subsequent set's rows; `Done` summarises the whole statement.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExecEvent {
     Columns(Vec<Column>),
@@ -526,6 +528,14 @@ impl Connection {
     pub async fn explain(&mut self, sql: &str, analyze: bool) -> DbResult<PlanNode> {
         dispatch!(self, c => c.explain(sql, analyze).await)
     }
+
+    /// Loads a SQLite extension (enabled only for the duration of the call). Other backends: error.
+    pub async fn load_extension(&mut self, path: &str) -> DbResult<()> {
+        match self {
+            Connection::Sqlite(c) => c.load_extension(path).await,
+            other => Err(DbError::other(format!("loading extensions is not supported for {}", other.backend()))),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -544,3 +554,31 @@ mod quote_tests {
         assert_eq!(quote_ident("a\"b", Backend::Sqlite), "\"a\"\"b\"");
     }
 }
+
+/// Gathers a statement's events into a `ResultSet` (driver-internal counterpart of `Connection::query`).
+pub(crate) async fn collect_events(mut rx: mpsc::Receiver<ExecEvent>) -> ResultSet {
+    let mut rs = ResultSet::default();
+    while let Some(ev) = rx.recv().await {
+        match ev {
+            ExecEvent::Columns(c) => rs.columns = c,
+            ExecEvent::Rows(mut r) => rs.rows.append(&mut r),
+            ExecEvent::Done(s) => rs.summary = s,
+            ExecEvent::Notice(_) => {}
+        }
+    }
+    rs
+}
+
+/// Scalar JSON value as plain text (arrays comma-joined) for EXPLAIN plan details.
+pub(crate) fn json_text(v: &serde_json::Value) -> String {
+    use serde_json::Value as Json;
+    match v {
+        Json::String(s) => s.clone(),
+        Json::Array(a) => a.iter().map(json_text).collect::<Vec<_>>().join(", "),
+        Json::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
+/// Rows per `ExecEvent::Rows` batch.
+pub(crate) const BATCH_ROWS: usize = 256;
