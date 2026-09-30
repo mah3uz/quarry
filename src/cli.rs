@@ -285,14 +285,8 @@ pub async fn open(
                 spec.password = Some(prompt_password(&spec)?);
             }
             Err(e) => {
-                let mut msg = e.message.clone();
-                if let Some(d) = &e.detail {
-                    msg.push_str(&format!("\n{d}"));
-                }
-                if let Some(h) = &e.hint {
-                    msg.push_str(&format!("\nhint: {h}"));
-                }
-                bail!("could not connect to {}: {msg}", spec.display_url());
+                let url = spec.display_url();
+                return Err(anyhow::Error::new(e).context(format!("could not connect to {url}")));
             }
         }
     }

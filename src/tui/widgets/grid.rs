@@ -188,6 +188,14 @@ impl GridState {
         self.measure(start..self.rows.len().min(start + budget));
     }
 
+    /// Replaces one cell in place (staged table edits).
+    pub fn set_cell(&mut self, row: usize, col: usize, value: Value) {
+        if let Some(cell) = self.rows.get_mut(row).and_then(|r| r.get_mut(col)) {
+            *cell = value;
+            self.measure(row..row + 1);
+        }
+    }
+
     pub fn clear(&mut self) {
         self.columns.clear();
         self.rows.clear();

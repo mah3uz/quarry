@@ -15,7 +15,8 @@ pub type ConnId = usize;
 /// Where a reply should be routed in the UI.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tag {
-    Tab(u64),
+    /// Tab id plus a sequence number so replies to superseded requests can be dropped.
+    Tab(u64, u64),
     Sidebar,
     Catalog,
     Palette,
@@ -38,6 +39,8 @@ pub enum Request {
     Kill(String),
     Explain { sql: String, analyze: bool },
     ChangeDatabase(String),
+    /// Backslash / dot command typed into a query editor.
+    Special(crate::special::Special),
 }
 
 pub enum Reply {
@@ -54,12 +57,26 @@ pub enum Reply {
     Plan(Result<PlanNode, DbError>, Duration),
     Done(Result<(), DbError>),
     Committed(Result<usize, DbError>),
+    Titled(Result<Option<Vec<crate::special::Titled>>, DbError>),
+}
+
+pub struct Connected {
+    pub opened: crate::cli::Opened,
+    /// Second connection for metadata so the explorer stays live during long queries.
+    pub meta: Option<Connection>,
+}
+
+pub enum ConnectError {
+    /// Authentication failed: the UI should ask for a password and retry.
+    Auth(String),
+    Other(String),
 }
 
 pub enum AppEvent {
     Db { conn: ConnId, tag: Tag, reply: Reply },
     State { conn: ConnId, info: ServerInfo, in_transaction: bool },
-    Connected { conn: ConnId, result: Result<Box<(Connection, Option<Connection>, ConnSpec)>, String> },
+    Connected { conn: ConnId, name: String, spec: Box<ConnSpec>, save_as: Option<String>, result: Result<Box<Connected>, ConnectError> },
+    MetaReady { conn: ConnId, connection: Box<Connection> },
 }
 
 pub type AppSender = std::sync::mpsc::Sender<crate::tui::Event>;
@@ -154,6 +171,10 @@ async fn run(
             Request::Explain { sql, analyze } => {
                 let r = conn.explain(&sql, analyze).await;
                 post(&app, id, tag, Reply::Plan(r, started.elapsed()))
+            }
+            Request::Special(cmd) => {
+                let r = crate::special::introspect::run(&mut conn, &cmd).await;
+                post(&app, id, tag, Reply::Titled(r))
             }
             Request::ChangeDatabase(db) => {
                 let r = conn.change_database(&db).await;
