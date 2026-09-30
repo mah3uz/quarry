@@ -293,7 +293,7 @@ impl Sidebar {
                 path.push(i);
                 let last = i + 1 == n_nodes;
                 out.push(Row { depth, path: path.clone(), guides: guides.clone(), last });
-                let open = n.expanded || (!filter.is_empty() && !n.children.is_empty() && !label_matches(n, filter));
+                let open = n.expanded || (!filter.is_empty() && n.children.iter().any(|c| subtree_matches(c, filter)));
                 if open {
                     guides.push(last);
                     walk(&n.children, depth + 1, path, guides, filter, out);
@@ -751,7 +751,7 @@ mod tests {
     use crate::db::{ColumnInfo, SchemaInfo};
 
     fn catalog() -> Catalog {
-        let col = |n: &str, pk| ColumnInfo {
+        let col = |n: &str, pk: bool| ColumnInfo {
             name: n.into(),
             data_type: "int".into(),
             nullable: !pk,

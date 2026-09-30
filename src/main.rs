@@ -208,7 +208,8 @@ fn run_script(session: &mut Session, text: &str) -> bool {
     };
     for line in text.lines() {
         let t = line.trim();
-        let is_cmd = sql.trim().is_empty()
+        let at_boundary = sql.trim().is_empty() || quarry::sql::split::ends_with_terminator(&sql, backend, ";");
+        let is_cmd = at_boundary
             && !t.is_empty()
             && (t.starts_with('\\') || t.starts_with('.') || t.to_ascii_lowercase().starts_with("delimiter "))
             && quarry::special::submits_immediately(t, backend);

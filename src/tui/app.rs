@@ -186,7 +186,6 @@ pub struct App {
     pub favorites: special::favorites::Favorites,
     quit: bool,
     next_id: u64,
-    seq: u64,
     pending_connects: HashMap<ConnId, (String, Box<ConnSpec>, Option<String>)>,
     pub max_rows: usize,
 }
@@ -219,7 +218,6 @@ impl App {
             favorites,
             quit: false,
             next_id: 1,
-            seq: 0,
             pending_connects: HashMap::new(),
             max_rows: 200_000,
             config,
@@ -260,11 +258,6 @@ impl App {
     fn next_tab_id(&mut self) -> u64 {
         self.next_id += 1;
         self.next_id
-    }
-
-    fn next_seq(&mut self) -> u64 {
-        self.seq += 1;
-        self.seq
     }
 
     pub fn conn(&self, id: ConnId) -> Option<&ConnEntry> {

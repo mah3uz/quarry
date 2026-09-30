@@ -108,7 +108,7 @@ fn server(env: &str, default: &str) -> Option<String> {
 fn postgres_batch_roundtrip() {
     let Some(url) = server("QUARRY_TEST_PG", "postgres://postgres@127.0.0.1:5432/postgres") else { return };
     let o = quarry(&[&url, "-e", "select 42::int as answer, 'x'::text as t, null::int as n"], None);
-    assert_eq!(stdout(&o), "answer\tt\tn\n42\tx\t\n");
+    assert_eq!(stdout(&o), "answer\tt\tn\n42\tx\tNULL\n", "TSV prints NULL like mysql -B");
 }
 
 #[test]
