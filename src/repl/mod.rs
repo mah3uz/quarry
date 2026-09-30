@@ -2,6 +2,7 @@ pub mod editing;
 pub mod highlight;
 pub mod prompt;
 pub mod session;
+pub mod spinner;
 pub mod style;
 
 use std::sync::{Arc, RwLock};

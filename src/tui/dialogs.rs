@@ -50,6 +50,20 @@ fn button(buf: &mut Buffer, x: u16, y: u16, label: &str, key: &str, style: Style
     kx + key.width() as u16 + 3
 }
 
+/// Where an overlay was drawn, for mouse handling: clicks outside close it, buttons answer it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ModalLayout {
+    pub area: Rect,
+    pub yes: Option<Rect>,
+    pub cancel: Option<Rect>,
+}
+
+impl ModalLayout {
+    fn at(area: Rect) -> Self {
+        ModalLayout { area, ..Default::default() }
+    }
+}
+
 pub enum DialogResult<T> {
     None,
     Close,
@@ -82,7 +96,7 @@ impl<T: Clone> Confirm<T> {
         }
     }
 
-    pub fn render(&self, screen: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub fn render(&self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> ModalLayout {
         let content_w = self.lines.iter().map(|l| l.width()).max().unwrap_or(20) as u16;
         let width = (content_w + 6).clamp(44, screen.width.saturating_sub(4).max(44));
         let height = (self.lines.len() as u16 + 5).clamp(7, screen.height.saturating_sub(2));
@@ -98,7 +112,12 @@ impl<T: Clone> Confirm<T> {
             Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD)
         };
         let x = button(buf, inner.x + 1, y, &self.yes, "⏎/y", yes_style, theme);
-        button(buf, x, y, "Cancel", "esc", Style::default().bg(theme.highlight).fg(theme.fg), theme);
+        let end = button(buf, x, y, "Cancel", "esc", Style::default().bg(theme.highlight).fg(theme.fg), theme);
+        ModalLayout {
+            area,
+            yes: Some(Rect { x: inner.x + 1, y, width: x.saturating_sub(inner.x + 1), height: 1 }),
+            cancel: Some(Rect { x, y, width: end.saturating_sub(x), height: 1 }),
+        }
     }
 }
 
@@ -118,7 +137,7 @@ impl<T: Clone> Prompt<T> {
         }
     }
 
-    pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> Option<(u16, u16)> {
+    pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> (ModalLayout, Option<(u16, u16)>) {
         let width = (screen.width * 3 / 5).clamp(40, 100);
         let hint_lines = if self.hint.is_empty() { 0 } else { 1 + self.hint.width() as u16 / width.max(1) };
         let area = centered(screen, width, 5 + hint_lines);
@@ -131,7 +150,7 @@ impl<T: Clone> Prompt<T> {
         }
         let field = Rect { x: inner.x + 1, y: y + 1, width: inner.width.saturating_sub(2), height: 1 };
         buf.set_style(field, Style::default().bg(theme.highlight));
-        self.input.render(field, buf, theme, true)
+        (ModalLayout::at(area), self.input.render(field, buf, theme, true))
     }
 }
 
@@ -162,7 +181,7 @@ impl TextView {
         DialogResult::None
     }
 
-    pub fn render(&self, screen: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub fn render(&self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> ModalLayout {
         let longest = self.text.lines().map(|l| l.width()).max().unwrap_or(10) as u16;
         let width = (longest + 8).clamp(50, screen.width.saturating_sub(4).max(50));
         let height = (self.text.lines().count() as u16 + 4).clamp(8, screen.height.saturating_sub(4).max(8));
@@ -176,6 +195,7 @@ impl TextView {
         }
         let fy = inner.y + inner.height - 1;
         buf.set_stringn(inner.x + 1, fy, &self.footer, inner.width.saturating_sub(2) as usize, Style::default().fg(theme.muted));
+        ModalLayout::at(area)
     }
 }
 
@@ -324,7 +344,7 @@ impl HelpView {
         DialogResult::None
     }
 
-    pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> ModalLayout {
         let area = centered(screen, 96, 40);
         let inner = frame(area, buf, theme, "Keyboard shortcuts", theme.border_focus);
         let mut lines: Vec<Line> = Vec::new();
@@ -341,6 +361,7 @@ impl HelpView {
         let max = lines.len().saturating_sub(inner.height as usize);
         self.scroll = self.scroll.min(max);
         Paragraph::new(lines).scroll((self.scroll as u16, 0)).render(Rect { x: inner.x + 1, width: inner.width.saturating_sub(2), ..inner }, buf);
+        ModalLayout::at(area)
     }
 }
 
@@ -666,13 +687,13 @@ impl ConnectForm {
         }
     }
 
-    pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> Option<(u16, u16)> {
+    pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> (ModalLayout, Option<(u16, u16)>) {
         self.hits.clear();
         if self.in_list {
-            self.render_list(screen, buf, theme);
-            None
+            (ModalLayout::at(self.render_list(screen, buf, theme)), None)
         } else {
-            self.render_form(screen, buf, theme)
+            let (area, cursor) = self.render_form(screen, buf, theme);
+            (ModalLayout::at(area), cursor)
         }
     }
 
@@ -688,7 +709,7 @@ impl ConnectForm {
         buf.set_stringn(x, y, hint, w, Style::default().fg(theme.muted));
     }
 
-    fn render_list(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) {
+    fn render_list(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> Rect {
         let ic = icons::get();
         let rows = self.saved.len() as u16 + 7;
         let area = centered(screen, 72, rows.min(screen.height.saturating_sub(2)));
@@ -735,9 +756,10 @@ impl ConnectForm {
         buf.set_string(x + 1, ny, &label, Style::default().fg(theme.accent));
         self.hits.push((Rect { x, y: ny, width: label.width() as u16 + 2, height: 1 }, Hit::NewConnection));
         self.footer(buf, inner, theme, "⏎ connect   n new   d delete   esc close");
+        area
     }
 
-    fn render_form(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> Option<(u16, u16)> {
+    fn render_form(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> (Rect, Option<(u16, u16)>) {
         let ic = icons::get();
         let fields = self.visible_fields();
         let area = centered(screen, 72, fields.len() as u16 + 7);
@@ -826,7 +848,7 @@ impl ConnectForm {
         self.hits.push((Rect { x: cx, y: by, width: connect.width() as u16, height: 1 }, Hit::Connect));
         self.hits.push((Rect { x: bx, y: by, width: back.width() as u16, height: 1 }, Hit::Back));
         self.footer(buf, Rect { width: inner.width.saturating_sub(connect.width() as u16 + back.width() as u16 + 3), ..inner }, theme, "⏎ connect  tab next  esc back");
-        cursor
+        (area, cursor)
     }
 }
 

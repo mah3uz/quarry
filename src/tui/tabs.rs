@@ -67,6 +67,8 @@ pub struct QueryTab {
     pub messages: Vec<Message>,
     pub messages_scroll: usize,
     pub running: Option<Running>,
+    /// Which model and the question, while the model is writing SQL.
+    pub asking: Option<(String, String)>,
     pub last_elapsed: Option<Duration>,
     /// Byte offset of the executed text inside the editor (for error markers).
     pub exec_base: usize,
@@ -89,6 +91,7 @@ impl QueryTab {
             messages: Vec::new(),
             messages_scroll: 0,
             running: None,
+            asking: None,
             last_elapsed: None,
             exec_base: 0,
             exec_sqls: Vec::new(),
@@ -494,14 +497,15 @@ pub fn highlight_spans(line: &str, backend: Backend, theme: &Theme) -> Vec<Span<
 }
 
 /// Explain view: tree with cost/time bars relative to the root.
-pub fn render_explain(tab: &mut ExplainTab, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
+/// Returns the rows' area, for clicks.
+pub fn render_explain(tab: &mut ExplainTab, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) -> Rect {
     if let Some(e) = &tab.error {
         buf.set_stringn(area.x + 1, area.y, format!("{} {e}", crate::icons::get().error), area.width as usize - 1, Style::default().fg(theme.error));
-        return;
+        return Rect::default();
     }
     if tab.flat.is_empty() {
         buf.set_string(area.x + 1, area.y, "Planning…", Style::default().fg(theme.muted));
-        return;
+        return Rect::default();
     }
     let detail_h = (area.height / 3).clamp(3, 12);
     let list = Rect { height: area.height.saturating_sub(detail_h + 1), ..area };
@@ -580,4 +584,5 @@ pub fn render_explain(tab: &mut ExplainTab, area: Rect, buf: &mut Buffer, theme:
             y += 1;
         }
     }
+    list
 }

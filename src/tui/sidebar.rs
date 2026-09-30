@@ -19,7 +19,8 @@ pub enum NodeKind {
     Connection { backend: Backend, mariadb: bool },
     DatabasesGroup,
     Database { name: String, current: bool },
-    Schema { name: String },
+    /// `database` is `Some(current)` where a schema is a whole database (MySQL, SQLite attachments).
+    Schema { name: String, database: Option<bool> },
     Group { schema: String, what: GroupKind },
     Relation { schema: String, name: String, kind: RelKind },
     Column { data_type: String, pk: bool, nullable: bool },
@@ -181,7 +182,8 @@ impl Sidebar {
             .collect();
         schemas.sort_by_key(|s| (!cat.is_on_search_path(&s.name), s.name.clone()));
         for s in schemas {
-            let mut sn = Node::new(conn, NodeKind::Schema { name: s.name.clone() }, s.name.clone());
+            let database = (cat.backend != Backend::Postgres).then(|| cat.is_on_search_path(&s.name));
+            let mut sn = Node::new(conn, NodeKind::Schema { name: s.name.clone(), database }, s.name.clone());
             let lazy = cat.backend == Backend::MySql && cat.current_database.as_deref() != Some(s.name.as_str())
                 && s.relations.is_empty();
             if lazy {
@@ -211,7 +213,7 @@ impl Sidebar {
         if root.children.iter().all(|c| !c.expanded) {
             let default = cat.search_path.first().cloned().or(cat.current_database.clone());
             if let Some(d) = default
-                && let Some(c) = root.children.iter_mut().find(|c| matches!(&c.kind, NodeKind::Schema { name } if *name == d)) {
+                && let Some(c) = root.children.iter_mut().find(|c| matches!(&c.kind, NodeKind::Schema { name, .. } if *name == d)) {
                     c.expanded = true;
                     let k = format!("{key}/{}", c.label);
                     self.expanded_keys.insert(k.clone());
@@ -226,7 +228,7 @@ impl Sidebar {
 
     pub fn set_relations(&mut self, conn: ConnId, schema: &str, rels: &[Relation]) {
         if let Some(root) = self.roots.iter_mut().find(|r| r.conn == conn)
-            && let Some(sn) = root.children.iter_mut().find(|c| matches!(&c.kind, NodeKind::Schema { name } if name == schema)) {
+            && let Some(sn) = root.children.iter_mut().find(|c| matches!(&c.kind, NodeKind::Schema { name, .. } if name == schema)) {
                 sn.lazy = false;
                 sn.children = schema_children(conn, schema, rels, &[]);
                 sn.detail = rels.len().to_string();
@@ -320,7 +322,7 @@ impl Sidebar {
         let target = open.unwrap_or(!node.expanded);
         node.expanded = target;
         let action = if target && node.lazy {
-            if let NodeKind::Schema { name } = &node.kind {
+            if let NodeKind::Schema { name, .. } = &node.kind {
                 node.children = vec![Node::new(node.conn, NodeKind::Message, "loading…")];
                 Some(Action::LoadRelations { conn: node.conn, schema: name.clone() })
             } else {
@@ -603,6 +605,8 @@ fn node_line<'a>(node: &'a Node, row: &Row, theme: &Theme, filter: &str) -> Line
         NodeKind::DatabasesGroup => (ic.databases, Style::default().fg(theme.muted)),
         NodeKind::Database { current: true, .. } => (ic.database_current, Style::default().fg(theme.success)),
         NodeKind::Database { .. } => (ic.database, Style::default().fg(theme.fg)),
+        NodeKind::Schema { database: Some(true), .. } => (ic.database_current, Style::default().fg(theme.success)),
+        NodeKind::Schema { database: Some(false), .. } => (ic.database, Style::default().fg(theme.accent2)),
         NodeKind::Schema { .. } => (ic.schema, Style::default().fg(theme.accent2)),
         NodeKind::Group { .. } => (ic.group, Style::default().fg(theme.muted)),
         NodeKind::Relation { kind, .. } => match kind {

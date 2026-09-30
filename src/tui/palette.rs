@@ -80,6 +80,9 @@ pub struct Palette<T: Clone> {
     filtered: Vec<(usize, Vec<usize>)>,
     selected: usize,
     offset: usize,
+    /// Where the modal and its rows were last drawn, for clicks.
+    area: Rect,
+    list: Rect,
 }
 
 impl<T: Clone> Palette<T> {
@@ -91,6 +94,8 @@ impl<T: Clone> Palette<T> {
             filtered: Vec::new(),
             selected: 0,
             offset: 0,
+            area: Rect::default(),
+            list: Rect::default(),
         };
         p.refilter();
         p
@@ -155,6 +160,24 @@ impl<T: Clone> Palette<T> {
         PaletteEvent::None
     }
 
+    pub fn area(&self) -> Rect {
+        self.area
+    }
+
+    /// Selects the row under (x, y); false when that isn't a row.
+    pub fn select_at(&mut self, x: u16, y: u16) -> bool {
+        let l = self.list;
+        if x < l.x || x >= l.x + l.width || y < l.y || y >= l.y + l.height {
+            return false;
+        }
+        let row = self.offset + (y - l.y) as usize;
+        if row >= self.filtered.len() {
+            return false;
+        }
+        self.selected = row;
+        true
+    }
+
     fn move_by(&mut self, d: isize) {
         if self.filtered.is_empty() {
             return;
@@ -175,10 +198,11 @@ impl<T: Clone> Palette<T> {
         };
         let title = Span::styled(format!(" {} ", self.title), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD));
         let inner = super::dialogs::modal(area, buf, theme, Some(title), theme.border_focus);
+        self.area = area;
         if inner.height < 2 {
             return None;
         }
-        buf.set_string(inner.x + 1, inner.y, "❯ ", Style::default().fg(theme.accent));
+        buf.set_string(inner.x + 1, inner.y, format!("{} ", crate::icons::get().prompt), Style::default().fg(theme.accent));
         let cursor = self.input.render(Rect { x: inner.x + 3, y: inner.y, width: inner.width.saturating_sub(4), height: 1 }, buf, theme, true);
         let count = format!("{}/{}", self.filtered.len(), self.items.len());
         buf.set_string(inner.x + inner.width - count.width() as u16 - 1, inner.y, &count, Style::default().fg(theme.muted));
@@ -186,6 +210,7 @@ impl<T: Clone> Palette<T> {
             buf[(x, inner.y + 1)].set_symbol("─").set_style(Style::default().fg(theme.border));
         }
         let list = Rect { y: inner.y + 2, height: inner.height - 2, ..inner };
+        self.list = list;
         let h = list.height as usize;
         if self.selected < self.offset {
             self.offset = self.selected;

@@ -665,9 +665,11 @@ impl Session {
             self.fail(&e.to_string());
             return;
         }
-        eprintln!("{}", p.muted(&format!("Asking {}…", crate::llm::describe(&llm))));
+        let spinner = super::spinner::Spinner::start(format!("Asking {}…", crate::llm::describe(&llm)), p.clone());
         let req = crate::llm::Request { question, backend: self.conn.backend(), server_version: &version, catalog: catalog.as_deref() };
-        match crate::llm::ask(&llm, &req) {
+        let answer = crate::llm::ask(&llm, &req);
+        spinner.stop();
+        match answer {
             Ok(a) if a.sql.is_empty() => self.msg(&a.explanation),
             Ok(a) => {
                 if !a.explanation.is_empty() {

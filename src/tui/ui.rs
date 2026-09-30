@@ -7,6 +7,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget, Wra
 use unicode_width::UnicodeWidthStr;
 
 use super::app::{App, Command, Focus, Level, Overlay};
+use super::dialogs::ModalLayout;
 use super::sidebar::compact_count;
 use super::tabs::*;
 use crate::complete::SuggestionKind;
@@ -22,6 +23,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let buf = f.buffer_mut();
     buf.set_style(area, Style::default().bg(theme.bg).fg(theme.fg));
     app.areas = Default::default();
+    let transparent = app.config.main.transparent;
     if area.height < 6 || area.width < 30 {
         buf.set_string(area.x, area.y, "Terminal too small", Style::default().fg(theme.warning));
         return;
@@ -49,6 +51,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         cursor = Some(c);
     } else if app.overlay.is_some() {
         cursor = None;
+    }
+    if transparent {
+        clear_theme_background(f.buffer_mut(), area, &theme);
     }
     if let Some((x, y)) = cursor {
         f.set_cursor_position((x, y));
@@ -158,6 +163,7 @@ fn pane_block<'a>(title: Vec<Span<'a>>, focused: bool, theme: &Theme) -> Block<'
 fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Option<(u16, u16)> {
     let focused = app.focus == Focus::Main;
     let spinner = app.spinner();
+    let tick = app.spinner;
     let conn_label = app.active_tab().and_then(|t| t.conn).and_then(|c| app.conn(c)).map(|c| c.short_label()).unwrap_or_default();
     let backend = app.active_tab().and_then(|t| t.conn).and_then(|c| app.conn(c)).map(|c| c.backend());
     let max_rows = app.max_rows;
@@ -186,12 +192,25 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             );
             let inner = block.inner(ea);
             block.render(ea, buf);
+            let ic = icons::get();
+            let (label, cmd, bg) = if q.running.is_some() {
+                (format!("{} Stop", ic.stop), Command::Cancel, theme.error)
+            } else {
+                (format!("{} Run", ic.run), Command::RunStatement, theme.success)
+            };
+            let pill = Pill { text: &label, fg: theme.bg, bg, bold: true };
+            let px = (ea.x + ea.width).saturating_sub(pill.width() + 2);
+            if px > ea.x + 30 {
+                let r = pill.draw(buf, px, ea.y, theme.bg, ea.x + ea.width - 1);
+                app.areas.buttons.push((r, cmd));
+            }
+            app.areas.split = Rect { x: ea.x, y: ea.y + ea.height - 1, width: ea.width, height: 2 };
             app.areas.editor = inner;
             q.editor.render(inner, buf, theme, ef);
             if ef && app.overlay.is_none() {
                 cursor = q.editor.cursor_screen_position(inner);
             }
-            draw_results(buf, ra, q, focused && q.pane == Pane::Results, theme, spinner, max_rows, &mut app.areas);
+            draw_results(buf, ra, q, focused && q.pane == Pane::Results, theme, spinner, tick, max_rows, &mut app.areas);
         }
         TabKind::Table(t) => {
             let [tool, rest] = Layout::vertical([Constraint::Length(1), Constraint::Min(2)]).areas(area);
@@ -294,7 +313,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             );
             let inner = block.inner(area);
             block.render(area, buf);
-            render_explain(x, inner, buf, theme, focused);
+            app.areas.list = render_explain(x, inner, buf, theme, focused);
         }
         TabKind::History(h) => {
             let block = pane_block(vec![Span::styled(format!(" {} History ", icons::get().history), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))], focused, theme)
@@ -304,6 +323,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             buf.set_string(inner.x + 1, inner.y, format!("{} ", icons::get().search), Style::default().fg(theme.accent));
             cursor = h.filter.render(Rect { x: inner.x + 3, y: inner.y, width: inner.width.saturating_sub(4), height: 1 }, buf, theme, focused);
             let list = Rect { y: inner.y + 2, height: inner.height.saturating_sub(2), ..inner };
+            app.areas.list = list;
             let n = list.height as usize;
             if h.selected < h.offset {
                 h.offset = h.selected;
@@ -342,6 +362,7 @@ fn draw_results(
     focused: bool,
     theme: &Theme,
     spinner: &str,
+    tick: usize,
     max_rows: usize,
     areas: &mut super::app::Areas,
 ) {
@@ -377,6 +398,9 @@ fn draw_results(
     areas.result_tabs.push((Rect { x, y: area.y, width: mlabel.width() as u16, height: 1 }, q.results.len()));
     title.push(Span::styled(mlabel, mst));
     let status = match &q.running {
+        Some(r) if q.asking.is_some() => {
+            Span::styled(format!(" {spinner} writing SQL · {} ", human_duration(r.started.elapsed())), Style::default().fg(theme.accent2))
+        }
         Some(r) => {
             let step = if r.total > 1 { format!(" {}/{}", r.current + 1, r.total) } else { String::new() };
             Span::styled(format!(" {spinner} running{step} · {} · esc cancel ", human_duration(r.started.elapsed())), Style::default().fg(theme.accent))
@@ -391,6 +415,10 @@ fn draw_results(
     let inner = block.inner(area);
     block.render(area, buf);
     areas.grid = inner;
+    if let (Some((who, question)), Some(r)) = (&q.asking, &q.running) {
+        draw_asking(buf, inner, theme, spinner, tick, who, question, r.started.elapsed());
+        return;
+    }
     if q.showing_messages() {
         draw_messages(buf, inner, q, theme);
         return;
@@ -595,6 +623,32 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
     }
 }
 
+/// The card shown while a model writes SQL: a spinner, a shimmering headline, the question, the time.
+#[allow(clippy::too_many_arguments)]
+fn draw_asking(buf: &mut Buffer, area: Rect, theme: &Theme, spinner: &str, tick: usize, who: &str, question: &str, elapsed: std::time::Duration) {
+    let headline = format!("Asking {who}…");
+    let w = area.width.saturating_sub(4) as usize;
+    let quoted = truncate(&format!("“{question}”"), w.saturating_sub(4).max(8));
+    let time = human_duration(elapsed);
+    let width = (headline.width() + 2).max(quoted.width()).min(w) as u16;
+    let x = area.x + area.width.saturating_sub(width) / 2;
+    let y = area.y + area.height.saturating_sub(3) / 2;
+    buf.set_string(x, y, spinner, Style::default().fg(theme.accent2).add_modifier(Modifier::BOLD));
+    let colors = crate::theme::shimmer(headline.chars().count(), tick, theme.muted, theme.fg);
+    let mut hx = x + 2;
+    for (c, color) in headline.chars().zip(colors) {
+        if hx >= area.x + area.width {
+            break;
+        }
+        buf.set_string(hx, y, c.to_string(), Style::default().fg(color).add_modifier(Modifier::BOLD));
+        hx += c.to_string().width() as u16;
+    }
+    if area.height >= 3 {
+        buf.set_stringn(x + 2, y + 1, &quoted, w, Style::default().fg(theme.muted).add_modifier(Modifier::ITALIC));
+        buf.set_string(x + 2, y + 2, &time, Style::default().fg(theme.muted));
+    }
+}
+
 fn grid_position(g: &super::widgets::grid::GridState) -> Option<String> {
     let (row, _) = g.selected_cell()?;
     Some(format!("{}/{}", fmt_count(row + 1), fmt_count(g.row_count())))
@@ -632,6 +686,7 @@ fn draw_completion(buf: &mut Buffer, screen: Rect, app: &mut App, theme: &Theme)
     let x = cx.saturating_sub(1).min(screen.x + screen.width.saturating_sub(width));
     let area = Rect { x, y, width: width.min(screen.width), height };
     let inner = super::dialogs::modal(area, buf, theme, None, theme.border_focus);
+    app.areas.completion = inner;
     if popup.selected < popup.offset {
         popup.offset = popup.selected;
     } else if popup.selected >= popup.offset + visible {
@@ -688,23 +743,35 @@ fn draw_toasts(buf: &mut Buffer, screen: Rect, app: &App, theme: &Theme) {
 fn draw_overlay(buf: &mut Buffer, screen: Rect, app: &mut App, theme: &Theme) -> Option<(u16, u16)> {
     let overlay = app.overlay.as_mut()?;
     dim(buf, screen);
-    match overlay {
-        Overlay::Commands(p) => p.render(screen, buf, theme),
-        Overlay::Themes(p, _) => p.render(screen, buf, theme),
-        Overlay::Help(h) => {
-            h.render(screen, buf, theme);
-            None
+    let (layout, cursor) = match overlay {
+        Overlay::Commands(p) => {
+            let c = p.render(screen, buf, theme);
+            (ModalLayout { area: p.area(), ..Default::default() }, c)
         }
-        Overlay::Confirm(c) => {
-            c.render(screen, buf, theme);
-            None
+        Overlay::Themes(p, _) => {
+            let c = p.render(screen, buf, theme);
+            (ModalLayout { area: p.area(), ..Default::default() }, c)
         }
+        Overlay::Help(h) => (h.render(screen, buf, theme), None),
+        Overlay::Confirm(c) => (c.render(screen, buf, theme), None),
         Overlay::Prompt(p) => p.render(screen, buf, theme),
-        Overlay::Text(t) => {
-            t.render(screen, buf, theme);
-            None
-        }
+        Overlay::Text(t) => (t.render(screen, buf, theme), None),
         Overlay::Connect(c) => c.render(screen, buf, theme),
+    };
+    app.areas.modal = layout;
+    cursor
+}
+
+/// Lets the terminal's background through wherever the theme's background or panel colour was
+/// painted; text colours, selections and pills are untouched.
+fn clear_theme_background(buf: &mut Buffer, area: Rect, theme: &Theme) {
+    for y in area.y..area.y + area.height {
+        for x in area.x..area.x + area.width {
+            let cell = &mut buf[(x, y)];
+            if cell.bg == theme.bg || cell.bg == theme.surface {
+                cell.bg = Color::Reset;
+            }
+        }
     }
 }
 
@@ -754,4 +821,26 @@ fn fmt_count(n: usize) -> String {
         return s;
     }
     compact_count(n as i64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A translucent terminal must show through the app's own background and panels, while
+    /// selections keep their colour so the cursor row stays visible.
+    #[test]
+    fn transparent_mode_clears_only_theme_backgrounds() {
+        let theme = Theme::default();
+        let area = Rect::new(0, 0, 3, 1);
+        let mut buf = Buffer::empty(area);
+        buf[(0, 0)].set_bg(theme.bg);
+        buf[(1, 0)].set_bg(theme.surface);
+        buf[(2, 0)].set_bg(theme.selection).set_fg(theme.bg);
+        clear_theme_background(&mut buf, area, &theme);
+        assert_eq!(buf[(0, 0)].bg, Color::Reset);
+        assert_eq!(buf[(1, 0)].bg, Color::Reset);
+        assert_eq!(buf[(2, 0)].bg, theme.selection);
+        assert_eq!(buf[(2, 0)].fg, theme.bg, "text drawn in the background colour keeps it");
+    }
 }

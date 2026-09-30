@@ -117,6 +117,29 @@ pub fn to_ansi16(r: u8, g: u8, b: u8) -> u8 {
         .unwrap_or(7)
 }
 
+pub const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// Per-character colours for `len` characters with a band of `peak` sweeping over `base`;
+/// each `tick` moves the band one character. Colours that aren't RGB switch instead of blending.
+pub fn shimmer(len: usize, tick: usize, base: Color, peak: Color) -> Vec<Color> {
+    const HALF: f32 = 4.0;
+    let span = len + 2 * HALF as usize;
+    let center = (tick % span.max(1)) as f32 - HALF;
+    (0..len)
+        .map(|i| {
+            let t = (1.0 - (i as f32 - center).abs() / HALF).max(0.0);
+            match (base, peak) {
+                (Color::Rgb(r1, g1, b1), Color::Rgb(r2, g2, b2)) => {
+                    let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
+                    Color::Rgb(mix(r1, r2), mix(g1, g2), mix(b1, b2))
+                }
+                _ if t >= 0.5 => peak,
+                _ => base,
+            }
+        })
+        .collect()
+}
+
 /// Adapts a color to the terminal's capability.
 pub fn adapt(c: Color, depth: ColorDepth) -> Color {
     match (c, depth) {
@@ -755,6 +778,20 @@ fn relative_luminance(r: u8, g: u8, b: u8) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shimmer_band_moves_with_the_tick_and_blends_between_the_colours() {
+        let (base, peak) = (Color::Rgb(0, 0, 0), Color::Rgb(200, 200, 200));
+        let at = |tick| shimmer(12, tick, base, peak);
+        let brightest = |v: Vec<Color>| v.iter().position(|c| *c == peak);
+        assert_eq!(brightest(at(4)), Some(0));
+        assert_eq!(brightest(at(9)), Some(5), "the band advances one character per tick");
+        assert!(at(9).contains(&Color::Rgb(100, 100, 100)), "neighbours are blended, not switched");
+        assert!(at(9).iter().filter(|c| **c == base).count() > 3, "far characters keep the base colour");
+        let indexed = shimmer(12, 9, Color::Indexed(8), Color::Indexed(15));
+        assert!(indexed.iter().all(|c| *c == Color::Indexed(8) || *c == Color::Indexed(15)));
+    }
+
 
     fn contrast(a: Color, b: Color) -> f64 {
         let lum = |c: Color| match c {

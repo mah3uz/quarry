@@ -30,6 +30,8 @@ pub struct MainConfig {
     pub row_lines: bool,
     /// Glyphs in the prompt, the TUI and messages: nerd (needs a Nerd Font), unicode or ascii.
     pub icons: crate::icons::IconSet,
+    /// The TUI leaves the terminal's own background (e.g. a translucent one) instead of the theme's.
+    pub transparent: bool,
     /// on | off | auto
     pub expanded: String,
     pub null_string: String,
@@ -70,6 +72,7 @@ impl Default for MainConfig {
             table_format: "rounded".into(),
             row_lines: true,
             icons: crate::icons::IconSet::Nerd,
+            transparent: false,
             expanded: "auto".into(),
             null_string: "NULL".into(),
             max_field_width: Some(500),
@@ -307,6 +310,11 @@ row_lines = true
 # nerd needs a Nerd Font (https://www.nerdfonts.com) in the terminal; if you see boxes or
 # question marks instead of icons, use unicode.
 icons = "nerd"
+
+# Keep the terminal's own background in the TUI instead of the theme's, e.g. to let a
+# translucent terminal show through. Panels and bars go transparent too; selections keep
+# their colour. Toggle at runtime from the command palette.
+transparent = false
 
 # Expanded (vertical, one column per line) output: on | off | auto.
 # auto switches to vertical when a table is wider than the terminal. Toggle with \x.

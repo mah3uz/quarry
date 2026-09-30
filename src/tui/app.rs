@@ -66,6 +66,12 @@ impl ConnEntry {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Drag {
+    Split,
+    Sidebar,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Focus {
     Sidebar,
     Main,
@@ -91,6 +97,7 @@ pub enum Command {
     CloseTab,
     CloseTabAt(usize),
     Commands,
+    ToggleTransparent,
     NextTab,
     PrevTab,
     ToggleSidebar,
@@ -174,6 +181,13 @@ pub struct Areas {
     pub struct_tabs: Vec<(Rect, usize)>,
     /// Anything clickable that runs a command: tab close, new tab, run, status-bar pills.
     pub buttons: Vec<(Rect, Command)>,
+    pub modal: super::dialogs::ModalLayout,
+    /// The editor's bottom border and the results' top border: drag to resize the split.
+    pub split: Rect,
+    /// Rows of the History or Explain list.
+    pub list: Rect,
+    /// Rows of the completion popup.
+    pub completion: Rect,
 }
 
 pub struct App {
@@ -196,12 +210,13 @@ pub struct App {
     pub spinner: usize,
     pub favorites: special::favorites::Favorites,
     quit: bool,
+    dragging: Option<Drag>,
     next_id: u64,
     pending_connects: HashMap<ConnId, (String, Box<ConnSpec>, Option<String>)>,
     pub max_rows: usize,
 }
 
-const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+use crate::theme::SPINNER;
 
 impl App {
     pub fn new(rt: Handle, config: Config, tx: AppSender, overrides: super::Overrides) -> App {
@@ -219,6 +234,7 @@ impl App {
             sidebar: Sidebar::default(),
             sidebar_visible: true,
             sidebar_width: 34,
+            dragging: None,
             tabs: Vec::new(),
             active: 0,
             focus: Focus::Main,
@@ -1217,6 +1233,7 @@ impl App {
         let llm = self.config.llm.clone();
         if let TabKind::Query(q) = &mut self.tabs[idx].kind {
             q.running = Some(Running { started: Instant::now(), total: 1, current: 0 });
+            q.asking = Some((crate::llm::describe(&llm), question.clone()));
             q.log(MessageKind::Info, format!("{} Asking {}: {question}", crate::icons::get().ask, crate::llm::describe(&llm)));
         }
         let tx = self.tx.clone();
@@ -1231,6 +1248,7 @@ impl App {
         let Some(idx) = self.tab_index(tab) else { return };
         let TabKind::Query(q) = &mut self.tabs[idx].kind else { return };
         q.running = None;
+        q.asking = None;
         match result {
             Ok(a) => {
                 if !a.explanation.is_empty() {
@@ -2350,6 +2368,7 @@ impl App {
         add("Server activity / sessions", "", Command::Activity);
         add("Query history", "Ctrl+R", Command::History);
         add("Switch theme…", "Ctrl+Y", Command::Themes);
+        add("Toggle transparent background", "", Command::ToggleTransparent);
         add("Connections…", "Ctrl+O", Command::Connections);
         add("Refresh schema", "r in explorer", Command::Refresh);
         add("Export results to file…", "Ctrl+X", Command::Export);
@@ -2378,6 +2397,7 @@ impl App {
             Command::CloseTab => self.close_tab(self.active),
             Command::CloseTabAt(i) => self.close_tab(i),
             Command::Commands => self.open_commands(),
+            Command::ToggleTransparent => self.config.main.transparent = !self.config.main.transparent,
             Command::NextTab => {
                 if !self.tabs.is_empty() {
                     self.active = (self.active + 1) % self.tabs.len();
@@ -2772,10 +2792,138 @@ impl App {
 
     // ---------------------------------------------------------------- mouse
 
+    fn on_completion_mouse(&mut self, m: MouseEvent) -> bool {
+        let r = self.areas.completion;
+        if !(m.column >= r.x && m.column < r.x + r.width && m.row >= r.y && m.row < r.y + r.height) {
+            if matches!(m.kind, MouseEventKind::Down(_)) {
+                self.completion = None;
+            }
+            return false;
+        }
+        let key = |code| KeyEvent::new(code, KeyModifiers::NONE);
+        match m.kind {
+            MouseEventKind::ScrollDown => {
+                self.on_completion_key(key(KeyCode::Down));
+            }
+            MouseEventKind::ScrollUp => {
+                self.on_completion_key(key(KeyCode::Up));
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                if let Some(p) = &mut self.completion {
+                    let i = p.offset + (m.row - r.y) as usize;
+                    if i < p.items.len() {
+                        p.selected = i;
+                        self.on_completion_key(key(KeyCode::Tab));
+                    }
+                }
+            }
+            _ => {}
+        }
+        true
+    }
+
+    /// History and Explain rows: the wheel moves the selection, a click selects, a click on the
+    /// selected History entry opens it.
+    fn on_list_mouse(&mut self, m: MouseEvent) -> bool {
+        let r = self.areas.list;
+        let inside = m.column >= r.x && m.column < r.x + r.width && m.row >= r.y && m.row < r.y + r.height;
+        if !inside {
+            return false;
+        }
+        let Some(tab) = self.tabs.get_mut(self.active) else { return false };
+        let history = matches!(tab.kind, TabKind::History(_));
+        let (selected, offset, len) = match &mut tab.kind {
+            TabKind::History(h) => (&mut h.selected, h.offset, h.filtered.len()),
+            TabKind::Explain(x) => (&mut x.selected, x.offset, x.flat.len()),
+            _ => return false,
+        };
+        match m.kind {
+            MouseEventKind::ScrollDown => *selected = (*selected + 1).min(len.saturating_sub(1)),
+            MouseEventKind::ScrollUp => *selected = selected.saturating_sub(1),
+            MouseEventKind::Down(MouseButton::Left) => {
+                let i = offset + (m.row - r.y) as usize;
+                let again = i == *selected;
+                if i < len {
+                    *selected = i;
+                }
+                self.focus = Focus::Main;
+                if again && history {
+                    self.on_history_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+                }
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// Dragging the borders between panes resizes them. Returns true when the event was a drag.
+    fn on_drag(&mut self, m: MouseEvent) -> bool {
+        let main = self.areas.main;
+        let on_sidebar_edge = self.sidebar_visible && main.x > 0 && (m.column == main.x - 1 || m.column == main.x) && m.row >= main.y;
+        let split = self.areas.split;
+        let on_split = split.height > 0 && m.row >= split.y && m.row < split.y + split.height && m.column >= split.x && m.column < split.x + split.width;
+        match m.kind {
+            MouseEventKind::Down(MouseButton::Left) if on_sidebar_edge => self.dragging = Some(Drag::Sidebar),
+            MouseEventKind::Down(MouseButton::Left) if on_split => self.dragging = Some(Drag::Split),
+            MouseEventKind::Drag(MouseButton::Left) => match self.dragging {
+                Some(Drag::Sidebar) => {
+                    self.sidebar_width = m.column.saturating_sub(self.areas.sidebar.x).clamp(16, 80);
+                }
+                Some(Drag::Split) => {
+                    let body_y = main.y;
+                    let h = main.height.max(1) as u32;
+                    let pct = ((m.row.saturating_sub(body_y) as u32 + 1) * 100 / h) as u16;
+                    if let Some(Tab { kind: TabKind::Query(q), .. }) = self.tabs.get_mut(self.active) {
+                        q.split = pct.clamp(15, 85);
+                    }
+                }
+                None => return false,
+            },
+            MouseEventKind::Up(_) if self.dragging.is_some() => self.dragging = None,
+            _ => return false,
+        }
+        true
+    }
+
+    /// Mouse input on a dialog becomes the keys it stands for, so each dialog keeps one code path:
+    /// the wheel is Up/Down, a click outside is Esc, a button or a list row is Enter.
     fn on_overlay_mouse(&mut self, m: MouseEvent) {
-        if let Some(Overlay::Connect(form)) = &mut self.overlay {
-            let ev = form.handle_mouse(m);
-            self.on_connect_event(ev);
+        let key = |code| KeyEvent::new(code, KeyModifiers::NONE);
+        let inside = |r: Rect| m.column >= r.x && m.column < r.x + r.width && m.row >= r.y && m.row < r.y + r.height;
+        let layout = self.areas.modal;
+        match m.kind {
+            MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
+                if let Some(Overlay::Connect(form)) = &mut self.overlay {
+                    let ev = form.handle_mouse(m);
+                    return self.on_connect_event(ev);
+                }
+                let code = if m.kind == MouseEventKind::ScrollDown { KeyCode::Down } else { KeyCode::Up };
+                self.on_overlay_key(key(code));
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                if !inside(layout.area) {
+                    return self.on_overlay_key(key(KeyCode::Esc));
+                }
+                if layout.yes.is_some_and(inside) {
+                    return self.on_overlay_key(key(KeyCode::Enter));
+                }
+                if layout.cancel.is_some_and(inside) {
+                    return self.on_overlay_key(key(KeyCode::Esc));
+                }
+                let picked = match &mut self.overlay {
+                    Some(Overlay::Connect(form)) => {
+                        let ev = form.handle_mouse(m);
+                        return self.on_connect_event(ev);
+                    }
+                    Some(Overlay::Commands(p)) => p.select_at(m.column, m.row),
+                    Some(Overlay::Themes(p, _)) => p.select_at(m.column, m.row),
+                    _ => false,
+                };
+                if picked {
+                    self.on_overlay_key(key(KeyCode::Enter));
+                }
+            }
+            _ => {}
         }
     }
 
@@ -2785,6 +2933,15 @@ impl App {
             return;
         }
         let inside = |r: Rect| m.column >= r.x && m.column < r.x + r.width && m.row >= r.y && m.row < r.y + r.height;
+        if self.on_drag(m) {
+            return;
+        }
+        if self.completion.is_some() && self.on_completion_mouse(m) {
+            return;
+        }
+        if self.on_list_mouse(m) {
+            return;
+        }
         if let MouseEventKind::Down(MouseButton::Left) = m.kind
             && let Some((_, cmd)) = self.areas.buttons.iter().find(|(r, _)| inside(*r))
         {
@@ -2836,6 +2993,18 @@ impl App {
         let tab_id = tab.id;
         let backend = Backend::Postgres;
         let ev = match &mut tab.kind {
+            TabKind::Query(q) if q.showing_messages() && inside(grid_area) => {
+                match m.kind {
+                    MouseEventKind::ScrollDown => q.messages_scroll = q.messages_scroll.saturating_add(3),
+                    MouseEventKind::ScrollUp => q.messages_scroll = q.messages_scroll.saturating_sub(3),
+                    MouseEventKind::Down(_) => {
+                        self.focus = Focus::Main;
+                        q.pane = Pane::Results;
+                    }
+                    _ => {}
+                }
+                None
+            }
             TabKind::Query(q) => {
                 if inside(editor_area) {
                     if matches!(m.kind, MouseEventKind::Down(_)) {
