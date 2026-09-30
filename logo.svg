@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="title">
+  <title id="title">quarry</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2f45"/>
+      <stop offset="1" stop-color="#16161e"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.42" r="0.5">
+      <stop offset="0" stop-color="#7aa2f7" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#7aa2f7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gemglow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7dcfff" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#7dcfff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3b4261"/>
+      <stop offset="0.22" stop-color="#6b739c"/>
+      <stop offset="0.5" stop-color="#8189b6"/>
+      <stop offset="0.82" stop-color="#565f89"/>
+      <stop offset="1" stop-color="#2f3549"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d5dbf7"/>
+      <stop offset="1" stop-color="#9aa5ce"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f0c585"/>
+      <stop offset="1" stop-color="#b3874a"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e4e9ff"/>
+      <stop offset="1" stop-color="#8a94c0"/>
+    </linearGradient>
+    <linearGradient id="gemL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e0fbff"/>
+      <stop offset="1" stop-color="#7dcfff"/>
+    </linearGradient>
+    <linearGradient id="gemR" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dcfff"/>
+      <stop offset="1" stop-color="#2a8fbf"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#halo)"/>
+
+  <g transform="translate(-14 8)">
+    <ellipse cx="256" cy="440" rx="150" ry="20" fill="#0b0c12" opacity="0.55"/>
+
+    <!-- pickaxe, handle tucked behind the body -->
+    <g transform="translate(420 118) rotate(16)">
+      <rect x="-8" y="0" width="16" height="300" rx="8" fill="url(#wood)" stroke="#1a1b26" stroke-width="5"/>
+      <path d="M-74 30 Q-38 -18 0 -18 Q38 -18 74 30 Q36 2 0 4 Q-36 2 -74 30 Z" fill="url(#steel)" stroke="#1a1b26" stroke-width="5" stroke-linejoin="round"/>
+      <rect x="-14" y="-18" width="28" height="30" rx="6" fill="#565f89" stroke="#1a1b26" stroke-width="5"/>
+    </g>
+
+    <!-- stone cylinder -->
+    <path d="M136 150 V400 A120 34 0 0 0 376 400 V150 Z" fill="url(#stone)"/>
+    <path d="M136 233 A120 34 0 0 0 376 233" fill="none" stroke="#1f2335" stroke-width="7"/>
+    <path d="M140 240 A118 33 0 0 0 372 240" fill="none" stroke="#a9b1d6" stroke-opacity="0.35" stroke-width="3"/>
+    <path d="M136 316 A120 34 0 0 0 376 316" fill="none" stroke="#1f2335" stroke-width="7"/>
+    <path d="M140 323 A118 33 0 0 0 372 323" fill="none" stroke="#a9b1d6" stroke-opacity="0.3" stroke-width="3"/>
+    <path d="M136 150 V400 A120 34 0 0 0 376 400 V150" fill="none" stroke="#1a1b26" stroke-width="6" stroke-linejoin="round"/>
+
+    <g fill="#1f2335" opacity="0.45">
+      <circle cx="162" cy="206" r="2.5"/><circle cx="344" cy="198" r="2"/><circle cx="170" cy="300" r="2"/>
+      <circle cx="232" cy="330" r="2.5"/><circle cx="300" cy="352" r="2"/><circle cx="348" cy="300" r="2.5"/>
+      <circle cx="210" cy="410" r="2.5"/><circle cx="280" cy="420" r="2"/><circle cx="330" cy="392" r="2"/>
+    </g>
+    <g fill="#c0caf5" opacity="0.3">
+      <circle cx="186" cy="196" r="2"/><circle cx="262" cy="292" r="2"/><circle cx="196" cy="352" r="2"/>
+      <circle cx="252" cy="398" r="2"/><circle cx="318" cy="326" r="1.8"/>
+    </g>
+
+    <!-- chisel marks -->
+    <path d="M136 272 l14 8 l-14 10 Z" fill="#1f2335" opacity="0.7"/>
+    <path d="M376 356 l-12 7 l12 9 Z" fill="#1f2335" opacity="0.7"/>
+    <path d="M178 372 l13 11 l-6 13 l12 9" fill="none" stroke="#2a2f45" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M318 290 l-10 9 l8 10" fill="none" stroke="#2a2f45" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- top face -->
+    <ellipse cx="256" cy="150" rx="120" ry="34" fill="url(#top)" stroke="#1a1b26" stroke-width="6"/>
+    <path d="M150 140 L192 124 L226 142 L186 158 Z" fill="#ffffff" opacity="0.18"/>
+    <path d="M300 170 L338 160 L360 166 L330 178 Z" fill="#565f89" opacity="0.35"/>
+    <path d="M138 158 l16 -4 l-10 14 Z" fill="#2a2f45" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
+
+    <!-- face -->
+    <ellipse cx="216" cy="222" rx="13" ry="16" fill="#1a1b26"/>
+    <ellipse cx="296" cy="222" rx="13" ry="16" fill="#1a1b26"/>
+    <circle cx="221" cy="215" r="5" fill="#ffffff"/>
+    <circle cx="301" cy="215" r="5" fill="#ffffff"/>
+    <circle cx="212" cy="229" r="2.2" fill="#ffffff" opacity="0.8"/>
+    <circle cx="292" cy="229" r="2.2" fill="#ffffff" opacity="0.8"/>
+    <ellipse cx="186" cy="248" rx="15" ry="8" fill="#f7768e" opacity="0.45"/>
+    <ellipse cx="326" cy="248" rx="15" ry="8" fill="#f7768e" opacity="0.45"/>
+    <path d="M240 244 Q256 260 272 244" fill="none" stroke="#1a1b26" stroke-width="6" stroke-linecap="round"/>
+
+    <!-- data crystal -->
+    <circle cx="256" cy="112" r="78" fill="url(#gemglow)"/>
+    <path d="M222 156 L210 118 L224 96 L236 150 Z" fill="url(#gemR)" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M290 156 L304 124 L292 104 L278 150 Z" fill="url(#gemR)" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M256 58 L230 98 L238 160 L256 160 Z" fill="url(#gemL)"/>
+    <path d="M256 58 L282 98 L274 160 L256 160 Z" fill="url(#gemR)"/>
+    <path d="M256 58 L282 98 L274 160 L238 160 L230 98 Z" fill="none" stroke="#1a1b26" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M247 80 L239 100 L244 140" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+
+    <!-- little stone arm and hand gripping the handle -->
+    <path d="M362 270 q10 -3 16 -2" fill="none" stroke="#1a1b26" stroke-width="20" stroke-linecap="round"/>
+    <path d="M362 270 q10 -3 16 -2" fill="none" stroke="#6b739c" stroke-width="11" stroke-linecap="round"/>
+    <circle cx="381" cy="268" r="15" fill="#737aa2" stroke="#1a1b26" stroke-width="5"/>
+    <path d="M373 263 q8 -4 15 1" fill="none" stroke="#a9b1d6" stroke-opacity="0.6" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- pebbles -->
+    <path d="M112 440 l8 -14 l16 2 l6 12 Z" fill="#565f89" stroke="#1a1b26" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M146 442 l5 -9 l10 2 l2 7 Z" fill="#737aa2" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M384 442 l6 -10 l11 2 l3 8 Z" fill="#6b739c" stroke="#1a1b26" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+
+  <!-- sparkles -->
+  <g fill="#e0af68">
+    <path d="M118 108 Q118 124 134 124 Q118 124 118 140 Q118 124 102 124 Q118 124 118 108 Z"/>
+    <path d="M84 240 Q84 250 94 250 Q84 250 84 260 Q84 250 74 250 Q84 250 84 240 Z"/>
+  </g>
+  <path d="M446 300 Q446 309 455 309 Q446 309 446 318 Q446 309 437 309 Q446 309 446 300 Z" fill="#7dcfff"/>
+  <circle cx="150" cy="176" r="4" fill="#bb9af7"/>
+</svg>

@@ -1,3 +1,5 @@
+<p align="center"><img src="logo.svg" width="160" alt="quarry mascot: a stone database cylinder with a data crystal and a pickaxe"></p>
+
 # quarry
 
 A fast, good-looking SQL client for **PostgreSQL**, **MySQL / MariaDB** and **SQLite**, written in Rust.
