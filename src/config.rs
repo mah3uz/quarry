@@ -55,6 +55,8 @@ pub struct MainConfig {
     pub log_queries: bool,
     pub mouse: bool,
     pub auto_refresh_catalog: bool,
+    /// Claude model used by \llm.
+    pub llm_model: String,
 }
 
 impl Default for MainConfig {
@@ -87,6 +89,7 @@ impl Default for MainConfig {
             log_queries: false,
             mouse: true,
             auto_refresh_catalog: true,
+            llm_model: crate::llm::DEFAULT_MODEL.into(),
         }
     }
 }
@@ -333,6 +336,9 @@ mouse = true
 
 # Reload completion metadata automatically after CREATE / ALTER / DROP.
 auto_refresh_catalog = true
+
+# Claude model used by \llm / \ai (reads ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN).
+llm_model = "claude-opus-5-5"
 
 # Saved connections: `quarry <name>`, `\c <name>`, and the TUI connection manager.
 #

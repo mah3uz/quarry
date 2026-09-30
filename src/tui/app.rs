@@ -119,6 +119,7 @@ pub enum Command {
     ForceQuit,
     RunConfirmed(u64, Vec<String>),
     ApplyEdits(u64),
+    AskLlm,
     Kill(u64, String),
     DropFavorite(String),
     SwitchDatabase(ConnId, String),
@@ -134,6 +135,7 @@ pub enum PromptPurpose {
     OpenFile,
     Password { conn: ConnId },
     GridSearch { tab: u64 },
+    Llm { tab: u64 },
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -655,6 +657,7 @@ impl App {
                     }
             }
             AppEvent::Db { conn, tag, reply } => self.on_reply(conn, tag, reply),
+            AppEvent::Llm { tab, result } => self.on_llm(tab, result),
         }
     }
 
@@ -1034,6 +1037,7 @@ impl App {
         }
         if let Some(parsed) = special::parse(sql.trim(), backend) {
             match parsed {
+                Ok(special::Special::Llm { question }) => self.start_llm(tab_id, question),
                 Ok(cmd) => {
                     q.running = Some(Running { started: Instant::now(), total: 1, current: 0 });
                     if let Some(c) = self.conn(conn_id) {
@@ -1110,6 +1114,57 @@ impl App {
         self.completion = None;
         if let Some(c) = conn_id.and_then(|c| self.conn(c)) {
             c.main.send(Tag::Tab(tab_id, 0), Request::Script { statements, keep_going: false, max_rows });
+        }
+    }
+
+    fn start_llm(&mut self, tab_id: u64, question: String) {
+        let Some(idx) = self.tab_index(tab_id) else { return };
+        let conn = self.tabs[idx].conn.and_then(|c| self.conn(c));
+        let catalog = conn.and_then(|c| c.catalog.clone());
+        let backend = conn.map(|c| c.backend()).unwrap_or(Backend::Postgres);
+        let version = conn.map(|c| c.info.version.clone()).unwrap_or_default();
+        let model = self.config.main.llm_model.clone();
+        if let TabKind::Query(q) = &mut self.tabs[idx].kind {
+            q.running = Some(Running { started: Instant::now(), total: 1, current: 0 });
+            q.log(MessageKind::Info, format!("✦ Asking {model}: {question}"));
+        }
+        let tx = self.tx.clone();
+        self.rt.spawn_blocking(move || {
+            let req = crate::llm::Request { question: &question, backend, server_version: &version, catalog: catalog.as_deref(), model: &model };
+            let result = crate::llm::ask(&req);
+            let _ = tx.send(Event::App(AppEvent::Llm { tab: tab_id, result }));
+        });
+    }
+
+    fn on_llm(&mut self, tab: u64, result: Result<crate::llm::Answer, String>) {
+        let Some(idx) = self.tab_index(tab) else { return };
+        let TabKind::Query(q) = &mut self.tabs[idx].kind else { return };
+        q.running = None;
+        match result {
+            Ok(a) => {
+                if !a.explanation.is_empty() {
+                    q.log(MessageKind::Info, a.explanation.clone());
+                }
+                if a.sql.is_empty() {
+                    self.toast(Level::Info, "Claude replied without SQL — see Messages");
+                    return;
+                }
+                let r = q.editor.current_statement_range();
+                let text = q.editor.text();
+                if text[r.clone()].trim_start().starts_with('\\') {
+                    q.editor.replace_range(r, &a.sql);
+                } else {
+                    let end = text.len();
+                    let sep = if text.trim().is_empty() { "" } else { "\n\n" };
+                    q.editor.replace_range(end..end, &format!("{sep}{}", a.sql));
+                }
+                q.pane = Pane::Editor;
+                self.toast(Level::Success, "SQL ready — review it, then Ctrl+Enter to run");
+            }
+            Err(e) => {
+                q.log(MessageKind::Error, format!("✗ {e}"));
+                self.toast(Level::Error, e);
+            }
         }
     }
 
@@ -2082,6 +2137,11 @@ impl App {
                 }
             }
             PromptPurpose::ExportPath => self.export_to(value.trim()),
+            PromptPurpose::Llm { tab } => {
+                if !value.trim().is_empty() {
+                    self.start_llm(tab, value.trim().to_string());
+                }
+            }
             PromptPurpose::SaveFile => {
                 let path = crate::conn::url::expand_tilde(value.trim());
                 let Some(Tab { kind: TabKind::Query(q), title, .. }) = self.tabs.get_mut(self.active) else { return };
@@ -2174,6 +2234,7 @@ impl App {
         add("Explain", "F7", Command::Explain(false));
         add("Explain analyze", "Shift+F7", Command::Explain(true));
         add("Format SQL", "Alt+F", Command::FormatSql);
+        add("Ask Claude to write SQL…", "\\llm", Command::AskLlm);
         add("New query tab", "Ctrl+T", Command::NewQuery);
         add("Close tab", "Ctrl+W", Command::CloseTab);
         add("Next tab", "Alt+→", Command::NextTab);
@@ -2435,6 +2496,21 @@ impl App {
             }
             Command::ForceQuit => self.quit = true,
             Command::RunConfirmed(tab, stmts) => self.dispatch_script(tab, stmts),
+            Command::AskLlm => {
+                let tab = match self.tabs.get(self.active) {
+                    Some(t) if matches!(t.kind, TabKind::Query(_)) => t.id,
+                    _ => {
+                        let i = self.new_query_tab(None, None);
+                        self.tabs[i].id
+                    }
+                };
+                self.overlay = Some(Overlay::Prompt(Prompt {
+                    title: "Ask Claude".into(),
+                    hint: "Describe the data you want; the SQL is written into the editor for you to review.".into(),
+                    input: Input::new("").with_placeholder("e.g. top 10 customers by revenue this month"),
+                    purpose: PromptPurpose::Llm { tab },
+                }));
+            }
             Command::ApplyEdits(id) if id > u64::MAX / 2 => {
                 let real = u64::MAX - id;
                 if let Some(i) = self.tab_index(real) {

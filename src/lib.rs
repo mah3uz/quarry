@@ -3,6 +3,7 @@ pub mod complete;
 pub mod config;
 pub mod conn;
 pub mod db;
+pub mod llm;
 pub mod output;
 pub mod repl;
 pub mod special;

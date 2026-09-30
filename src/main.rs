@@ -171,6 +171,11 @@ fn make_session(
 fn run_batch(session: &mut Session, args: &Args) -> ExitCode {
     let mut ok = true;
     for sql in &args.execute {
+        let backend = session.conn.backend();
+        if quarry::special::parse(sql.trim(), backend).is_some() {
+            session.handle_input(sql);
+            continue;
+        }
         ok &= session.run_sql(sql, None);
         if !ok && !session.continue_on_error {
             return ExitCode::FAILURE;

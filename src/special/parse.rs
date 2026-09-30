@@ -328,6 +328,10 @@ fn parse_backslash(rest: &str, backend: Backend) -> Option<Parsed> {
         "R" | "prompt" => Special::Prompt(prompt_arg(raw_args)),
         "delimiter" => return Some(delimiter(args)),
         "theme" => Special::Theme(opt(args)),
+        "llm" | "ai" => match opt(raw_args) {
+            Some(question) => Special::Llm { question },
+            None => return Some(Err("missing question (usage: \\llm show the ten newest orders)".into())),
+        },
         "format" => Special::Format { query: opt(args) },
         "explain" => return Some(explain(args)),
         "readonly" => return Some(bool_opt(args, "\\readonly [on|off]").map(Special::ReadOnly)),

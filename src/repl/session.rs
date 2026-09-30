@@ -642,9 +642,40 @@ impl Session {
                 }
                 self.out(&s);
             }
+            Special::Llm { question } => self.ask_llm(&question),
             other => self.err(&format!("✗ {other:?} is not available here")),
         }
         Flow::Continue
+    }
+
+    fn ask_llm(&mut self, question: &str) {
+        let p = self.palette.clone();
+        let catalog = self.current_catalog();
+        let version = self.conn.info().version.clone();
+        let model = self.config.main.llm_model.clone();
+        if let Err(e) = crate::llm::credentials_available() {
+            self.err(&format!("✗ {e}"));
+            return;
+        }
+        eprintln!("{}", p.muted(&format!("Asking {model}…")));
+        let req = crate::llm::Request {
+            question,
+            backend: self.conn.backend(),
+            server_version: &version,
+            catalog: catalog.as_deref(),
+            model: &model,
+        };
+        match crate::llm::ask(&req) {
+            Ok(a) if a.sql.is_empty() => self.msg(&a.explanation),
+            Ok(a) => {
+                if !a.explanation.is_empty() {
+                    self.msg(&p.muted(&a.explanation));
+                }
+                self.msg(&p.muted("Review the query below and press Enter to run it."));
+                self.pending_buffer = Some(a.sql);
+            }
+            Err(e) => self.err(&format!("✗ {e}")),
+        }
     }
 
     pub fn set_theme(&mut self, theme: crate::theme::Theme) {

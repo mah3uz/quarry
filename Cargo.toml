@@ -32,6 +32,7 @@ tokio-postgres-rustls = "0.14.0"
 toml = "1.1.6"
 unicode-segmentation = "1.13.3"
 unicode-width = "0.2.2"
+ureq = { version = "3.4.2", features = ["json"] }
 url = "2.5.8"
 webpki-roots = "1.0.9"
 which = "8.0.6"

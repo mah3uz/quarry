@@ -77,6 +77,7 @@ pub enum AppEvent {
     State { conn: ConnId, main: bool, info: ServerInfo, in_transaction: bool },
     Connected { conn: ConnId, name: String, spec: Box<ConnSpec>, save_as: Option<String>, result: Result<Box<Connected>, ConnectError> },
     MetaReady { conn: ConnId, connection: Box<Connection> },
+    Llm { tab: u64, result: Result<crate::llm::Answer, String> },
 }
 
 pub type AppSender = std::sync::mpsc::Sender<crate::tui::Event>;

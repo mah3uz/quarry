@@ -134,6 +134,8 @@ pub enum Special {
     LoadExtension { path: String },
     /// `\history [n]`
     History(Option<usize>),
+    /// `\llm question`, `\ai question` — ask Claude to write SQL for this database.
+    Llm { question: String },
 }
 
 /// Output of an introspection command.
