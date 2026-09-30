@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useData, withBase } from 'vitepress'
 import Terminal from './Terminal.vue'
 
@@ -36,6 +36,81 @@ const layers = [60, 140, 214, 290, 372, 450, 530].map((y, i) => ({
   cls: `s${i}`,
 }))
 const vein = `M0,318 C220,286 380,356 620,310 S1020,254 1240,304 S1400,318 ${W},288`
+
+// Crystals in the rock, placed from a fixed seed so every build draws the same face.
+function seeded(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+const rand = seeded(7)
+const flecks = Array.from({ length: 46 }, (_, i) => {
+  const x = rand() * W
+  const y = 96 + rand() * (H - 170)
+  const s = 2.5 + rand() * 4.5
+  return {
+    key: i,
+    d: `M${x.toFixed(1)},${(y - s).toFixed(1)} L${(x + s * 0.6).toFixed(1)},${y.toFixed(1)} L${x.toFixed(1)},${(y + s).toFixed(1)} L${(x - s * 0.6).toFixed(1)},${y.toFixed(1)} Z`,
+    delay: `${(-rand() * 7).toFixed(2)}s`,
+  }
+})
+
+// A headlamp on the rock face: it follows the pointer, or wanders slowly when the pointer is
+// elsewhere, lighting the strata and making the crystals glint. Still with reduced motion, and
+// paused while the section is off screen.
+const face = ref<HTMLElement | null>(null)
+const lampEl = ref<SVGEllipseElement | null>(null)
+const LAMP_PX = 230
+let stopLamp = () => {}
+onMounted(() => {
+  const el = face.value
+  const lampNode = lampEl.value
+  if (!el || !lampNode || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  let rect = el.getBoundingClientRect()
+  let target: { x: number; y: number } | null = null
+  const pos = { x: W * 0.1, y: H * 0.5 }
+  let raf = 0
+  const place = () => {
+    lampNode.setAttribute('cx', pos.x.toFixed(1))
+    lampNode.setAttribute('cy', pos.y.toFixed(1))
+    // the SVG is stretched to the section, so size the lamp in pixels to keep it round
+    lampNode.setAttribute('rx', ((LAMP_PX * W) / rect.width).toFixed(1))
+    lampNode.setAttribute('ry', ((LAMP_PX * H) / rect.height).toFixed(1))
+  }
+  const tick = (t: number) => {
+    // idling, sweep the whole face: the terminal covers the middle, the rock shows at the sides
+    const goal = target ?? { x: W * (0.5 + 0.47 * Math.sin(t / 5200)), y: H * (0.48 + 0.3 * Math.sin(t / 3700)) }
+    pos.x += (goal.x - pos.x) * (target ? 0.14 : 0.02)
+    pos.y += (goal.y - pos.y) * (target ? 0.14 : 0.02)
+    place()
+    raf = requestAnimationFrame(tick)
+  }
+  const move = (e: PointerEvent) => {
+    rect = el.getBoundingClientRect()
+    target = { x: ((e.clientX - rect.left) / rect.width) * W, y: ((e.clientY - rect.top) / rect.height) * H }
+  }
+  const leave = () => (target = null)
+  const resize = () => (rect = el.getBoundingClientRect())
+  const seen = new IntersectionObserver(([entry]) => {
+    cancelAnimationFrame(raf)
+    if (entry.isIntersecting) raf = requestAnimationFrame(tick)
+  })
+  el.addEventListener('pointermove', move)
+  el.addEventListener('pointerleave', leave)
+  addEventListener('resize', resize)
+  seen.observe(el)
+  stopLamp = () => {
+    cancelAnimationFrame(raf)
+    seen.disconnect()
+    el.removeEventListener('pointermove', move)
+    el.removeEventListener('pointerleave', leave)
+    removeEventListener('resize', resize)
+  }
+})
+onBeforeUnmount(() => stopLamp())
 
 const features = [
   {
@@ -123,10 +198,32 @@ const features = [
           alt="The quarry mascot: a stone database cylinder with a glowing crystal and a pickaxe" />
       </section>
 
-      <section class="face" aria-label="A quarry REPL session">
+      <section ref="face" class="face" aria-label="A quarry REPL session">
         <svg class="strata" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <radialGradient id="lamp-light">
+              <stop offset="0" stop-color="#fff" />
+              <stop offset="0.5" stop-color="#fff" stop-opacity="0.45" />
+              <stop offset="1" stop-color="#fff" stop-opacity="0" />
+            </radialGradient>
+            <mask id="lamp" maskUnits="userSpaceOnUse" x="0" y="0" :width="W" :height="H">
+              <ellipse ref="lampEl" :cx="W * 0.1" :cy="H * 0.5" rx="240" ry="240" fill="url(#lamp-light)" />
+            </mask>
+          </defs>
           <path v-for="l in layers" :key="l.cls" :d="l.d" :class="l.cls" />
           <path class="vein" :d="vein" />
+          <g class="flecks">
+            <path v-for="f in flecks" :key="f.key" :d="f.d" :style="{ animationDelay: f.delay }" />
+          </g>
+          <g class="lit" mask="url(#lamp)">
+            <path v-for="l in layers" :key="l.cls" :d="l.d" :class="l.cls" />
+            <path class="vein" :d="vein" />
+            <g class="glint">
+              <path v-for="f in flecks" :key="f.key" :d="f.d" />
+            </g>
+          </g>
+          <path class="pulse" :d="vein" pathLength="1" />
+          <path class="pulse late" :d="vein" pathLength="1" />
         </svg>
         <div class="set">
           <Terminal capture="repl" title="quarry shop.db"
@@ -464,6 +561,55 @@ h1 {
   opacity: 0.85;
   filter: drop-shadow(0 0 6px rgba(76, 198, 238, 0.6));
 }
+/* Crystals twinkle faintly on their own and glint where the lamp shines. */
+.flecks path {
+  fill: #16a8d8;
+  opacity: 0.12;
+  animation: twinkle 7s ease-in-out infinite;
+}
+.dark .flecks path {
+  fill: #9be3ff;
+  opacity: 0.1;
+}
+@keyframes twinkle {
+  50% { opacity: 0.32; }
+}
+.lit {
+  filter: brightness(1.05);
+}
+.dark .lit {
+  filter: brightness(1.45) saturate(1.15);
+}
+.glint path {
+  fill: #0f93c2;
+}
+.dark .glint path {
+  fill: #e6fbff;
+  filter: drop-shadow(0 0 3px #4cc6ee);
+}
+/* Light running along the seam, into the terminal and out the other side. */
+.pulse {
+  fill: none;
+  stroke: #0fa3d6;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 0.05 0.95;
+  stroke-dashoffset: 1;
+  animation: seam 7.5s linear infinite;
+}
+.dark .pulse {
+  stroke: #c9f3ff;
+  filter: drop-shadow(0 0 6px #4cc6ee);
+}
+.pulse.late {
+  stroke-dasharray: 0.025 0.975;
+  opacity: 0.6;
+  animation-duration: 11s;
+  animation-delay: -4s;
+}
+@keyframes seam {
+  to { stroke-dashoffset: 0; }
+}
 .set {
   --term-max: 17px;
   max-width: 1000px;
@@ -682,6 +828,12 @@ dd {
   .top nav a,
   .top nav button {
     transition: none;
+  }
+  .flecks path {
+    animation: none;
+  }
+  .pulse {
+    display: none;
   }
 }
 </style>
