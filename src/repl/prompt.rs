@@ -4,10 +4,13 @@ use std::time::Duration;
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus, PromptViMode};
 
 use super::style::Palette;
+use crate::icons::{self, Icons};
 
 #[derive(Clone, Debug, Default)]
 pub struct PromptInfo {
     pub backend: String,
+    /// Shown before `backend` in the two-line prompt; empty outside the nerd icon set.
+    pub backend_icon: &'static str,
     pub user: String,
     pub host: String,
     pub port: Option<u16>,
@@ -39,9 +42,11 @@ impl QPrompt {
 
 fn fancy(info: &PromptInfo, p: &Palette) -> (String, String) {
     let th = &p.theme;
+    let ic = icons::get();
     let mut s = String::new();
     s.push_str(&p.muted("╭─ "));
-    s.push_str(&p.paint(p.fg(th.accent).bold(), &info.backend));
+    let backend = if info.backend_icon.is_empty() { info.backend.clone() } else { format!("{} {}", info.backend_icon, info.backend) };
+    s.push_str(&p.paint(p.fg(th.accent).bold(), &backend));
     s.push(' ');
     let who = match (info.host.is_empty(), info.port) {
         (true, _) => info.user.clone(),
@@ -53,29 +58,29 @@ fn fancy(info: &PromptInfo, p: &Palette) -> (String, String) {
         s.push(' ');
     }
     if !info.database.is_empty() {
-        s.push_str(&p.muted("▸ "));
+        s.push_str(&p.muted(&format!("{} ", ic.prompt_db)));
         s.push_str(&p.paint(p.fg(th.fg).bold(), &info.database));
         s.push(' ');
     }
     if info.in_transaction {
-        s.push_str(&p.paint(p.on(th.bg, th.warning).bold(), " TX "));
+        s.push_str(&p.paint(p.on(th.bg, th.warning).bold(), &Icons::badge(ic.tx, "TX")));
         s.push(' ');
     }
     if info.readonly {
-        s.push_str(&p.paint(p.on(th.bg, th.info).bold(), " RO "));
+        s.push_str(&p.paint(p.on(th.bg, th.info).bold(), &Icons::badge(ic.ro, "RO")));
         s.push(' ');
     }
     match (info.last_ok, info.last_elapsed) {
-        (Some(true), Some(d)) => s.push_str(&p.muted(&format!(" ✓ {}", human_duration(d)))),
+        (Some(true), Some(d)) => s.push_str(&p.muted(&format!(" {} {}", ic.ok, human_duration(d)))),
         (Some(false), Some(d)) => {
-            s.push_str(&p.error(" ✗"));
+            s.push_str(&p.error(&format!(" {}", ic.error)));
             s.push_str(&p.muted(&format!(" {}", human_duration(d))));
         }
         _ => {}
     }
     s.push('\n');
     s.push_str(&p.muted("╰─"));
-    let indicator = p.paint(p.fg(if info.in_transaction { th.warning } else { th.accent }).bold(), "❯ ");
+    let indicator = p.paint(p.fg(if info.in_transaction { th.warning } else { th.accent }).bold(), &format!("{} ", ic.prompt));
     (s, indicator)
 }
 
@@ -136,7 +141,10 @@ impl Prompt for QPrompt {
 
     fn render_prompt_indicator(&self, mode: PromptEditMode) -> Cow<'_, str> {
         match mode {
-            PromptEditMode::Vi(PromptViMode::Normal) => Cow::Owned(self.indicator.replace('❯', "❮").to_string()),
+            PromptEditMode::Vi(PromptViMode::Normal) => {
+                let ic = icons::get();
+                Cow::Owned(self.indicator.replace(ic.prompt, ic.prompt_vi))
+            },
             _ => Cow::Borrowed(&self.indicator),
         }
     }

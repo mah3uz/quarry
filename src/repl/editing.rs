@@ -61,6 +61,11 @@ impl RlCompleter for ReplCompleter {
                     Some(d) if !d.is_empty() && d != label => format!("{label} · {d}"),
                     _ => label.to_string(),
                 };
+                // Only nerd icons add something: the other sets' markers are letters that repeat the label.
+                let description = match crate::icons::current() {
+                    crate::icons::IconSet::Nerd => format!("{} {description}", crate::icons::get().kind(s.kind)),
+                    _ => description,
+                };
                 RlSuggestion {
                     value: s.text,
                     display_override: (s.display.as_str() != "").then_some(s.display),

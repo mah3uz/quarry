@@ -148,7 +148,7 @@ fn build_editor(session: &Session, toggles: &Toggles) -> Result<Reedline> {
 
     let menu = IdeMenu::default()
         .with_name(MENU)
-        .with_marker(&p.paint(p.fg(th.accent).bold(), "❯ "))
+        .with_marker(&p.paint(p.fg(th.accent).bold(), &format!("{} ", crate::icons::get().prompt)))
         .with_word_chars("_$")
         .with_default_border()
         .with_description_mode(DescriptionMode::PreferRight)

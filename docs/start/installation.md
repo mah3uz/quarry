@@ -96,6 +96,12 @@ Check that it worked:
 quarry --version
 ```
 
+## A Nerd Font
+
+quarry's icons come from a [Nerd Font](https://www.nerdfonts.com). If your terminal doesn't use
+one, install one (on Arch, `pacman -S ttf-jetbrains-mono-nerd`) and select it in the terminal's
+settings, or set `icons = "unicode"` in the config. See [icons](/advanced/customising#icons).
+
 ## Shell completion
 
 quarry completes its options in bash, zsh and fish, and it knows your setup: <kbd>Tab</kbd> after

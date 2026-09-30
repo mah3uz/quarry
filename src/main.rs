@@ -76,6 +76,7 @@ fn real_main(args: Args, rt: &tokio::runtime::Runtime) -> Result<ExitCode> {
     if let Some(n) = args.row_limit {
         config.main.row_limit = n;
     }
+    quarry::icons::set(args.icons.unwrap_or(config.main.icons));
 
     let batch = !args.execute.is_empty() || args.file.is_some() || !std::io::stdin().is_terminal();
     let depth = if args.no_color || (batch && !std::io::stdout().is_terminal()) {

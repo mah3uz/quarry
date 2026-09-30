@@ -18,6 +18,9 @@ full reference.
 ╰─❯
 ```
 
+That's the `unicode` [icon set](#icons); with a Nerd Font the product, the database and the badges
+get icons too.
+
 Or write your own with these escapes:
 
 | Escape | Becomes |
@@ -46,6 +49,26 @@ That gives `PostgreSQL me@localhost:app> `, with `*` before the `>` inside a tra
 
 Try formats at runtime with `\R`: `\R '\u@\d> '` (quote it to keep the trailing space). `\R` alone
 goes back to `auto`. The `--prompt` flag sets it for one session.
+
+## Icons
+
+quarry draws icons from a [Nerd Font](https://www.nerdfonts.com) by default: database logos in the
+prompt and the status bar, and icons for tables, views, columns, keys and functions in the TUI's
+explorer, its tabs and the completion menus. Your terminal needs a Nerd Font (v3) for these, for
+example *JetBrainsMono Nerd Font*.
+
+| `icons` | Looks like | For |
+|---|---|---|
+| `"nerd"` (default) | Database and object icons | Terminals using a Nerd Font |
+| `"unicode"` | `▦ ◫ ƒ ✓ ✗` | Any font with ordinary Unicode symbols |
+| `"ascii"` | `T V f + x` | Fonts or consoles with no symbols at all |
+
+```toml
+icons = "unicode"
+```
+
+`--icons unicode` sets it for one run. Borders and table lines are box-drawing characters in every
+set; for results without them use `\T ascii`.
 
 ## Vi or Emacs keys
 
@@ -106,6 +129,6 @@ echo of a favourite's SQL.
 |---|---|---|
 | `mouse` | `true` | Mouse support in the TUI: click, drag to select, scroll |
 
-The TUI also reads `theme`, `null_string`, `smart_completion`, `complete_while_typing`,
+The TUI also reads `theme`, `icons`, `null_string`, `smart_completion`, `complete_while_typing`,
 `join_suggestions`, `keyword_casing`, `auto_refresh_catalog` and `destructive_warning`. The other
 options on this page apply to the REPL only.

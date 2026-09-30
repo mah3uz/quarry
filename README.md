@@ -227,6 +227,9 @@ You can also put your own themes in `~/.config/quarry/themes/`:
 
 Colours fall back to 256 or 16 colours on terminals without truecolor, and `NO_COLOR` is respected.
 
+Icons come from a [Nerd Font](https://www.nerdfonts.com) by default. Without one in your terminal,
+set `icons = "unicode"` (or `"ascii"`) in the config, or pass `--icons unicode`.
+
 ## Configuration
 
 `~/.config/quarry/config.toml` is created with comments on first run. It covers the theme, table

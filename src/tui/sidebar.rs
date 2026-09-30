@@ -11,11 +11,12 @@ use unicode_width::UnicodeWidthStr;
 use super::widgets::input::{Input, InputEvent};
 use super::worker::ConnId;
 use crate::db::{Backend, Catalog, FunctionKind, RelKind, Relation};
+use crate::icons;
 use crate::theme::Theme;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NodeKind {
-    Connection,
+    Connection { backend: Backend, mariadb: bool },
     DatabasesGroup,
     Database { name: String, current: bool },
     Schema { name: String },
@@ -124,14 +125,14 @@ pub struct Sidebar {
 
 
 impl Sidebar {
-    pub fn set_connection(&mut self, conn: ConnId, label: &str, detail: &str) {
+    pub fn set_connection(&mut self, conn: ConnId, label: &str, detail: &str, backend: Backend, mariadb: bool) {
         match self.roots.iter_mut().find(|r| r.conn == conn) {
             Some(r) => {
                 r.label = label.to_string();
                 r.detail = detail.to_string();
             }
             None => {
-                let mut n = Node::new(conn, NodeKind::Connection, label);
+                let mut n = Node::new(conn, NodeKind::Connection { backend, mariadb }, label);
                 n.detail = detail.to_string();
                 n.expanded = true;
                 n.children.push(Node::new(conn, NodeKind::Message, "loading…"));
@@ -523,7 +524,7 @@ impl Sidebar {
             (area, None)
         };
         if let Some(fa) = filter_area {
-            buf.set_string(fa.x, fa.y, "⌕ ", Style::default().fg(theme.accent));
+            buf.set_string(fa.x, fa.y, format!("{} ", icons::get().search), Style::default().fg(theme.accent));
             let input_area = Rect { x: fa.x + 2, width: fa.width.saturating_sub(2), ..fa };
             match &mut self.filter {
                 Some(input) => {
@@ -585,27 +586,32 @@ fn node_line<'a>(node: &'a Node, row: &Row, theme: &Theme, filter: &str) -> Line
         prefix.push_str(if row.last { "╰ " } else { "├ " });
     }
     spans.push(Span::styled(prefix, guide));
-    let arrow = if node.expandable() { if node.expanded { "▾ " } else { "▸ " } } else { "  " };
-    spans.push(Span::styled(arrow, Style::default().fg(theme.muted)));
+    let ic = icons::get();
+    let arrow = if node.expandable() { if node.expanded { ic.expanded } else { ic.collapsed } } else { " " };
+    spans.push(Span::styled(format!("{arrow} "), Style::default().fg(theme.muted)));
     let (icon, style) = match &node.kind {
-        NodeKind::Connection => ("◆ ", Style::default().fg(node.color.unwrap_or(theme.accent)).add_modifier(Modifier::BOLD)),
-        NodeKind::DatabasesGroup => ("⛁ ", Style::default().fg(theme.muted)),
-        NodeKind::Database { current: true, .. } => ("● ", Style::default().fg(theme.success)),
-        NodeKind::Database { .. } => ("○ ", Style::default().fg(theme.fg)),
-        NodeKind::Schema { .. } => ("⬡ ", Style::default().fg(theme.accent2)),
-        NodeKind::Group { .. } => ("", Style::default().fg(theme.muted)),
+        NodeKind::Connection { backend, mariadb } => (
+            ic.connection(*backend, *mariadb),
+            Style::default().fg(node.color.unwrap_or(theme.accent)).add_modifier(Modifier::BOLD),
+        ),
+        NodeKind::DatabasesGroup => (ic.databases, Style::default().fg(theme.muted)),
+        NodeKind::Database { current: true, .. } => (ic.database_current, Style::default().fg(theme.success)),
+        NodeKind::Database { .. } => (ic.database, Style::default().fg(theme.fg)),
+        NodeKind::Schema { .. } => (ic.schema, Style::default().fg(theme.accent2)),
+        NodeKind::Group { .. } => (ic.group, Style::default().fg(theme.muted)),
         NodeKind::Relation { kind, .. } => match kind {
-            RelKind::View => ("◫ ", Style::default().fg(theme.info)),
-            RelKind::MaterializedView => ("◩ ", Style::default().fg(theme.info)),
-            RelKind::ForeignTable => ("⇢ ", Style::default().fg(theme.fg)),
-            RelKind::SystemTable => ("▦ ", Style::default().fg(theme.muted)),
-            _ => ("▦ ", Style::default().fg(theme.fg)),
+            RelKind::View => (ic.view, Style::default().fg(theme.info)),
+            RelKind::MaterializedView => (ic.matview, Style::default().fg(theme.info)),
+            RelKind::ForeignTable => (ic.foreign_table, Style::default().fg(theme.fg)),
+            RelKind::SystemTable => (ic.system_table, Style::default().fg(theme.muted)),
+            _ => (ic.table, Style::default().fg(theme.fg)),
         },
-        NodeKind::Column { pk: true, .. } => ("⚷ ", Style::default().fg(theme.warning)),
-        NodeKind::Column { .. } => ("· ", Style::default().fg(theme.identifier)),
-        NodeKind::Function { .. } => ("ƒ ", Style::default().fg(theme.function)),
+        NodeKind::Column { pk: true, .. } => (ic.key, Style::default().fg(theme.warning)),
+        NodeKind::Column { .. } => (ic.column, Style::default().fg(theme.identifier)),
+        NodeKind::Function { .. } => (ic.function, Style::default().fg(theme.function)),
         NodeKind::Message => ("", Style::default().fg(theme.muted).add_modifier(Modifier::ITALIC)),
     };
+    let icon = if icon.is_empty() { String::new() } else { format!("{icon} ") };
     let icon_style = match &node.kind {
         NodeKind::Relation { .. } => Style::default().fg(theme.accent),
         _ => style,
@@ -626,7 +632,7 @@ fn node_line<'a>(node: &'a Node, row: &Row, theme: &Theme, filter: &str) -> Line
     if let NodeKind::Column { data_type, nullable, .. } = &node.kind {
         spans.push(Span::styled(format!(" {data_type}"), Style::default().fg(theme.datatype).add_modifier(Modifier::DIM)));
         if !nullable {
-            spans.push(Span::styled(" ✱", Style::default().fg(theme.muted)));
+            spans.push(Span::styled(format!(" {}", ic.not_null), Style::default().fg(theme.muted)));
         }
     }
     Line::from(spans)
@@ -641,7 +647,7 @@ fn is_leafish(n: &Node) -> bool {
 }
 
 fn subtree_matches(n: &Node, filter: &str) -> bool {
-    if matches!(n.kind, NodeKind::Connection) {
+    if matches!(n.kind, NodeKind::Connection { .. }) {
         return true;
     }
     (is_leafish(n) && label_matches(n, filter)) || n.children.iter().any(|c| subtree_matches(c, filter))
@@ -775,7 +781,7 @@ mod tests {
     #[test]
     fn default_schema_tables_are_expanded_and_system_schemas_hidden() {
         let mut s = Sidebar::default();
-        s.set_connection(0, "local", "pg");
+        s.set_connection(0, "local", "pg", Backend::Postgres, false);
         s.set_catalog(0, &catalog(), false);
         assert_eq!(labels(&s), vec!["local", "public", "Tables", "orders", "users", "Views"]);
     }
@@ -783,7 +789,7 @@ mod tests {
     #[test]
     fn filter_reveals_matching_leaves_inside_collapsed_groups() {
         let mut s = Sidebar::default();
-        s.set_connection(0, "local", "pg");
+        s.set_connection(0, "local", "pg", Backend::Postgres, false);
         s.set_catalog(0, &catalog(), false);
         s.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         for c in "v".chars() {
@@ -796,7 +802,7 @@ mod tests {
     #[test]
     fn enter_on_table_opens_it_and_expansion_survives_refresh() {
         let mut s = Sidebar::default();
-        s.set_connection(0, "local", "pg");
+        s.set_connection(0, "local", "pg", Backend::Postgres, false);
         s.set_catalog(0, &catalog(), false);
         s.selected = 3;
         assert_eq!(
@@ -813,7 +819,7 @@ mod tests {
     #[test]
     fn script_generation_prefix() {
         let mut s = Sidebar::default();
-        s.set_connection(0, "local", "pg");
+        s.set_connection(0, "local", "pg", Backend::Postgres, false);
         s.set_catalog(0, &catalog(), false);
         s.selected = 4;
         s.handle_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));

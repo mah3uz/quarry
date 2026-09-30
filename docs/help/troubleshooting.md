@@ -83,6 +83,12 @@ That's `row_limit`. Answer `y`, raise it in the config, pass `--row-limit 0`, or
 
 When stdout isn't a terminal quarry prints TSV without colour. Pass `-F` to choose a format.
 
+**I see boxes or question marks where icons should be**
+
+quarry uses Nerd Font icons by default. Set your terminal to a [Nerd Font](https://www.nerdfonts.com),
+or set `icons = "unicode"` in the config (or `"ascii"` if symbols are missing too). `--icons unicode`
+tries it for one run.
+
 **Characters look broken or boxes don't line up**
 
 Use a terminal font with box-drawing characters (most monospace fonts have them), or pick an ASCII

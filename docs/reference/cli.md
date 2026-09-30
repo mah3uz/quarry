@@ -59,6 +59,7 @@ See [Scripts, exports and pipes](/guides/scripting).
 | `--tui` | `-T` | Open the full-screen TUI. Ignored in scripts. |
 | `--theme NAME` | | Colour theme for this run |
 | `--prompt FORMAT` | | Prompt format for this session. See [the prompt](/advanced/customising#the-prompt). |
+| `--icons SET` | | `nerd`, `unicode` or `ascii` for this run. See [icons](/advanced/customising#icons). |
 | `--no-color` | | No colour |
 | `--less-chatty` | | Skip the banner and the goodbye message |
 | `--row-limit N` | | Ask before showing more than `N` rows. `0` never asks. |

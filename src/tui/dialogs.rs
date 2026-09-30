@@ -10,6 +10,7 @@ use super::widgets::input::{Input, InputEvent};
 use crate::config::SavedConnection;
 use crate::conn::{ConnSpec, SslMode};
 use crate::db::Backend;
+use crate::icons;
 use crate::theme::Theme;
 
 pub fn centered(screen: Rect, width: u16, height: u16) -> Rect {
@@ -620,16 +621,17 @@ impl ConnectForm {
                 } else {
                     Style::default().fg(theme.fg)
                 };
-                let backend = ConnSpec::parse(&c.url).map(|s| match s.backend {
-                    Backend::Postgres => "pg",
-                    Backend::MySql => "my",
-                    Backend::Sqlite => "sq",
+                let backend = ConnSpec::parse(&c.url).map(|s| match (icons::get().backend(s.backend, false), s.backend) {
+                    (icon, _) if !icon.is_empty() => icon,
+                    (_, Backend::Postgres) => "pg",
+                    (_, Backend::MySql) => "my",
+                    (_, Backend::Sqlite) => "sq",
                 }).unwrap_or("??");
                 buf.set_style(Rect { x: inner.x, y, width: list_w, height: 1 }, style);
                 buf.set_string(inner.x + 1, y, backend, Style::default().fg(theme.accent2));
                 buf.set_stringn(inner.x + 4, y, name, list_w.saturating_sub(6) as usize, style);
                 if c.readonly {
-                    buf.set_string(inner.x + list_w - 2, y, "ʀ", Style::default().fg(theme.info));
+                    buf.set_string(inner.x + list_w - 2, y, icons::get().readonly_mark, Style::default().fg(theme.info));
                 }
             }
             for y in inner.y..inner.y + inner.height {
@@ -658,7 +660,7 @@ impl ConnectForm {
             };
             let focused = focused_field == Some(f);
             let lstyle = if focused { Style::default().fg(theme.accent).add_modifier(Modifier::BOLD) } else { Style::default().fg(theme.muted) };
-            buf.set_string(fx, y, format!("{}{label}", if focused { "▸ " } else { "  " }), lstyle);
+            buf.set_string(fx, y, format!("{}{label}", if focused { format!("{} ", icons::get().more_right) } else { "  ".into() }), lstyle);
             let vx = fx + label_w + 2;
             let vw = fw.saturating_sub(label_w + 3);
             let varea = Rect { x: vx, y, width: vw, height: 1 };
@@ -705,7 +707,7 @@ impl ConnectForm {
         }
         let msg_y = inner.y + inner.height - 2;
         if let Some(e) = &self.error {
-            buf.set_stringn(fx, msg_y, format!("✗ {e}"), fw as usize, Style::default().fg(theme.error));
+            buf.set_stringn(fx, msg_y, format!("{} {e}", icons::get().error), fw as usize, Style::default().fg(theme.error));
         } else if self.busy {
             buf.set_string(fx, msg_y, "Connecting…", Style::default().fg(theme.info));
         }

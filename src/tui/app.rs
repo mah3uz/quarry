@@ -330,7 +330,7 @@ impl App {
             color,
         };
         self.conns.push(Some(entry));
-        self.sidebar.set_connection(id, &name, &info.version);
+        self.sidebar.set_connection(id, &name, &info.version, spec.backend, info.is_mariadb);
         self.sidebar.set_connection_color(id, color);
         if let Some(m) = meta {
             let w = Worker::spawn(&self.rt, id, m, self.tx.clone(), false);
@@ -832,7 +832,7 @@ impl App {
                             history.push(sql);
                         }
                         Err(e) => {
-                            let mut msg = format!("✗ {e}");
+                            let mut msg = format!("{} {e}", crate::icons::get().error);
                             if let Some(d) = &e.detail {
                                 msg.push_str(&format!("\n  detail: {d}"));
                             }
@@ -893,7 +893,7 @@ impl App {
                         }
                         Ok(None) => toast = Some((Level::Info, "That command is only available in the CLI".into())),
                         Err(e) => {
-                            q.log(MessageKind::Error, format!("✗ {e}"));
+                            q.log(MessageKind::Error, format!("{} {e}", crate::icons::get().error));
                             toast = Some((Level::Error, e.message));
                         }
                     }
@@ -1131,7 +1131,7 @@ impl App {
         q.exec_sqls = statements.clone();
         let preview: String = statements.first().map(|s| s.lines().next().unwrap_or("").chars().take(80).collect()).unwrap_or_default();
         let more = if statements.len() > 1 { format!(" (+{} more)", statements.len() - 1) } else { String::new() };
-        q.log(MessageKind::Info, format!("▶ {preview}{more}"));
+        q.log(MessageKind::Info, format!("{} {preview}{more}", crate::icons::get().run));
         self.completion = None;
         if let Some(c) = conn_id.and_then(|c| self.conn(c)) {
             c.main.send(Tag::Tab(tab_id, 0), Request::Script { statements, keep_going: false, max_rows });
@@ -1147,7 +1147,7 @@ impl App {
         let llm = self.config.llm.clone();
         if let TabKind::Query(q) = &mut self.tabs[idx].kind {
             q.running = Some(Running { started: Instant::now(), total: 1, current: 0 });
-            q.log(MessageKind::Info, format!("✦ Asking {}: {question}", crate::llm::describe(&llm)));
+            q.log(MessageKind::Info, format!("{} Asking {}: {question}", crate::icons::get().ask, crate::llm::describe(&llm)));
         }
         let tx = self.tx.clone();
         self.rt.spawn_blocking(move || {
@@ -1183,7 +1183,7 @@ impl App {
                 self.toast(Level::Success, "SQL ready — review it, then Ctrl+Enter to run");
             }
             Err(e) => {
-                q.log(MessageKind::Error, format!("✗ {e}"));
+                q.log(MessageKind::Error, format!("{} {e}", crate::icons::get().error));
                 self.toast(Level::Error, e);
             }
         }

@@ -28,6 +28,8 @@ pub struct MainConfig {
     pub table_format: String,
     /// A line between result rows in the boxed table formats.
     pub row_lines: bool,
+    /// Glyphs in the prompt, the TUI and messages: nerd (needs a Nerd Font), unicode or ascii.
+    pub icons: crate::icons::IconSet,
     /// on | off | auto
     pub expanded: String,
     pub null_string: String,
@@ -67,6 +69,7 @@ impl Default for MainConfig {
             theme: "tokyo-night".into(),
             table_format: "rounded".into(),
             row_lines: true,
+            icons: crate::icons::IconSet::Nerd,
             expanded: "auto".into(),
             null_string: "NULL".into(),
             max_field_width: Some(500),
@@ -299,6 +302,11 @@ table_format = "rounded"
 
 # Draw a line between result rows in the boxed formats (rounded, unicode, double, ascii).
 row_lines = true
+
+# Icons in the prompt, the TUI and messages: nerd | unicode | ascii.
+# nerd needs a Nerd Font (https://www.nerdfonts.com) in the terminal; if you see boxes or
+# question marks instead of icons, use unicode.
+icons = "nerd"
 
 # Expanded (vertical, one column per line) output: on | off | auto.
 # auto switches to vertical when a table is wider than the terminal. Toggle with \x.

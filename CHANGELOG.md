@@ -67,10 +67,14 @@ by itself. Set it up once with `quarry --setup-llm`: an Anthropic API key, any O
 OpenRouter, Ollama, LM Studio), or the Claude Code or Codex CLI you're already signed in to. Only your question and
 the schema are sent, never rows.
 
-### Themes
+### Themes and icons
 
 27 built-in themes shared by the REPL and the TUI, among them Tokyo Night, Catppuccin, Gruvbox, Dracula, Nord,
 Solarized, Rosé Pine and Kanagawa, plus your own TOML palettes and any base16 or base24 scheme.
+
+Nerd Font icons throughout: database logos in the prompt and status bar, and icons for tables, views, keys, columns
+and functions in the explorer, tabs and completion menus. `icons = "unicode"` or `"ascii"` (or `--icons`) for
+terminals without a Nerd Font.
 
 ### Install
 

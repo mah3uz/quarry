@@ -11,6 +11,7 @@ use super::sidebar::compact_count;
 use super::tabs::*;
 use crate::complete::SuggestionKind;
 use crate::db::Backend;
+use crate::icons::{self, Icons};
 use crate::repl::prompt::human_duration;
 use crate::theme::Theme;
 
@@ -55,15 +56,16 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
 fn draw_header(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
     buf.set_style(area, Style::default().bg(theme.surface));
-    let logo = " ◆ quarry ";
-    buf.set_string(area.x, area.y, logo, Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD));
+    let ic = icons::get();
+    let logo = format!(" {} quarry ", ic.logo);
+    buf.set_string(area.x, area.y, &logo, Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD));
     let mut x = area.x + logo.width() as u16 + 1;
     let right_reserve = 22u16;
     for (i, tab) in app.tabs.iter().enumerate() {
         let active = i == app.active;
         let busy = if tab.is_busy() { format!(" {}", app.spinner()) } else { String::new() };
         let dirty = matches!(&tab.kind, TabKind::Table(t) if t.dirty());
-        let label = format!(" {} {}{}{} ", tab.icon(), truncate(&tab.title, 22), if dirty { " ●" } else { "" }, busy);
+        let label = format!(" {} {}{}{} ", tab.icon(), truncate(&tab.title, 22), if dirty { format!(" {}", ic.dirty) } else { String::new() }, busy);
         let w = label.width() as u16;
         if x + w + right_reserve > area.x + area.width {
             buf.set_string(x, area.y, " … ", Style::default().fg(theme.muted).bg(theme.surface));
@@ -144,7 +146,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             let ef = focused && q.pane == Pane::Editor;
             let (row, col) = q.editor.cursor_pos();
             let mut title = vec![
-                Span::styled(" ⌘ ", Style::default().fg(theme.accent)),
+                Span::styled(format!(" {} ", icons::get().query), Style::default().fg(theme.accent)),
                 Span::styled(tab.title.clone(), Style::default().fg(if ef { theme.fg } else { theme.muted }).add_modifier(Modifier::BOLD)),
             ];
             if !conn_label.is_empty() {
@@ -173,7 +175,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             app.areas.grid = inner;
             if let Some(e) = &t.error
                 && t.grid.column_count() == 0 {
-                    Paragraph::new(format!("✗ {e}")).style(Style::default().fg(theme.error)).wrap(Wrap { trim: false }).render(inner, buf);
+                    Paragraph::new(format!("{} {e}", icons::get().error)).style(Style::default().fg(theme.error)).wrap(Wrap { trim: false }).render(inner, buf);
                     return None;
                 }
             if t.grid.column_count() == 0 && t.loading {
@@ -185,7 +187,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
         TabKind::Structure(s) => {
             let [tabs_a, rest] = Layout::vertical([Constraint::Length(1), Constraint::Min(2)]).areas(area);
             let mut x = tabs_a.x + 1;
-            buf.set_string(x, tabs_a.y, format!("⚙ {}.{} ", s.schema, s.name), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD));
+            buf.set_string(x, tabs_a.y, format!("{} {}.{} ", icons::get().structure, s.schema, s.name), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD));
             x += (s.schema.width() + s.name.width() + 4) as u16;
             for (i, sec) in StructSection::ALL.iter().enumerate() {
                 let count = s.section_count(*sec).map(|n| format!(" {n}")).unwrap_or_default();
@@ -209,7 +211,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             block.render(rest, buf);
             app.areas.grid = inner;
             if let Some(e) = &s.error {
-                Paragraph::new(format!("✗ {e}")).style(Style::default().fg(theme.error)).render(inner, buf);
+                Paragraph::new(format!("{} {e}", icons::get().error)).style(Style::default().fg(theme.error)).render(inner, buf);
             } else if s.section == StructSection::Ddl {
                 match &s.ddl {
                     Some(d) => render_text(d, backend, s.text_scroll, inner, buf, theme),
@@ -226,7 +228,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             let state = if a.paused { "paused".to_string() } else { format!("every {}s", a.interval.as_secs()) };
             let ago = a.last_refresh.map(|t| format!("refreshed {}s ago", t.elapsed().as_secs())).unwrap_or_default();
             let line = Line::from(vec![
-                Span::styled(" ⚡ Sessions ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" {} Sessions ", icons::get().activity), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
                 Span::styled(format!("{} · {state} · {ago}", a.grid.row_count()), Style::default().fg(theme.muted)),
                 Span::styled("   p pause · r refresh · K kill · Enter details", Style::default().fg(theme.muted)),
             ]);
@@ -236,14 +238,14 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             block.render(rest, buf);
             app.areas.grid = inner;
             if let Some(e) = &a.error {
-                Paragraph::new(format!("✗ {e}")).style(Style::default().fg(theme.error)).wrap(Wrap { trim: false }).render(inner, buf);
+                Paragraph::new(format!("{} {e}", icons::get().error)).style(Style::default().fg(theme.error)).wrap(Wrap { trim: false }).render(inner, buf);
             } else {
                 a.grid.render(inner, buf, theme, focused);
             }
         }
         TabKind::Text(t) => {
             let block = pane_block(
-                vec![Span::styled(format!(" ≡ {} ", tab.title), Style::default().fg(theme.accent))],
+                vec![Span::styled(format!(" {} {} ", icons::get().text, tab.title), Style::default().fg(theme.accent))],
                 focused,
                 theme,
             )
@@ -257,7 +259,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             let first = x.sql.lines().next().unwrap_or("").to_string();
             let block = pane_block(
                 vec![
-                    Span::styled(if x.analyze { " ⊿ Explain analyze " } else { " ⊿ Explain " }, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(" {} Explain{} ", icons::get().explain, if x.analyze { " analyze" } else { "" }), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("{} · {elapsed} ", truncate(&first, 60)), Style::default().fg(theme.muted)),
                 ],
                 focused,
@@ -268,11 +270,11 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             render_explain(x, inner, buf, theme, focused);
         }
         TabKind::History(h) => {
-            let block = pane_block(vec![Span::styled(" ↺ History ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))], focused, theme)
+            let block = pane_block(vec![Span::styled(format!(" {} History ", icons::get().history), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))], focused, theme)
                 .title_bottom(Line::from(Span::styled(" type to filter · ⏎ open in new query tab ", Style::default().fg(theme.muted))).right_aligned());
             let inner = block.inner(area);
             block.render(area, buf);
-            buf.set_string(inner.x + 1, inner.y, "⌕ ", Style::default().fg(theme.accent));
+            buf.set_string(inner.x + 1, inner.y, format!("{} ", icons::get().search), Style::default().fg(theme.accent));
             cursor = h.filter.render(Rect { x: inner.x + 3, y: inner.y, width: inner.width.saturating_sub(4), height: 1 }, buf, theme, focused);
             let list = Rect { y: inner.y + 2, height: inner.height.saturating_sub(2), ..inner };
             let n = list.height as usize;
@@ -338,8 +340,8 @@ fn draw_results(
             break;
         }
     }
-    let errors = q.messages.iter().rev().take_while(|m| !m.text.starts_with('▶')).any(|m| matches!(m.kind, MessageKind::Error));
-    let mlabel = format!(" Messages{} ", if errors { " ✗" } else { "" });
+    let errors = q.messages.iter().rev().take_while(|m| !m.text.starts_with(icons::get().run)).any(|m| matches!(m.kind, MessageKind::Error));
+    let mlabel = format!(" Messages{} ", if errors { format!(" {}", icons::get().error) } else { String::new() });
     let mst = if q.showing_messages() {
         Style::default().bg(if focused { theme.selection } else { theme.highlight }).fg(if errors { theme.error } else { theme.fg }).add_modifier(Modifier::BOLD)
     } else {
@@ -381,10 +383,10 @@ fn draw_messages(buf: &mut Buffer, area: Rect, q: &mut QueryTab, theme: &Theme) 
     let mut lines: Vec<Line> = Vec::new();
     for m in &q.messages {
         let (icon, color) = match m.kind {
-            MessageKind::Info => ("·", theme.muted),
-            MessageKind::Ok => ("✓", theme.success),
-            MessageKind::Notice => ("!", theme.warning),
-            MessageKind::Error => ("✗", theme.error),
+            MessageKind::Info => (icons::get().note, theme.muted),
+            MessageKind::Ok => (icons::get().ok, theme.success),
+            MessageKind::Notice => (icons::get().notice, theme.warning),
+            MessageKind::Error => (icons::get().error, theme.error),
         };
         for (i, l) in m.text.lines().enumerate() {
             let prefix = if i == 0 { format!("{} {icon} ", m.at.format("%H:%M:%S")) } else { " ".repeat(11) };
@@ -403,9 +405,10 @@ fn draw_messages(buf: &mut Buffer, area: Rect, q: &mut QueryTab, theme: &Theme) 
 }
 
 fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme, spinner: &str, backend: Option<Backend>) {
-    let mut spans = vec![Span::styled(format!(" ▦ {}.{} ", t.schema, t.name), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))];
+    let ic = icons::get();
+    let mut spans = vec![Span::styled(format!(" {} {}.{} ", ic.table, t.schema, t.name), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))];
     if t.filter.is_empty() {
-        spans.push(Span::styled(" ⌕ no filter (f) ", Style::default().fg(theme.muted)));
+        spans.push(Span::styled(format!(" {} no filter (f) ", ic.filter), Style::default().fg(theme.muted)));
     } else {
         spans.push(Span::styled(" WHERE ", Style::default().fg(theme.keyword).add_modifier(Modifier::BOLD)));
         spans.extend(highlight_spans(&truncate(&t.filter, 50), backend.unwrap_or(Backend::Postgres), theme));
@@ -413,7 +416,7 @@ fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme,
     }
     if let Some((c, asc)) = t.order
         && let Some(col) = t.grid.columns().get(c) {
-            spans.push(Span::styled(format!(" ⇅ {} {} ", col.name, if asc { "▲" } else { "▼" }), Style::default().fg(theme.accent2)));
+            spans.push(Span::styled(format!(" {} {} {} ", ic.sort, col.name, if asc { ic.asc } else { ic.desc }), Style::default().fg(theme.accent2)));
         }
     let count = match t.total {
         Some(n) => format!(" {} rows", fmt_count(n as usize)),
@@ -429,7 +432,7 @@ fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme,
     }
     if t.dirty() {
         spans.push(Span::styled(
-            format!("  ● {} pending · Ctrl+S review · u discard ", t.pending_count()),
+            format!("  {} {} pending · Ctrl+S review · u discard ", ic.dirty, t.pending_count()),
             Style::default().fg(theme.warning).add_modifier(Modifier::BOLD),
         ));
     }
@@ -499,26 +502,27 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &App, theme: &Theme) {
                 Backend::MySql => ("MY", theme.warning),
                 Backend::Sqlite => ("SQ", theme.success),
             };
+            let ic = icons::get();
             put(buf, " ", Style::default());
-            put(buf, &format!(" {tag} "), Style::default().fg(color).add_modifier(Modifier::BOLD).bg(theme.highlight));
+            put(buf, &Icons::badge(ic.backend(c.backend(), c.info.is_mariadb), tag), Style::default().fg(color).add_modifier(Modifier::BOLD).bg(theme.highlight));
             let label = match c.color {
                 Some(color) => Style::default().fg(theme.bg).bg(color).add_modifier(Modifier::BOLD),
                 None => Style::default().fg(theme.fg).bg(theme.surface),
             };
             put(buf, &format!(" {} ", c.short_label()), label);
             if c.in_tx {
-                put(buf, " TX ", Style::default().bg(theme.warning).fg(theme.bg).add_modifier(Modifier::BOLD));
+                put(buf, &Icons::badge(ic.tx, "TX"), Style::default().bg(theme.warning).fg(theme.bg).add_modifier(Modifier::BOLD));
                 put(buf, " ", Style::default());
             }
             if c.readonly {
-                put(buf, " READ-ONLY ", Style::default().bg(theme.info).fg(theme.bg).add_modifier(Modifier::BOLD));
+                put(buf, &Icons::badge(ic.ro, "READ-ONLY"), Style::default().bg(theme.info).fg(theme.bg).add_modifier(Modifier::BOLD));
                 put(buf, " ", Style::default());
             }
             if c.spec.ssh.is_some() {
-                put(buf, " ⇄ ssh ", Style::default().fg(theme.accent2));
+                put(buf, &Icons::badge(ic.ssh, "ssh"), Style::default().fg(theme.accent2));
             }
             if c.info.tls {
-                put(buf, " TLS ", Style::default().fg(theme.success));
+                put(buf, &Icons::badge(ic.tls, "TLS"), Style::default().fg(theme.success));
             }
         }
         None => put(buf, "  not connected ", Style::default().fg(theme.muted)),
@@ -537,22 +541,20 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &App, theme: &Theme) {
 }
 
 fn kind_glyph(kind: SuggestionKind, theme: &Theme) -> (&'static str, Color) {
-    match kind {
-        SuggestionKind::Keyword => ("K", theme.keyword),
-        SuggestionKind::Table => ("T", theme.accent),
-        SuggestionKind::View => ("V", theme.info),
-        SuggestionKind::Column => ("C", theme.identifier),
-        SuggestionKind::Schema => ("S", theme.accent2),
-        SuggestionKind::Database => ("D", theme.accent2),
-        SuggestionKind::Function => ("ƒ", theme.function),
-        SuggestionKind::DataType => ("τ", theme.datatype),
-        SuggestionKind::Alias => ("A", theme.parameter),
-        SuggestionKind::Join | SuggestionKind::JoinCondition => ("⋈", theme.success),
-        SuggestionKind::Special => ("\\", theme.accent2),
-        SuggestionKind::Favorite => ("★", theme.warning),
-        SuggestionKind::File => ("/", theme.string),
-        SuggestionKind::User => ("U", theme.parameter),
-    }
+    let color = match kind {
+        SuggestionKind::Keyword => theme.keyword,
+        SuggestionKind::Table => theme.accent,
+        SuggestionKind::View => theme.info,
+        SuggestionKind::Column => theme.identifier,
+        SuggestionKind::Schema | SuggestionKind::Database | SuggestionKind::Special => theme.accent2,
+        SuggestionKind::Function => theme.function,
+        SuggestionKind::DataType => theme.datatype,
+        SuggestionKind::Alias | SuggestionKind::User => theme.parameter,
+        SuggestionKind::Join | SuggestionKind::JoinCondition => theme.success,
+        SuggestionKind::Favorite => theme.warning,
+        SuggestionKind::File => theme.string,
+    };
+    (icons::get().kind(kind), color)
 }
 
 fn draw_completion(buf: &mut Buffer, screen: Rect, app: &mut App, theme: &Theme) -> Option<(u16, u16)> {
@@ -609,10 +611,10 @@ fn draw_toasts(buf: &mut Buffer, screen: Rect, app: &App, theme: &Theme) {
     let mut y = (screen.y + screen.height).saturating_sub(3);
     for t in app.toasts.iter().rev() {
         let (icon, color) = match t.level {
-            Level::Info => ("ℹ", theme.info),
-            Level::Success => ("✓", theme.success),
-            Level::Warning => ("⚠", theme.warning),
-            Level::Error => ("✗", theme.error),
+            Level::Info => (icons::get().info, theme.info),
+            Level::Success => (icons::get().ok, theme.success),
+            Level::Warning => (icons::get().warning, theme.warning),
+            Level::Error => (icons::get().error, theme.error),
         };
         let text = truncate(&t.text.replace('\n', " "), (screen.width as usize).saturating_sub(12).min(70));
         let w = text.width() as u16 + 5;

@@ -92,6 +92,11 @@ impl Session {
         eprintln!("{}", self.palette.error(text));
     }
 
+    /// `err` with the error icon in front.
+    fn fail(&self, text: &str) {
+        self.err(&format!("{} {text}", crate::icons::get().error));
+    }
+
     pub fn prompt_info(&self) -> PromptInfo {
         let info = self.conn.info();
         let backend = match self.conn.backend() {
@@ -115,6 +120,7 @@ impl Session {
         };
         PromptInfo {
             backend,
+            backend_icon: crate::icons::get().backend(self.conn.backend(), info.is_mariadb),
             user,
             host,
             port,
@@ -231,13 +237,13 @@ impl Session {
     pub fn run_statement(&mut self, sql: &str, vertical: bool) -> bool {
         let backend = self.conn.backend();
         if self.readonly && !classify::is_read_only(sql, backend) {
-            self.err("✗ Read-only mode: statement refused (use \\readonly off to allow writes)");
+            self.fail("Read-only mode: statement refused (use \\readonly off to allow writes)");
             self.last = Some((Duration::ZERO, false));
             return false;
         }
         if let Some(d) = classify::destructive(sql, backend, &self.config.main.destructive_warning)
             && self.interactive && std::io::stdin().is_terminal() {
-                eprintln!("{} {}", self.palette.warning("⚠ Destructive statement:"), self.palette.warning(&d.reason));
+                eprintln!("{} {}", self.palette.warning(&format!("{} Destructive statement:", crate::icons::get().warning)), self.palette.warning(&d.reason));
                 eprintln!("  {}", render_sql(&truncate_sql(sql, 400), backend, &self.palette));
                 if !self.confirm(&self.palette.warning("Do you want to proceed?")) {
                     self.msg(&self.palette.muted("Aborted."));
@@ -466,7 +472,7 @@ impl Session {
             }
             Ok(None) => {}
             Err(e) => {
-                self.err(&format!("✗ {e}"));
+                self.fail(&e.to_string());
                 self.last = Some((started.elapsed(), false));
                 return Flow::Continue;
             }
@@ -520,7 +526,7 @@ impl Session {
             }
             Special::Tee { path, overwrite } => match self.sinks.tee(&path, overwrite) {
                 Ok(()) => self.msg(&p.muted(&format!("Logging results to {path}."))),
-                Err(e) => self.err(&format!("✗ {path}: {e}")),
+                Err(e) => self.fail(&format!("{path}: {e}")),
             },
             Special::NoTee => {
                 self.sinks.notee();
@@ -528,7 +534,7 @@ impl Session {
             }
             Special::Once { path, overwrite } => {
                 if let Err(e) = self.sinks.once(&path, overwrite) {
-                    self.err(&format!("✗ {path}: {e}"));
+                    self.fail(&format!("{path}: {e}"));
                 }
             }
             Special::PipeOnce { command } => self.sinks.pipe_once(&command),
@@ -538,14 +544,14 @@ impl Session {
                 let text = query.or_else(|| self.last_query.clone()).unwrap_or_default();
                 match arboard::Clipboard::new().and_then(|mut c| c.set_text(text)) {
                     Ok(()) => self.msg(&p.muted("Copied to clipboard.")),
-                    Err(e) => self.err(&format!("✗ clipboard unavailable: {e}")),
+                    Err(e) => self.fail(&format!("clipboard unavailable: {e}")),
                 }
             }
             Special::Watch { seconds, clear, query } => {
                 let q = query.or_else(|| self.last_query.clone());
                 match q {
                     Some(q) => self.watch(&q, seconds, clear),
-                    None => self.err("✗ nothing to watch: give a query or run one first"),
+                    None => self.fail("nothing to watch: give a query or run one first"),
                 }
             }
             Special::Favorite { name: None, .. } => self.list_favorites(),
@@ -556,7 +562,7 @@ impl Session {
                     }
                     self.run_sql(&sql, None);
                 }
-                Err(e) => self.err(&format!("✗ {e}")),
+                Err(e) => self.fail(&e.to_string()),
             },
             Special::FavoriteSave { name, query } => {
                 self.favorites.queries.insert(name.clone(), query);
@@ -565,14 +571,14 @@ impl Session {
                         self.msg(&p.success(&format!("Saved favorite '{name}'.")));
                         self.sync_extras();
                     }
-                    Err(e) => self.err(&format!("✗ {e}")),
+                    Err(e) => self.fail(&e.to_string()),
                 }
             }
             Special::FavoriteDelete { name } => {
                 if self.favorites.queries.remove(&name).is_none() {
-                    self.err(&format!("✗ no favorite named '{name}'"));
+                    self.fail(&format!("no favorite named '{name}'"));
                 } else if let Err(e) = self.favorites.save() {
-                    self.err(&format!("✗ {e}"));
+                    self.fail(&e.to_string());
                 } else {
                     self.msg(&p.muted(&format!("Deleted favorite '{name}'.")));
                     self.sync_extras();
@@ -585,7 +591,7 @@ impl Session {
             Special::System { command } => {
                 let status = std::process::Command::new("sh").arg("-c").arg(&command).status();
                 if let Err(e) = status {
-                    self.err(&format!("✗ {e}"));
+                    self.fail(&e.to_string());
                 }
             }
             Special::Echo(text) => self.msg(&text),
@@ -605,7 +611,7 @@ impl Session {
                     self.set_theme(theme);
                     self.msg(&self.palette.success(&format!("Theme set to {name}.")));
                 }
-                Err(e) => self.err(&format!("✗ {e}")),
+                Err(e) => self.fail(&e.to_string()),
             },
             Special::Format { query } => {
                 let q = query.or_else(|| self.last_query.clone()).unwrap_or_default();
@@ -631,7 +637,7 @@ impl Session {
             Special::Export { format, path, query } => self.export(format, &path, &query),
             Special::LoadExtension { path } => match self.rt.block_on(self.conn.load_extension(&path)) {
                 Ok(()) => self.msg(&p.muted(&format!("Loaded {path}."))),
-                Err(e) => self.err(&format!("✗ {e}")),
+                Err(e) => self.fail(&e.to_string()),
             },
             Special::History(n) => {
                 let n = n.unwrap_or(20);
@@ -645,7 +651,7 @@ impl Session {
                 self.out(&s);
             }
             Special::Llm { question } => self.ask_llm(&question),
-            other => self.err(&format!("✗ {other:?} is not available here")),
+            other => self.fail(&format!("{other:?} is not available here")),
         }
         Flow::Continue
     }
@@ -656,7 +662,7 @@ impl Session {
         let version = self.conn.info().version.clone();
         let llm = self.config.llm.clone();
         if let Err(e) = crate::llm::check(&llm) {
-            self.err(&format!("✗ {e}"));
+            self.fail(&e.to_string());
             return;
         }
         eprintln!("{}", p.muted(&format!("Asking {}…", crate::llm::describe(&llm))));
@@ -670,7 +676,7 @@ impl Session {
                 self.msg(&p.muted("Review the query below and press Enter to run it."));
                 self.pending_buffer = Some(a.sql);
             }
-            Err(e) => self.err(&format!("✗ {e}")),
+            Err(e) => self.fail(&e.to_string()),
         }
     }
 
@@ -694,7 +700,7 @@ impl Session {
                 self.readonly = on;
                 self.msg(&self.palette.muted(&format!("Read-only mode {}.", if on { "on" } else { "off" })));
             }
-            Err(e) => self.err(&format!("✗ {e}")),
+            Err(e) => self.fail(&e.to_string()),
         }
     }
 
@@ -780,7 +786,7 @@ impl Session {
                     Some(spec)
                 }
                 Err(e) => {
-                    self.err(&format!("✗ {e:#}"));
+                    self.fail(&format!("{e:#}"));
                     return;
                 }
             }
@@ -795,7 +801,7 @@ impl Session {
                     Some(s)
                 }
                 Err(e) => {
-                    self.err(&format!("✗ {e}"));
+                    self.fail(&e.to_string());
                     return;
                 }
             }
@@ -819,7 +825,7 @@ impl Session {
                     self.msg(&p.success(&format!("Connected to {}", self.spec.display_url())));
                     self.refresh_catalog();
                 }
-                Err(e) => self.err(&format!("✗ {e:#}")),
+                Err(e) => self.fail(&format!("{e:#}")),
                 }
             }
             None => match self.rt.block_on(self.conn.change_database(&target)) {
@@ -828,7 +834,7 @@ impl Session {
                     self.msg(&p.success(&format!("You are now connected to database \"{target}\"")));
                     self.refresh_catalog();
                 }
-                Err(e) => self.err(&format!("✗ {e}")),
+                Err(e) => self.fail(&e.to_string()),
             },
         }
     }
@@ -841,7 +847,7 @@ impl Session {
                 let path = std::env::temp_dir().join(format!("quarry-{}.sql", std::process::id()));
                 let initial = query.or_else(|| self.last_query.clone()).unwrap_or_default();
                 if let Err(e) = write_private(&path, &initial) {
-                    self.err(&format!("✗ {e}"));
+                    self.fail(&e.to_string());
                     return;
                 }
                 (path, true)
@@ -853,10 +859,10 @@ impl Session {
         match status {
             Ok(s) if s.success() => match std::fs::read_to_string(&path) {
                 Ok(text) => self.pending_buffer = Some(text.trim_end().to_string()),
-                Err(e) => self.err(&format!("✗ {e}")),
+                Err(e) => self.fail(&e.to_string()),
             },
-            Ok(s) => self.err(&format!("✗ editor exited with {s}")),
-            Err(e) => self.err(&format!("✗ could not start editor '{editor}': {e}")),
+            Ok(s) => self.fail(&format!("editor exited with {s}")),
+            Err(e) => self.fail(&format!("could not start editor '{editor}': {e}")),
         }
         if temp {
             let _ = std::fs::remove_file(&path);
@@ -873,7 +879,7 @@ impl Session {
                 flow
             }
             Err(e) => {
-                self.err(&format!("✗ {}: {e}", p.display()));
+                self.fail(&format!("{}: {e}", p.display()));
                 Flow::Continue
             }
         }
@@ -971,7 +977,7 @@ impl Session {
                 format.name(),
                 human_duration(started.elapsed())
             ))),
-            Err(e) => self.err(&format!("✗ {}: {e}", dest.display())),
+            Err(e) => self.fail(&format!("{}: {e}", dest.display())),
         }
     }
 }
@@ -1073,10 +1079,11 @@ pub fn render_sql(sql: &str, backend: Backend, p: &Palette) -> String {
 
 pub fn format_error(e: &DbError, sql: &str, backend: Backend, p: &Palette) -> String {
     let mut s = String::new();
+    let x = crate::icons::get().error;
     let head = match (&e.code, e.kind) {
-        (_, ErrorKind::Cancelled) => "✗ Cancelled".to_string(),
-        (Some(code), _) => format!("✗ ERROR {code}"),
-        (None, _) => "✗ ERROR".to_string(),
+        (_, ErrorKind::Cancelled) => format!("{x} Cancelled"),
+        (Some(code), _) => format!("{x} ERROR {code}"),
+        (None, _) => format!("{x} ERROR"),
     };
     s.push_str(&p.error(&head));
     if e.kind != ErrorKind::Cancelled || !e.message.is_empty() {

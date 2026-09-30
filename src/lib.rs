@@ -2,6 +2,7 @@ pub mod cli;
 pub mod complete;
 pub mod completions;
 pub mod config;
+pub mod icons;
 pub mod conn;
 pub mod db;
 pub mod llm;

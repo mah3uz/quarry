@@ -786,7 +786,7 @@ impl GridState {
                         pal.header,
                         right_align,
                     );
-                    buf[(x + content_w, y)].set_symbol(if asc { "▲" } else { "▼" }).set_style(pal.sort);
+                    buf[(x + content_w, y)].set_symbol(if asc { crate::icons::get().asc } else { crate::icons::get().desc }).set_style(pal.sort);
                 }
                 _ => draw_text(buf, Rect::new(x + 1, y, content_w, 1), &col.name, pal.header, pal.header, right_align),
             }
@@ -807,10 +807,10 @@ impl GridState {
         }
         let x0 = area.x + digits + 3;
         if hidden_left && x0 < right {
-            buf[(x0, ry)].set_symbol("◂").set_style(pal.hint);
+            buf[(x0, ry)].set_symbol(crate::icons::get().more_left).set_style(pal.hint);
         }
         if hidden_right && right > x0 + 1 {
-            buf[(right - 1, ry)].set_symbol("▸").set_style(pal.hint);
+            buf[(right - 1, ry)].set_symbol(crate::icons::get().more_right).set_style(pal.hint);
         }
     }
 
@@ -1283,13 +1283,13 @@ mod tests {
         let row: Row = (0..12).map(|i| text(&format!("value_{i:02}"))).collect();
         g.set_data(cols, vec![row; 5]);
         let buf = draw(&mut g, 50, 8);
-        assert!(!line(&buf, 1).contains('◂'));
-        assert!(line(&buf, 1).contains('▸'));
+        assert!(!line(&buf, 1).contains(crate::icons::get().more_left));
+        assert!(line(&buf, 1).contains(crate::icons::get().more_right));
 
         press(&mut g, &[KeyCode::End]);
         let buf = draw(&mut g, 50, 8);
         assert!(line(&buf, 0).contains("column_11"), "{}", line(&buf, 0));
-        assert!(line(&buf, 1).contains('◂'));
+        assert!(line(&buf, 1).contains(crate::icons::get().more_left));
         assert!(!line(&buf, 0).contains("column_00"));
 
         press(&mut g, &[KeyCode::Char('h'); 6]);
@@ -1299,7 +1299,7 @@ mod tests {
         press(&mut g, &[KeyCode::Char('0')]);
         let buf = draw(&mut g, 50, 8);
         assert!(line(&buf, 0).contains("column_00"));
-        assert!(!line(&buf, 1).contains('◂'));
+        assert!(!line(&buf, 1).contains(crate::icons::get().more_left));
     }
 
     #[test]
@@ -1437,7 +1437,7 @@ mod tests {
 
         g.set_sort(1, false);
         let buf = draw(&mut g, 80, 8);
-        assert!(line(&buf, 0).contains('▼'));
+        assert!(line(&buf, 0).contains(crate::icons::get().desc));
 
         let click = mouse(MouseEventKind::Down(MouseButton::Left), name_x, 4);
         assert_eq!(g.handle_mouse(click, area), GridEvent::Handled);

@@ -425,14 +425,15 @@ pub struct Tab {
 
 impl Tab {
     pub fn icon(&self) -> &'static str {
+        let ic = crate::icons::get();
         match self.kind {
-            TabKind::Query(_) => "⌘",
-            TabKind::Table(_) => "▦",
-            TabKind::Structure(_) => "⚙",
-            TabKind::Activity(_) => "⚡",
-            TabKind::Text(_) => "≡",
-            TabKind::Explain(_) => "⊿",
-            TabKind::History(_) => "↺",
+            TabKind::Query(_) => ic.query,
+            TabKind::Table(_) => ic.table,
+            TabKind::Structure(_) => ic.structure,
+            TabKind::Activity(_) => ic.activity,
+            TabKind::Text(_) => ic.text,
+            TabKind::Explain(_) => ic.explain,
+            TabKind::History(_) => ic.history,
         }
     }
 
@@ -495,7 +496,7 @@ pub fn highlight_spans(line: &str, backend: Backend, theme: &Theme) -> Vec<Span<
 /// Explain view: tree with cost/time bars relative to the root.
 pub fn render_explain(tab: &mut ExplainTab, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
     if let Some(e) = &tab.error {
-        buf.set_stringn(area.x + 1, area.y, format!("✗ {e}"), area.width as usize - 1, Style::default().fg(theme.error));
+        buf.set_stringn(area.x + 1, area.y, format!("{} {e}", crate::icons::get().error), area.width as usize - 1, Style::default().fg(theme.error));
         return;
     }
     if tab.flat.is_empty() {
