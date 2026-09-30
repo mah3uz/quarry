@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Writes logo.svg and banner.svg in the repo root. Edit the mascot here, not in the generated files.
+# Writes logo.svg and banner.svg (and the docs site's copies). Edit the mascot here, not in the output.
 #
 # Every animation leaves the element's own attributes at the resting pose, so renderers without SMIL
 # support (librsvg, image converters, PNG exports) draw the still artwork.
@@ -355,7 +355,16 @@ def banner():
 """
 
 
+OUTPUTS = {
+    "logo.svg": logo,
+    "banner.svg": banner,
+    # The docs site can't read files outside docs/, so it gets its own copies.
+    "docs/public/logo.svg": logo,
+    "docs/public/favicon.svg": logo,
+    "docs/src/assets/logo.svg": logo,
+}
+
 if __name__ == "__main__":
-    for name, svg in (("logo.svg", logo()), ("banner.svg", banner())):
-        (ROOT / name).write_text(svg)
+    for name, render in OUTPUTS.items():
+        (ROOT / name).write_text(render())
         print(f"wrote {name}")

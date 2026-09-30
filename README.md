@@ -228,6 +228,9 @@ history in `~/.local/share/quarry/`, readable only by you.
 
 ## Development
 
+Common tasks are in the `justfile`; run [`just`](https://github.com/casey/just) to list them
+(`just check`, `just release`, `just docs`, …). Or use Cargo directly:
+
 ```
 cargo test                    # unit + integration tests
 QUARRY_TEST_PG=postgres://postgres@127.0.0.1/postgres QUARRY_TEST_MYSQL=mysql://root@127.0.0.1 cargo test
@@ -237,5 +240,8 @@ The integration tests create their own `quarry_test_*` databases and drop them a
 server is unreachable, its tests are skipped.
 
 `logo.svg` and `banner.svg` are generated: edit the mascot in `scripts/gen_art.py` and run
-`python3 scripts/gen_art.py`. The animations leave every shape at its resting pose, so renderers
+`just art` (or `python3 scripts/gen_art.py`). The animations leave every shape at its resting pose, so renderers
 without SVG animation still draw the static artwork.
+
+The documentation site lives in `docs/` (Astro Starlight). `just docs` previews it; see
+[`docs/README.md`](docs/README.md) for deploying it to Cloudflare Pages or Netlify.

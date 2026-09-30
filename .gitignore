@@ -1,4 +1,28 @@
 /.claude/
-/target/
+
+# IDE / editor
+.vscode/
+.idea/
+*.iml
+.fleet/
+.zed/
 *.swp
+*~
+.DS_Store
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Release builds
+/dist/
+
+# Docs site
+docs/node_modules/
+docs/dist/
+docs/.astro/
+
+# Local scratch data
 /demo.db
+*.db-journal
+.env
