@@ -1,5 +1,9 @@
 pub mod favorites;
 pub mod introspect;
+mod parse;
+mod registry;
+#[cfg(test)]
+mod tests;
 
 use crate::db::{Backend, ResultSet};
 use crate::output::{Expanded, TableFormat};
@@ -143,16 +147,26 @@ pub struct Titled {
 }
 
 pub fn registry() -> &'static [CommandSpec] {
-    todo!()
+    registry::COMMANDS
+}
+
+/// Finds a command by any of its names (`dt`, `\dt`, `.tables`, `help`).
+pub fn lookup(name: &str) -> Option<&'static CommandSpec> {
+    registry::lookup(name)
+}
+
+/// `\?` output: every command for `backend` grouped by category, or details for one `topic`.
+pub fn help_text(topic: Option<&str>, backend: Backend) -> String {
+    registry::help_text(topic, backend)
 }
 
 /// `None` → not a special command (treat as SQL). `Some(Err)` → special command with bad arguments.
 /// Also recognises trailing suffix forms: `select 1 \e`, `select 1 \clip`, `select 1 \watch 2`.
-pub fn parse(_input: &str, _backend: Backend) -> Option<Result<Special, String>> {
-    todo!()
+pub fn parse(input: &str, backend: Backend) -> Option<Result<Special, String>> {
+    parse::parse(input, backend)
 }
 
 /// Whether the REPL should submit `input` on Enter without a statement terminator.
-pub fn submits_immediately(_input: &str, _backend: Backend) -> bool {
-    todo!()
+pub fn submits_immediately(input: &str, backend: Backend) -> bool {
+    parse::parse(input, backend).is_some()
 }
