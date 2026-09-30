@@ -90,6 +90,9 @@ pub struct Args {
     /// Save this connection under NAME in the config
     #[arg(long, value_name = "NAME")]
     pub save: Option<String>,
+    /// Choose how \llm reaches a model (API key, Claude Code, Codex, …) and save it
+    #[arg(long)]
+    pub setup_llm: bool,
     #[arg(long)]
     pub no_color: bool,
     /// Skip the intro banner and goodbye message

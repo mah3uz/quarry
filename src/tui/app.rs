@@ -1123,15 +1123,15 @@ impl App {
         let catalog = conn.and_then(|c| c.catalog.clone());
         let backend = conn.map(|c| c.backend()).unwrap_or(Backend::Postgres);
         let version = conn.map(|c| c.info.version.clone()).unwrap_or_default();
-        let model = self.config.main.llm_model.clone();
+        let llm = self.config.llm.clone();
         if let TabKind::Query(q) = &mut self.tabs[idx].kind {
             q.running = Some(Running { started: Instant::now(), total: 1, current: 0 });
-            q.log(MessageKind::Info, format!("✦ Asking {model}: {question}"));
+            q.log(MessageKind::Info, format!("✦ Asking {}: {question}", crate::llm::describe(&llm)));
         }
         let tx = self.tx.clone();
         self.rt.spawn_blocking(move || {
-            let req = crate::llm::Request { question: &question, backend, server_version: &version, catalog: catalog.as_deref(), model: &model };
-            let result = crate::llm::ask(&req);
+            let req = crate::llm::Request { question: &question, backend, server_version: &version, catalog: catalog.as_deref() };
+            let result = crate::llm::ask(&llm, &req);
             let _ = tx.send(Event::App(AppEvent::Llm { tab: tab_id, result }));
         });
     }
@@ -1146,7 +1146,7 @@ impl App {
                     q.log(MessageKind::Info, a.explanation.clone());
                 }
                 if a.sql.is_empty() {
-                    self.toast(Level::Info, "Claude replied without SQL — see Messages");
+                    self.toast(Level::Info, "The model replied without SQL — see Messages");
                     return;
                 }
                 let r = q.editor.current_statement_range();
@@ -2234,7 +2234,7 @@ impl App {
         add("Explain", "F7", Command::Explain(false));
         add("Explain analyze", "Shift+F7", Command::Explain(true));
         add("Format SQL", "Alt+F", Command::FormatSql);
-        add("Ask Claude to write SQL…", "\\llm", Command::AskLlm);
+        add("Ask the model to write SQL…", "\\llm", Command::AskLlm);
         add("New query tab", "Ctrl+T", Command::NewQuery);
         add("Close tab", "Ctrl+W", Command::CloseTab);
         add("Next tab", "Alt+→", Command::NextTab);
@@ -2505,7 +2505,7 @@ impl App {
                     }
                 };
                 self.overlay = Some(Overlay::Prompt(Prompt {
-                    title: "Ask Claude".into(),
+                    title: "Ask the model".into(),
                     hint: "Describe the data you want; the SQL is written into the editor for you to review.".into(),
                     input: Input::new("").with_placeholder("e.g. top 10 customers by revenue this month"),
                     purpose: PromptPurpose::Llm { tab },

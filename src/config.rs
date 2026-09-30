@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct Config {
     pub main: MainConfig,
+    /// How `\llm` reaches a model; `quarry --setup-llm` writes it.
+    pub llm: LlmConfig,
     /// Saved connections, used as `quarry <name>` and shown in the TUI connection manager.
     pub connections: BTreeMap<String, SavedConnection>,
     #[serde(skip)]
@@ -55,8 +57,6 @@ pub struct MainConfig {
     pub log_queries: bool,
     pub mouse: bool,
     pub auto_refresh_catalog: bool,
-    /// Claude model used by \llm.
-    pub llm_model: String,
 }
 
 impl Default for MainConfig {
@@ -89,8 +89,23 @@ impl Default for MainConfig {
             log_queries: false,
             mouse: true,
             auto_refresh_catalog: true,
-            llm_model: crate::llm::DEFAULT_MODEL.into(),
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LlmConfig {
+    pub provider: crate::llm::Provider,
+    /// Empty means the CLI's own default (claude-code, codex).
+    pub model: String,
+    /// Endpoint for the OpenAI-compatible provider, e.g. `http://localhost:11434/v1`.
+    pub base_url: Option<String>,
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        LlmConfig { provider: crate::llm::Provider::Anthropic, model: crate::llm::DEFAULT_MODEL.into(), base_url: None }
     }
 }
 
@@ -351,8 +366,20 @@ mouse = true
 # Reload completion metadata automatically after CREATE / ALTER / DROP.
 auto_refresh_catalog = true
 
-# Claude model used by \llm / \ai (reads ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN).
-llm_model = "claude-opus-5-5"
+[llm]
+# How \llm / \ai reaches a model. `quarry --setup-llm` walks you through it.
+#   anthropic     Claude API. Key from ANTHROPIC_API_KEY, or saved by --setup-llm.
+#   openai        Any OpenAI-compatible API (OpenAI, OpenRouter, Ollama, LM Studio, …); set base_url.
+#   claude-code   Your installed `claude` CLI, using its own login.
+#   codex         Your installed `codex` CLI, using its own login.
+# API keys saved by --setup-llm go in credentials.toml in the data directory, not in this file.
+provider = "anthropic"
+
+# Model name. Empty uses the CLI's own default (claude-code, codex).
+model = "claude-opus-5-5"
+
+# Endpoint for the openai provider.
+# base_url = "http://localhost:11434/v1"
 
 # Saved connections: `quarry <name>`, `\c <name>`, and the TUI connection manager.
 #
@@ -384,10 +411,13 @@ mod tests {
 
     #[test]
     fn default_file_documents_every_option() {
-        let text = toml::to_string(&MainConfig { pager: Some("x".into()), ..Default::default() }).unwrap();
-        let table: toml::Table = toml::from_str(&text).unwrap();
-        for key in table.keys() {
-            assert!(DEFAULT_CONFIG.contains(&format!("{key} =")), "option `{key}` is not documented");
+        let main = toml::to_string(&MainConfig { pager: Some("x".into()), ..Default::default() }).unwrap();
+        let llm = toml::to_string(&LlmConfig { base_url: Some("x".into()), ..Default::default() }).unwrap();
+        for text in [main, llm] {
+            let table: toml::Table = toml::from_str(&text).unwrap();
+            for key in table.keys() {
+                assert!(DEFAULT_CONFIG.contains(&format!("{key} =")), "option `{key}` is not documented");
+            }
         }
     }
 

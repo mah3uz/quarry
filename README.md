@@ -83,7 +83,7 @@ TLS modes are `disable`, `prefer` (the default), `require`, `verify-ca` and `ver
 | Query | `\e` (external editor) `\i file` `\watch 2 query` `\format` `\explain [analyze] query` `\export csv file query` `\clip` `delimiter //` |
 | Favourites | `\f` `\f name args…` `\fs name query` `\fd name`, with `$1`, `$*` and `${name}` placeholders |
 | Session | `\c db-or-url` `use db` `\readonly` `\theme name` `\prompt fmt` `\refresh` `\! shell` `\tui` `\q` |
-| AI | `\llm question` (or `\ai`): Claude writes SQL for your schema and puts it in the prompt for review. It never runs by itself. |
+| AI | `\llm question` (or `\ai`): a model writes SQL for your schema and puts it in the prompt for review. It never runs by itself. |
 
 Output formats: `rounded` (the default), `psql`, `ascii`, `unicode`, `double`, `minimal`, `plain`,
 `simple`, `markdown`, `csv`, `tsv`, `json`, `jsonl`, `html`, `vertical`, `sql-insert` and `sql-update`.
@@ -116,17 +116,88 @@ Launch it with `quarry --tui <target>`, with `\tui` from the REPL, or with plain
 | Everything else | Command palette (`Ctrl+P`), go-to-table (`Ctrl+G`), live theme picker (`Ctrl+Y`), history (`Ctrl+R`), favourites, open/save `.sql` files, export results, commit/rollback, several connections at once, mouse support. |
 
 `F1` shows every shortcut. Focus moves with `F6` (explorer → editor → results) or `Alt+0` for the
-explorer. `\llm` works in the editor too, and the palette has "Ask Claude to write SQL…".
+explorer. `\llm` works in the editor too, and the palette has "Ask the model to write SQL…".
 
-## Asking Claude for SQL
+## Asking a model for SQL
 
-`\llm show the ten customers who spent the most last month` sends your question to Claude,
-together with the schema (tables, columns, keys). The request uses `claude-opus-5-5` by default;
-set `llm_model` in the config to change it. The generated statement goes into the prompt (REPL) or the editor
-(TUI) for you to read and run. It needs `ANTHROPIC_API_KEY`, or `ANTHROPIC_AUTH_TOKEN`; no data rows
-are sent, only the schema and your question. If Claude declines a request on safety grounds,
-it is retried server-side on a fallback model (`fallbacks: "default"`), and a final refusal is shown
-as an error.
+`\llm show the ten customers who spent the most last month` (or `\ai …`) asks a model to write SQL
+for the database you're connected to. The statement goes into the prompt (REPL) or the editor (TUI)
+for you to read and run; it never runs by itself. In the TUI, the palette has "Ask the model to
+write SQL…".
+
+Only your question, the schema (tables, columns, primary and foreign keys), the server version, the
+current database and the search path are sent. No rows are ever sent.
+
+### Setting it up
+
+Run the setup once:
+
+```sh
+quarry --setup-llm
+```
+
+It asks which provider to use and the questions that apply to it, sends a small test request, and
+saves the answers. `\llm` then keeps using them until you run the setup again. Press `Ctrl+C` at any
+step to leave your settings unchanged.
+
+| Provider | Choose it when | Before running the setup |
+|---|---|---|
+| **Anthropic API** | You have an Anthropic API key | Create a key in the [Claude Console](https://platform.claude.com/) |
+| **Claude Code** | You use Claude Code and want `\llm` to use its login | Install `claude` and sign in (`claude auth login`) |
+| **OpenAI-compatible API** | You use OpenAI, OpenRouter, a local Ollama or LM Studio, or any other `/chat/completions` server | Have the key ready, or start the local server |
+| **Codex** | You use Codex and want `\llm` to use its login | Install `codex` and sign in (`codex login`) |
+
+What each provider asks for:
+
+- **Anthropic API:** your key, then the model (Claude Opus 5.5 by default, or Sonnet 5.5, Haiku 4.5
+  or any other model id).
+- **Claude Code:** the model (Claude Code's default, or Opus, Sonnet or Haiku). quarry runs
+  `claude -p` with no tools, so it can only reply with text.
+- **OpenAI-compatible API:** the server (OpenAI, OpenRouter, Ollama, LM Studio, or any base URL),
+  a key if the server needs one, and a model picked from the server's own list (type to filter).
+- **Codex:** the model (empty for Codex's default). quarry runs `codex exec` in a read-only sandbox.
+
+Claude Code and Codex run from a temporary folder, so they don't read your project's `CLAUDE.md` or
+`AGENTS.md`. Usage counts against whichever account that CLI is signed in to.
+
+### API keys
+
+Keys typed into the setup are saved in `~/.local/share/quarry/credentials.toml`, readable only by
+you. They are kept out of `~/.config/quarry/`, so backing up or sharing your dotfiles doesn't share
+your keys. Each key is tied to its server: a key saved for OpenRouter is never sent to Ollama or
+anywhere else.
+
+- **Anthropic:** `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`) in the environment takes precedence
+  over a saved key, so you can also skip saving a key and just export it. `ANTHROPIC_BASE_URL`
+  points requests at a gateway.
+- **OpenAI-compatible:** only the saved key is used. `OPENAI_API_KEY` is deliberately not read,
+  because the server is configurable and that key could otherwise be sent to a different service.
+- **Removing a key:** delete its line from `credentials.toml`.
+
+### Editing the settings by hand
+
+The setup writes the `[llm]` section of `config.toml`. You can also edit it directly:
+
+```toml
+[llm]
+provider = "anthropic"      # anthropic | openai | claude-code | codex
+model = "claude-opus-5-5"   # empty = the CLI's default (claude-code, codex)
+# base_url = "http://localhost:11434/v1"   # openai provider only
+```
+
+Running `--setup-llm` rewrites `config.toml` from quarry's settings, so comments you added are lost.
+The previous file is kept as `config.toml.bak`.
+
+### Troubleshooting
+
+| Message | What to do |
+|---|---|
+| `no Anthropic API key` | Run `quarry --setup-llm`, or export `ANTHROPIC_API_KEY` |
+| `` `claude` is not on PATH `` / `` `codex` is not on PATH `` | Install the CLI, or run the setup and pick another provider |
+| `` `claude` failed `` / `` `codex` failed `` | Usually not signed in: run `claude auth login` or `codex login` |
+| `Could not list models` during setup | The server isn't running or the key is wrong. You can still type a model name |
+| A timeout (requests give up after 180 s) | The model or local server is too slow. Try a smaller model |
+| `Claude declined this request` | With the Anthropic API, a declined request is already retried on a fallback model (`fallbacks: "default"`), so this is the final answer. Rephrase the question |
 
 ## Themes
 
@@ -150,7 +221,7 @@ Colours fall back to 256 or 16 colours on terminals without truecolor, and `NO_C
 
 `~/.config/quarry/config.toml` is created with comments on first run. It covers the theme, table
 format, null string, row limit, pager, destructive-warning rules, prompt format, keyword casing,
-vi mode, completion behaviour and saved connections. Favourites are kept in `favorites.toml`, and
+vi mode, completion behaviour, the `\llm` provider and saved connections. Favourites are kept in `favorites.toml`, and
 history in `~/.local/share/quarry/`, readable only by you.
 
 ## Development

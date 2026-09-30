@@ -652,20 +652,14 @@ impl Session {
         let p = self.palette.clone();
         let catalog = self.current_catalog();
         let version = self.conn.info().version.clone();
-        let model = self.config.main.llm_model.clone();
-        if let Err(e) = crate::llm::credentials_available() {
+        let llm = self.config.llm.clone();
+        if let Err(e) = crate::llm::check(&llm) {
             self.err(&format!("✗ {e}"));
             return;
         }
-        eprintln!("{}", p.muted(&format!("Asking {model}…")));
-        let req = crate::llm::Request {
-            question,
-            backend: self.conn.backend(),
-            server_version: &version,
-            catalog: catalog.as_deref(),
-            model: &model,
-        };
-        match crate::llm::ask(&req) {
+        eprintln!("{}", p.muted(&format!("Asking {}…", crate::llm::describe(&llm))));
+        let req = crate::llm::Request { question, backend: self.conn.backend(), server_version: &version, catalog: catalog.as_deref() };
+        match crate::llm::ask(&llm, &req) {
             Ok(a) if a.sql.is_empty() => self.msg(&a.explanation),
             Ok(a) => {
                 if !a.explanation.is_empty() {

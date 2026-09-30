@@ -39,6 +39,9 @@ fn real_main(args: Args, rt: &tokio::runtime::Runtime) -> Result<ExitCode> {
         list_connections(&config);
         return Ok(ExitCode::SUCCESS);
     }
+    if args.setup_llm {
+        return quarry::llm::setup::run(&mut config).map(|_| ExitCode::SUCCESS);
+    }
     if let Some(p) = &args.prompt {
         config.main.prompt = p.clone();
     }

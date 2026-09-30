@@ -134,7 +134,7 @@ pub enum Special {
     LoadExtension { path: String },
     /// `\history [n]`
     History(Option<usize>),
-    /// `\llm question`, `\ai question` — ask Claude to write SQL for this database.
+    /// `\llm question`, `\ai question` — ask the configured model to write SQL for this database.
     Llm { question: String },
 }
 

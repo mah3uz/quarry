@@ -27,7 +27,7 @@ pub(super) static COMMANDS: &[CommandSpec] = &[
     cmd(&["\\e", "\\edit"], "\\e [file] | query \\e", "Edit the query buffer (or a file) in $EDITOR.", General, ALL),
     cmd(&["\\i", "source", "\\ir", "\\.", ".read"], "\\i file", "Execute statements from a file.", General, ALL),
     cmd(&["\\history"], "\\history [n]", "Show the last n queries.", General, ALL),
-    cmd(&["\\llm", "\\ai"], "\\llm question", "Ask Claude to write SQL for this database (needs ANTHROPIC_API_KEY); the SQL is put in the prompt for review.", Query, ALL),
+    cmd(&["\\llm", "\\ai"], "\\llm question", "Ask the configured model (quarry --setup-llm) to write SQL for this database; the SQL is put in the prompt for review.", Query, ALL),
     cmd(&["\\theme"], "\\theme [name]", "List themes, or switch to one.", General, ALL),
     cmd(&["\\R", "prompt", "\\prompt"], "\\R [format]", "Show or change the prompt format (\\u \\h \\p \\d \\n \\t \\T \\x).", General, ALL),
     cmd(&["\\refresh", "rehash", "\\#", "\\rehash"], "\\refresh", "Reload the catalog used for completion.", General, ALL),
