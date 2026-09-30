@@ -272,3 +272,14 @@ fn tab_completion_offers_saved_connections_without_passwords_or_side_effects() {
     assert!(!dir.join("data").exists(), "completing must not create the data directory");
     assert_eq!(std::fs::read_dir(dir.join("config")).unwrap().count(), 1, "nor write anything next to the config");
 }
+
+/// `--default-config` is meant to be saved as the config file as-is, so it must parse to exactly
+/// the built-in defaults and must not depend on (or read) an existing config.
+#[test]
+fn default_config_prints_a_file_that_parses_to_the_defaults() {
+    let out = quarry(&["--default-config", "--config", "/nonexistent/quarry.toml"], None);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("[main]") && text.contains("# [keys]"));
+    assert_eq!(quarry::config::Config::parse(&text).unwrap(), quarry::config::Config::default());
+}

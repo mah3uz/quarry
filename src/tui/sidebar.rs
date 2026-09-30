@@ -9,6 +9,7 @@ use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Stateful
 use unicode_width::UnicodeWidthStr;
 
 use super::widgets::input::{Input, InputEvent};
+use super::tabs::Scope;
 use super::worker::ConnId;
 use crate::db::{Backend, Catalog, FunctionKind, RelKind, Relation};
 use crate::icons;
@@ -89,6 +90,8 @@ pub enum Action {
     ShowFunction { conn: ConnId, schema: String, name: String },
     NewConnection,
     Disconnect(ConnId),
+    /// A query tab for the database or schema around the selection (`None`: the connection's own).
+    NewConsole { conn: ConnId, scope: Option<Scope>, database: Option<String> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,6 +279,28 @@ impl Sidebar {
 
     pub fn selected_conn(&self) -> Option<ConnId> {
         self.selected_node().map(|n| n.conn)
+    }
+
+    /// Where a query console for the selection should run: the database or schema the selected node
+    /// is in. `database` is set for another PostgreSQL database, which needs its own connection.
+    pub fn console_target(&self) -> Option<Action> {
+        let path = self.rows.get(self.selected)?.path.clone();
+        let root = self.roots.get(*path.first()?)?;
+        let NodeKind::Connection { backend, .. } = root.kind else { return None };
+        let mut scope = None;
+        let mut database = None;
+        let mut nodes = &self.roots;
+        for &i in &path {
+            let n = nodes.get(i)?;
+            match &n.kind {
+                NodeKind::Database { name, current: false } => database = Some(name.clone()),
+                NodeKind::Schema { name, database: Some(_) } if backend == Backend::MySql => scope = Some(Scope::Database(name.clone())),
+                NodeKind::Schema { name, database: None } if backend == Backend::Postgres => scope = Some(Scope::Schema(name.clone())),
+                _ => {}
+            }
+            nodes = &n.children;
+        }
+        Some(Action::NewConsole { conn: root.conn, scope, database })
     }
 
     pub fn select_connection(&mut self, conn: ConnId) {
@@ -467,6 +492,7 @@ impl Sidebar {
             }
             KeyCode::Char('r') | KeyCode::F(5) => return self.selected_conn().map(Action::Refresh),
             KeyCode::Char('n') => return Some(Action::NewConnection),
+            KeyCode::Char('c') => return self.console_target(),
             KeyCode::Char('x') if ctrl => return self.selected_conn().map(Action::Disconnect),
             KeyCode::Esc if !self.filter_text.is_empty() => {
                 self.filter_text.clear();
@@ -786,6 +812,39 @@ mod tests {
 
     fn labels(s: &Sidebar) -> Vec<String> {
         s.rows.iter().map(|r| s.node_at(&r.path).unwrap().label.clone()).collect()
+    }
+
+    fn select(s: &mut Sidebar, label: &str) {
+        s.selected = labels(s).iter().position(|l| l == label).unwrap_or_else(|| panic!("no {label} in {:?}", labels(s)));
+    }
+
+    /// A console opened from the explorer runs where the selection lives: the table's schema on
+    /// PostgreSQL, its database on MySQL, and another PostgreSQL database over its own connection.
+    #[test]
+    fn console_target_follows_the_selection() {
+        let mut s = Sidebar::default();
+        s.set_connection(0, "pg", "pg", Backend::Postgres, false);
+        let mut cat = catalog();
+        cat.databases = vec!["app".into(), "other".into()];
+        cat.current_database = Some("app".into());
+        s.set_catalog(0, &cat, false);
+        select(&mut s, "users");
+        assert_eq!(s.console_target(), Some(Action::NewConsole { conn: 0, scope: Some(Scope::Schema("public".into())), database: None }));
+        select(&mut s, "Databases");
+        s.toggle(Some(true));
+        select(&mut s, "other");
+        assert_eq!(s.console_target(), Some(Action::NewConsole { conn: 0, scope: None, database: Some("other".into()) }));
+        select(&mut s, "app");
+        assert_eq!(s.console_target(), Some(Action::NewConsole { conn: 0, scope: None, database: None }), "the current database needs nothing");
+
+        let mut my = Sidebar::default();
+        my.set_connection(1, "my", "mysql", Backend::MySql, false);
+        let mut cat = Catalog::empty(Backend::MySql);
+        cat.databases = vec!["shop".into()];
+        cat.schemas = vec![SchemaInfo { name: "shop".into(), relations: vec![], functions: vec![], types: vec![] }];
+        my.set_catalog(1, &cat, false);
+        select(&mut my, "shop");
+        assert_eq!(my.console_target(), Some(Action::NewConsole { conn: 1, scope: Some(Scope::Database("shop".into())), database: None }));
     }
 
     #[test]

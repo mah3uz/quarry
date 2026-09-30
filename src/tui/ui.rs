@@ -8,11 +8,13 @@ use unicode_width::UnicodeWidthStr;
 
 use super::app::{App, Command, Focus, Level, Overlay};
 use super::dialogs::ModalLayout;
+use super::keymap::Action;
 use super::sidebar::compact_count;
 use super::tabs::*;
 use crate::complete::SuggestionKind;
 use crate::db::Backend;
 use super::widgets::bar::Pill;
+use super::widgets::editor::VimMode;
 use crate::icons::{self, Icons};
 use crate::repl::prompt::human_duration;
 use crate::theme::Theme;
@@ -164,7 +166,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
     let focused = app.focus == Focus::Main;
     let spinner = app.spinner();
     let tick = app.spinner;
-    let conn_label = app.active_tab().and_then(|t| t.conn).and_then(|c| app.conn(c)).map(|c| c.short_label()).unwrap_or_default();
+    let conn_label = app.active_tab().map(|t| app.tab_conn_label(t)).unwrap_or_default();
     let backend = app.active_tab().and_then(|t| t.conn).and_then(|c| app.conn(c)).map(|c| c.backend());
     let max_rows = app.max_rows;
     let Some(tab) = app.tabs.get_mut(app.active) else {
@@ -535,6 +537,15 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
     let y = area.y;
     let right_edge = area.x + area.width;
     let (mode, mode_bg) = match (app.focus, app.active_tab().map(|t| &t.kind)) {
+        _ if app.vim_mode().is_some() => {
+            let m = app.vim_mode().unwrap_or_default();
+            let color = match m {
+                VimMode::Normal => theme.accent,
+                VimMode::Insert => theme.success,
+                VimMode::Visual | VimMode::VisualLine => theme.accent2,
+            };
+            (m.label(), color)
+        }
         (Focus::Sidebar, _) => ("EXPLORER", theme.accent2),
         (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => ("EDITOR", theme.accent),
         (_, Some(TabKind::Query(_))) => ("RESULTS", theme.success),
@@ -560,7 +571,8 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
                 Backend::Sqlite => "SQ",
             };
             let logo = ic.backend(c.backend(), c.info.is_mariadb);
-            let label = if logo.is_empty() { format!("{tag} {}", c.short_label()) } else { format!("{logo} {}", c.short_label()) };
+            let place = app.active_tab().map(|t| app.tab_conn_label(t)).unwrap_or_else(|| c.short_label());
+            let label = if logo.is_empty() { format!("{tag} {place}") } else { format!("{logo} {place}") };
             let (fg, bg) = match c.color {
                 Some(color) => (theme.bg, color),
                 None => (theme.fg, theme.highlight),
@@ -610,13 +622,17 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
         p.draw(buf, rx, y, bar, right_edge);
     }
 
+    let k = |a: Action| app.keymap.short(a);
     let hints = match (app.focus, app.active_tab().map(|t| &t.kind)) {
-        (Focus::Sidebar, _) => "⏎ open  s structure  g script  / filter  r refresh",
-        (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => "^⏎ run  F5 all  F7 explain  ^Space complete",
-        (_, Some(TabKind::Query(_))) => "⏎ view  y copy  / search  [ ] results  m messages",
-        (_, Some(TabKind::Table(_))) => "f filter  s sort  e edit  o insert  D delete  ^S apply",
-        _ => "F1 help",
+        (Focus::Sidebar, _) => "⏎ open  c console  s structure  g script  / filter".to_string(),
+        (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => {
+            format!("{} run  {} all  {} explain  {} help", k(Action::RunStatement), k(Action::RunAll), k(Action::Explain), k(Action::Help))
+        }
+        (_, Some(TabKind::Query(_))) => "⏎ view  y copy  / search  [ ] results  m messages".to_string(),
+        (_, Some(TabKind::Table(_))) => "f filter  s sort  e edit  o insert  D delete  ^S apply".to_string(),
+        _ => format!("{} help", k(Action::Help)),
     };
+    let hints = hints.as_str();
     let hw = hints.width() as u16;
     if rx > x + hw + 2 {
         buf.set_string(rx - hw - 2, y, hints, Style::default().fg(theme.muted).bg(bar));
@@ -752,7 +768,7 @@ fn draw_overlay(buf: &mut Buffer, screen: Rect, app: &mut App, theme: &Theme) ->
             let c = p.render(screen, buf, theme);
             (ModalLayout { area: p.area(), ..Default::default() }, c)
         }
-        Overlay::Help(h) => (h.render(screen, buf, theme), None),
+        Overlay::Help(h) => h.render(screen, buf, theme),
         Overlay::Confirm(c) => (c.render(screen, buf, theme), None),
         Overlay::Prompt(p) => p.render(screen, buf, theme),
         Overlay::Text(t) => (t.render(screen, buf, theme), None),

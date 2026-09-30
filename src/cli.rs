@@ -103,6 +103,10 @@ pub struct Args {
     /// Save this connection under NAME in the config
     #[arg(long, value_name = "NAME", add = ArgValueCandidates::new(crate::completions::saved_names))]
     pub save: Option<String>,
+    /// Print the default config, every option commented, to start customizing from
+    /// (e.g. `quarry --default-config > ~/.config/quarry/config.toml`)
+    #[arg(long)]
+    pub default_config: bool,
     /// Choose how \llm reaches a model (API key, Claude Code, Codex, …) and save it
     #[arg(long)]
     pub setup_llm: bool,

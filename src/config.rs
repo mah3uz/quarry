@@ -12,6 +12,8 @@ pub struct Config {
     pub main: MainConfig,
     /// How `\llm` reaches a model; `quarry --setup-llm` writes it.
     pub llm: LlmConfig,
+    /// TUI key bindings by action name, replacing that action's default keys.
+    pub keys: BTreeMap<String, KeyBinding>,
     /// Saved connections, used as `quarry <name>` and shown in the TUI connection manager.
     pub connections: BTreeMap<String, SavedConnection>,
     #[serde(skip)]
@@ -98,6 +100,23 @@ impl Default for MainConfig {
             log_queries: false,
             mouse: true,
             auto_refresh_catalog: true,
+        }
+    }
+}
+
+/// One key (`"ctrl+enter"`) or several (`["f5", "ctrl+shift+enter"]`); `[]` unbinds.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum KeyBinding {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl KeyBinding {
+    pub fn keys(&self) -> Vec<String> {
+        match self {
+            KeyBinding::One(k) => vec![k.clone()],
+            KeyBinding::Many(ks) => ks.clone(),
         }
     }
 }
@@ -403,6 +422,15 @@ model = "claude-opus-5-5"
 
 # Endpoint for the openai provider.
 # base_url = "http://localhost:11434/v1"
+
+# TUI key bindings. Each line replaces an action's default keys: one key or a list, [] to unbind.
+# Keys look like ctrl+enter, alt+f, shift+f7, f5, ctrl+pagedown or ?. Press F1 in the TUI for the
+# list of actions and their current keys.
+#
+# [keys]
+# run_statement = ["ctrl+enter", "ctrl+e"]
+# run_all = "f5"
+# themes = "alt+t"
 
 # Saved connections: `quarry <name>`, `\c <name>`, and the TUI connection manager.
 #

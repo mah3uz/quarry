@@ -1,5 +1,6 @@
 pub mod app;
 pub mod dialogs;
+pub mod keymap;
 pub mod palette;
 pub mod sidebar;
 pub mod tabs;
@@ -16,6 +17,7 @@ use crossterm::event::{
     self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
     KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
+use crossterm::cursor::SetCursorStyle;
 use crossterm::execute;
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::Terminal;
@@ -71,7 +73,14 @@ fn restore_terminal(enhanced: bool) {
     if enhanced {
         let _ = execute!(out, PopKeyboardEnhancementFlags);
     }
-    let _ = execute!(out, DisableMouseCapture, DisableBracketedPaste, LeaveAlternateScreen, crossterm::cursor::Show);
+    let _ = execute!(
+        out,
+        DisableMouseCapture,
+        DisableBracketedPaste,
+        LeaveAlternateScreen,
+        SetCursorStyle::DefaultUserShape,
+        crossterm::cursor::Show
+    );
     let _ = terminal::disable_raw_mode();
 }
 
@@ -111,12 +120,22 @@ pub fn run(rt: &tokio::runtime::Runtime, config: Config, initial: Option<Opened>
         None => app.open_connection_manager(),
     }
 
+    let mut cursor_style = None;
     let frame_budget = Duration::from_millis(16);
     let mut last_draw = Instant::now() - frame_budget;
     let mut dirty = true;
     loop {
         if dirty && last_draw.elapsed() >= frame_budget {
             term.draw(|f| ui::draw(f, &mut app))?;
+            // vim modes read at a glance: a block cursor in normal and visual mode, a bar while inserting
+            let want = app.vim_mode().map(|m| match m {
+                widgets::editor::VimMode::Insert => SetCursorStyle::SteadyBar,
+                _ => SetCursorStyle::SteadyBlock,
+            });
+            if want != cursor_style {
+                let _ = execute!(io::stdout(), want.unwrap_or(SetCursorStyle::DefaultUserShape));
+                cursor_style = want;
+            }
             last_draw = Instant::now();
             dirty = false;
         }

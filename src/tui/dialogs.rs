@@ -267,37 +267,65 @@ fn json_spans(line: &str, theme: &Theme) -> Vec<Span<'static>> {
     spans
 }
 
-pub struct HelpView {
-    pub scroll: usize,
+fn truncate_to(s: &str, width: usize) -> String {
+    if s.width() <= width {
+        return s.to_string();
+    }
+    let mut out = String::new();
+    for c in s.chars() {
+        if out.width() + c.to_string().width() + 1 > width {
+            break;
+        }
+        out.push(c);
+    }
+    out.push('…');
+    out
 }
 
-pub const HELP: &[(&str, &[(&str, &str)])] = &[
+/// One line of the shortcuts list.
+#[derive(Clone, Debug)]
+pub struct HelpRow {
+    pub section: String,
+    pub keys: String,
+    pub what: String,
+    /// The `[keys]` name of a rebindable action; empty for fixed keys.
+    pub action: String,
+}
+
+/// The keyboard shortcuts, filtered as you type.
+pub struct HelpView {
+    rows: Vec<HelpRow>,
+    filter: Input,
+    scroll: usize,
+}
+
+/// Keys handled inside the panes themselves; not configurable.
+pub const FIXED_KEYS: &[(&str, &[(&str, &str)])] = &[
     ("Global", &[
-        ("Ctrl+P", "Command palette"),
-        ("F1 / ?", "This help"),
-        ("Ctrl+O", "Connections"),
-        ("Ctrl+T / Ctrl+W", "New query tab / close tab"),
-        ("Alt+←/→ · Ctrl+PgUp/PgDn", "Previous / next tab"),
         ("Alt+1…9", "Jump to tab"),
-        ("F6 / Shift+F6", "Cycle focus: explorer · editor · results"),
-        ("Alt+0", "Focus explorer"),
-        ("Ctrl+B", "Toggle explorer"),
-        ("Ctrl+G", "Go to table (fuzzy)"),
-        ("Ctrl+Y", "Switch theme (live preview)"),
-        ("Ctrl+R", "Query history"),
-        ("Ctrl+Q", "Quit"),
     ]),
     ("Editor", &[
-        ("Ctrl+Enter · Ctrl+E · Alt+Enter", "Run statement under cursor / selection"),
-        ("F5 · Ctrl+Shift+Enter", "Run everything in the editor"),
-        ("Esc · Ctrl+C (while running)", "Cancel query"),
-        ("Ctrl+Space", "Completion (also as you type)"),
-        ("F7 / Shift+F7", "Explain / explain analyze"),
-        ("Alt+F", "Format SQL"),
-        ("Ctrl+S", "Save query as favorite"),
+        ("Ctrl+Space", "Completion (it also opens as you type)"),
+        ("Tab / Shift+Tab", "Indent / dedent lines"),
         ("Ctrl+/", "Toggle comment"),
         ("Ctrl+Z / Ctrl+Y", "Undo / redo"),
-        ("Ctrl+↑/↓", "Resize editor / results split"),
+        ("Ctrl+D", "Duplicate line"),
+        ("Alt+↑/↓", "Move line up / down"),
+        ("Ctrl+A · Ctrl+C · Ctrl+X · Ctrl+V", "Select all, copy, cut, paste"),
+        ("Esc", "Go to the results"),
+    ]),
+    ("Vim (vi = true)", &[
+        ("i a I A o O", "Insert before / after / at line start / at line end / new line below / above"),
+        ("Esc", "Back to normal mode (again: go to the results)"),
+        ("h j k l · w b e · 0 ^ $ · gg G", "Move; a count repeats: 3j, 2w, 10G"),
+        ("d c y > <  + motion", "Delete, change, yank, indent, dedent: dw, c$, y2j, >G"),
+        ("dd cc yy >> <<", "The whole line (with a count: 3dd)"),
+        ("ciw diw yaw", "Change, delete, yank a word"),
+        ("x X s S D C Y r J", "Delete char, before, substitute, line, to end; replace char; join lines"),
+        ("p P", "Paste after / before (lines go below / above)"),
+        ("u · Ctrl+R", "Undo / redo"),
+        ("v · V", "Visual / visual-line selection, then d c y > <"),
+        ("Ctrl+D / Ctrl+U", "Half a page down / up"),
     ]),
     ("Results grid", &[
         ("hjkl · arrows", "Move"),
@@ -306,14 +334,14 @@ pub const HELP: &[(&str, &[(&str, &str)])] = &[
         ("y / Y", "Copy cells / rows"),
         ("/ · n · N", "Search in results"),
         ("< > =", "Narrow / widen / auto-fit column"),
-        ("s", "Sort by column (table view)"),
         ("[ ]", "Previous / next result set"),
         ("m", "Messages log"),
-        ("Ctrl+X", "Export results to file"),
+        ("i · Esc", "Back to the editor"),
     ]),
     ("Table view", &[
         ("f", "Filter (WHERE clause)"),
         ("F", "Filter by current cell value"),
+        ("s", "Sort by column"),
         ("e / F2", "Edit cell"),
         ("o", "Insert row"),
         ("D / Delete", "Mark rows for deletion"),
@@ -324,44 +352,119 @@ pub const HELP: &[(&str, &[(&str, &str)])] = &[
     ("Explorer", &[
         ("Enter · Space · ←/→", "Open / expand / collapse"),
         ("/", "Filter tree"),
+        ("c", "New query tab for this database"),
         ("s", "Structure of table"),
         ("i", "Insert name into editor"),
         ("g s|i|u|d|c|x|n", "Generate SELECT/INSERT/UPDATE/DELETE/CREATE/DROP/COUNT"),
         ("r", "Refresh"),
         ("n", "New connection"),
     ]),
+    ("Mouse", &[
+        ("Click", "Focus a pane, pick a tab, a row, a button or a list item"),
+        ("Middle click on a tab", "Close it"),
+        ("Drag a border", "Resize the explorer or the editor / results split"),
+        ("Wheel", "Scroll; in lists, move the selection"),
+        ("Click outside a dialog", "Close it"),
+    ]),
 ];
 
 impl HelpView {
+    /// `configurable` lists the rebindable actions with their current keys; the fixed keys follow.
+    pub fn new(configurable: Vec<HelpRow>) -> Self {
+        let mut rows = configurable;
+        for (section, keys) in FIXED_KEYS {
+            for (k, what) in *keys {
+                rows.push(HelpRow { section: section.to_string(), keys: k.to_string(), what: what.to_string(), action: String::new() });
+            }
+        }
+        // keep sections together, in the order they first appear
+        let order: Vec<String> = rows.iter().fold(Vec::new(), |mut v, r| {
+            if !v.contains(&r.section) {
+                v.push(r.section.clone());
+            }
+            v
+        });
+        rows.sort_by_key(|r| order.iter().position(|s| *s == r.section));
+        HelpView { rows, filter: Input::new("").with_placeholder("type to filter, e.g. run, ctrl, vim"), scroll: 0 }
+    }
+
+    fn visible(&self) -> Vec<&HelpRow> {
+        let q = self.filter.value().to_lowercase();
+        let words: Vec<&str> = q.split_whitespace().collect();
+        self.rows
+            .iter()
+            .filter(|r| {
+                let hay = format!("{} {} {} {}", r.section, r.keys, r.what, r.action).to_lowercase();
+                words.iter().all(|w| hay.contains(w))
+            })
+            .collect()
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> DialogResult<()> {
         match key.code {
-            KeyCode::Down | KeyCode::Char('j') => self.scroll += 1,
-            KeyCode::Up | KeyCode::Char('k') => self.scroll = self.scroll.saturating_sub(1),
+            KeyCode::Down => self.scroll += 1,
+            KeyCode::Up => self.scroll = self.scroll.saturating_sub(1),
             KeyCode::PageDown => self.scroll += 10,
             KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(10),
-            _ => return DialogResult::Close,
+            KeyCode::Esc if !self.filter.is_empty() => {
+                self.filter.set_value("");
+                self.scroll = 0;
+            }
+            KeyCode::Esc | KeyCode::F(1) => return DialogResult::Close,
+            _ => {
+                if let InputEvent::Changed = self.filter.handle_key(key) {
+                    self.scroll = 0;
+                }
+            }
         }
         DialogResult::None
     }
 
-    pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> ModalLayout {
-        let area = centered(screen, 96, 40);
+    pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> (ModalLayout, Option<(u16, u16)>) {
+        let area = centered(screen, 100, 40);
         let inner = frame(area, buf, theme, "Keyboard shortcuts", theme.border_focus);
+        buf.set_string(inner.x + 1, inner.y, format!("{} ", icons::get().search), Style::default().fg(theme.accent));
+        let field = Rect { x: inner.x + 3, y: inner.y, width: inner.width.saturating_sub(4), height: 1 };
+        let cursor = self.filter.render(field, buf, theme, true);
+        let rows = self.visible();
+        let count = format!("{}/{}", rows.len(), self.rows.len());
+        buf.set_string(inner.x + inner.width - count.width() as u16 - 1, inner.y, &count, Style::default().fg(theme.muted));
+        let key_w = rows.iter().map(|r| r.keys.width()).max().unwrap_or(10).clamp(10, 36);
         let mut lines: Vec<Line> = Vec::new();
-        for (section, keys) in HELP {
-            lines.push(Line::from(Span::styled(*section, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))));
-            for (k, d) in *keys {
-                lines.push(Line::from(vec![
-                    Span::styled(format!("  {k:<34}"), Style::default().fg(theme.accent2)),
-                    Span::styled(*d, Style::default().fg(theme.fg)),
-                ]));
+        let mut section = "";
+        for r in &rows {
+            if r.section != section {
+                if !section.is_empty() {
+                    lines.push(Line::from(""));
+                }
+                section = &r.section;
+                lines.push(Line::from(Span::styled(section.to_string(), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))));
             }
-            lines.push(Line::from(""));
+            let keys = if r.keys.is_empty() { "(unbound)".to_string() } else { r.keys.clone() };
+            let lead = format!("  {keys:<key_w$}  ");
+            let name_w = r.action.width();
+            let room = (inner.width as usize).saturating_sub(2 + lead.width() + name_w + 2);
+            let what = truncate_to(&r.what, room);
+            let gap = room.saturating_sub(what.width()) + 2;
+            let mut spans = vec![
+                Span::styled(lead, Style::default().fg(if r.keys.is_empty() { theme.muted } else { theme.accent2 })),
+                Span::styled(what, Style::default().fg(theme.fg)),
+            ];
+            if !r.action.is_empty() {
+                spans.push(Span::styled(format!("{}{}", " ".repeat(gap), r.action), Style::default().fg(theme.muted)));
+            }
+            lines.push(Line::from(spans));
         }
-        let max = lines.len().saturating_sub(inner.height as usize);
+        if rows.is_empty() {
+            lines.push(Line::from(Span::styled("  No shortcut matches", Style::default().fg(theme.muted).add_modifier(Modifier::ITALIC))));
+        }
+        let body = Rect { x: inner.x + 1, y: inner.y + 2, width: inner.width.saturating_sub(2), height: inner.height.saturating_sub(3) };
+        let max = lines.len().saturating_sub(body.height as usize);
         self.scroll = self.scroll.min(max);
-        Paragraph::new(lines).scroll((self.scroll as u16, 0)).render(Rect { x: inner.x + 1, width: inner.width.saturating_sub(2), ..inner }, buf);
-        ModalLayout::at(area)
+        Paragraph::new(lines).scroll((self.scroll as u16, 0)).render(body, buf);
+        let hint = "Rebind an action by its name under [keys] in the config, e.g. run_all = \"f9\"";
+        buf.set_stringn(inner.x + 1, inner.y + inner.height - 1, hint, inner.width.saturating_sub(2) as usize, Style::default().fg(theme.muted));
+        (ModalLayout::at(area), cursor)
     }
 }
 

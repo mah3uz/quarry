@@ -59,6 +59,10 @@ fn print_completion_script(shell: &str) -> ExitCode {
 }
 
 fn real_main(args: Args, rt: &tokio::runtime::Runtime) -> Result<ExitCode> {
+    if args.default_config {
+        print!("{}", quarry::config::DEFAULT_CONFIG);
+        return Ok(ExitCode::SUCCESS);
+    }
     let mut config = Config::load(args.config.clone())?;
     if args.list {
         list_connections(&config);

@@ -55,8 +55,26 @@ pub struct Running {
     pub current: usize,
 }
 
+/// What a query tab works in, when it isn't simply the connection's default.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Scope {
+    /// A MySQL database, switched to with `USE` before each run.
+    Database(String),
+    /// A PostgreSQL schema, put first on the `search_path` before each run.
+    Schema(String),
+}
+
+impl Scope {
+    pub fn name(&self) -> &str {
+        match self {
+            Scope::Database(n) | Scope::Schema(n) => n,
+        }
+    }
+}
+
 pub struct QueryTab {
     pub editor: Editor,
+    pub scope: Option<Scope>,
     pub grid: GridState,
     pub pane: Pane,
     /// Editor height as a percentage of the tab body.
@@ -83,6 +101,7 @@ impl QueryTab {
     pub fn new(backend: Backend) -> Self {
         QueryTab {
             editor: Editor::new(backend),
+            scope: None,
             grid: GridState::new(),
             pane: Pane::Editor,
             split: 42,

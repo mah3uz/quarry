@@ -8,14 +8,15 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use tokio::runtime::Handle;
 
-use super::dialogs::{Confirm, ConnectEvent, ConnectForm, DialogResult, HelpView, Prompt, TextView};
+use super::dialogs::{Confirm, ConnectEvent, ConnectForm, DialogResult, HelpRow, HelpView, Prompt, TextView};
+use super::keymap::{Action, Keymap};
 use super::palette::{Item, Palette, PaletteEvent};
 use super::sidebar::{self, Script, Sidebar};
 use super::tabs::*;
-use super::widgets::editor::EditorEvent;
+use super::widgets::editor::{EditorEvent, VimMode};
 use super::widgets::grid::{CopyKind, GridEvent, GridState};
 use super::widgets::input::{Input, InputEvent};
-use super::worker::{AppEvent, AppSender, ConnId, ConnectError, Connected, Reply, Request, Tag, Worker};
+use super::worker::{AppEvent, AppSender, ConnId, ConnectError, Connected, Reply, Request, Setup, Tag, Worker};
 use super::Event;
 use crate::cli::Opened;
 use crate::complete::{CompleteOptions, Completer, Extras, KeywordCasing, Suggestion};
@@ -44,6 +45,10 @@ pub struct ConnEntry {
     pub color: Option<Color>,
     /// Databases whose tables were requested for completion (MySQL loads only the current one up front).
     pub requested_schemas: std::collections::HashSet<String>,
+    /// The schema a scoped tab last put first on the PostgreSQL search_path (reset for other tabs).
+    pub session_schema: Option<String>,
+    /// Completers that resolve unqualified names in a tab's database or schema, by scope name.
+    pub scoped_completers: HashMap<String, Arc<Completer>>,
 }
 
 impl ConnEntry {
@@ -209,10 +214,13 @@ pub struct App {
     pub areas: Areas,
     pub spinner: usize,
     pub favorites: special::favorites::Favorites,
+    pub keymap: Keymap,
     quit: bool,
     dragging: Option<Drag>,
     next_id: u64,
     pending_connects: HashMap<ConnId, (String, Box<ConnSpec>, Option<String>)>,
+    /// Connections opened for a query console on another PostgreSQL database; they get a tab when ready.
+    pending_consoles: std::collections::HashSet<String>,
     pub max_rows: usize,
 }
 
@@ -224,8 +232,11 @@ impl App {
         let theme_name = overrides.theme.or_else(|| load_ui_state().theme).unwrap_or_else(|| config.main.theme.clone());
         let theme = crate::theme::load(&theme_name, &config.themes_dir()).unwrap_or_default();
         let favorites = special::favorites::Favorites::load(config.favorites_path()).unwrap_or_default();
-        let warnings = config.warnings.clone();
+        let mut warnings = config.warnings.clone();
+        let (keymap, key_warnings) = Keymap::new(&config.keys);
+        warnings.extend(key_warnings);
         let mut app = App {
+            keymap,
             rt,
             theme: theme.adapted(depth),
             depth,
@@ -247,6 +258,7 @@ impl App {
             quit: false,
             next_id: 1,
             pending_connects: HashMap::new(),
+            pending_consoles: Default::default(),
             max_rows: 200_000,
             config,
         };
@@ -254,6 +266,14 @@ impl App {
             app.toast(Level::Warning, w);
         }
         app
+    }
+
+    /// The editor's vim mode while a query editor has focus.
+    pub fn vim_mode(&self) -> Option<VimMode> {
+        match self.active_tab().map(|t| &t.kind) {
+            Some(TabKind::Query(q)) if self.editor_focused() && self.overlay.is_none() => q.editor.vim_mode(),
+            _ => None,
+        }
     }
 
     pub fn spinner(&self) -> &'static str {
@@ -351,6 +371,8 @@ impl App {
             loading_catalog: true,
             color,
             requested_schemas: Default::default(),
+            session_schema: None,
+            scoped_completers: HashMap::new(),
         };
         self.conns.push(Some(entry));
         self.sidebar.set_connection(id, &name, &info.version, spec.backend, info.is_mariadb);
@@ -409,6 +431,79 @@ impl App {
         self.completion = None;
     }
 
+    /// A query tab for a database or schema from the explorer. Another PostgreSQL database needs its
+    /// own connection, opened (or reused) under the name `connection/database`.
+    fn open_console(&mut self, conn: ConnId, scope: Option<Scope>, database: Option<String>) {
+        let Some(c) = self.conn(conn) else { return };
+        if let Some(db) = database {
+            let name = format!("{}/{db}", c.name);
+            if let Some(id) = open_conn_named(&self.conns, &name, c.backend()) {
+                self.new_query_tab(Some(id), None);
+                return;
+            }
+            let mut spec = c.spec.clone();
+            spec.database = Some(db);
+            self.pending_consoles.insert(name.clone());
+            self.toast(Level::Info, format!("Connecting to {name}…"));
+            self.start_connect(name, spec, None);
+            return;
+        }
+        let idx = self.new_query_tab(Some(conn), None);
+        if let Some(scope) = scope {
+            let n = self.tabs.iter().filter(|t| matches!(&t.kind, TabKind::Query(q) if q.scope.as_ref() == Some(&scope))).count();
+            let title = if n == 0 { scope.name().to_string() } else { format!("{} ({})", scope.name(), n + 1) };
+            let tab = &mut self.tabs[idx];
+            tab.title = title;
+            if let TabKind::Query(q) = &mut tab.kind {
+                q.scope = Some(scope.clone());
+            }
+            if let Scope::Database(db) = &scope {
+                self.request_schema(conn, db);
+            }
+        }
+    }
+
+    /// Loads a database's tables for completion if the catalog doesn't have them yet.
+    fn request_schema(&mut self, conn: ConnId, schema: &str) {
+        let Some(c) = self.conn_mut(conn) else { return };
+        let Some(cat) = &c.catalog else { return };
+        let unloaded = cat.schemas.iter().any(|s| s.name == schema && s.relations.is_empty());
+        if unloaded && c.requested_schemas.insert(schema.to_string()) {
+            c.meta().send(Tag::Sidebar, Request::ListRelations(schema.to_string()));
+        }
+    }
+
+    /// What a tab must run first so the shared session is in the tab's database or schema; `None`
+    /// when it already is. The connection's own tabs put back the default search_path.
+    fn session_setup(&mut self, conn: ConnId, scope: Option<Scope>) -> Option<Setup> {
+        let c = self.conn_mut(conn)?;
+        match (c.backend(), scope) {
+            (Backend::MySql, Some(Scope::Database(db))) if c.info.database.as_deref() != Some(db.as_str()) => {
+                c.info.database = Some(db.clone());
+                Some(Setup::Database(db))
+            }
+            (Backend::Postgres, Some(Scope::Schema(s))) if c.session_schema.as_deref() != Some(s.as_str()) => {
+                let sql = format!("SET search_path TO {}, public", quote_ident(&s, Backend::Postgres));
+                c.session_schema = Some(s);
+                Some(Setup::Sql(sql))
+            }
+            (Backend::Postgres, None) if c.session_schema.is_some() => {
+                c.session_schema = None;
+                Some(Setup::Sql("RESET search_path".into()))
+            }
+            _ => None,
+        }
+    }
+
+    /// `connection ▸ database` for a tab, showing the tab's own database or schema when it has one.
+    pub fn tab_conn_label(&self, tab: &Tab) -> String {
+        let Some(c) = tab.conn.and_then(|id| self.conn(id)) else { return String::new() };
+        match &tab.kind {
+            TabKind::Query(q) if q.scope.is_some() => format!("{} ▸ {}", c.name, q.scope.as_ref().map_or("", |s| s.name())),
+            _ => c.short_label(),
+        }
+    }
+
     pub fn open_connection_manager(&mut self) {
         let saved: Vec<(String, SavedConnection)> =
             self.config.connections.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -464,7 +559,12 @@ impl App {
                         Err(e) => self.toast(Level::Error, format!("Could not save connection: {e}")),
                     }
                 }
+                let console = self.pending_consoles.remove(&name);
                 self.adopt_connection(c.opened, Some(name), c.meta);
+                if console {
+                    let id = self.conns.len() - 1;
+                    self.new_query_tab(Some(id), None);
+                }
             }
             Err(ConnectError::Auth(msg)) => {
                 self.pending_connects.insert(id, (name, Box::new(spec), save_as));
@@ -493,7 +593,18 @@ impl App {
     pub fn new_query_tab(&mut self, conn: Option<ConnId>, text: Option<String>) -> usize {
         let conn = conn.or_else(|| self.active_conn_id());
         let backend = conn.and_then(|c| self.conn(c)).map(|c| c.backend()).unwrap_or(Backend::Postgres);
+        // a new tab works where the current one does; on MySQL, at least in the connection's database
+        let inherited = match self.active_tab() {
+            Some(Tab { conn: c, kind: TabKind::Query(q), .. }) if *c == conn => q.scope.clone(),
+            _ => None,
+        };
+        let scope = inherited.or_else(|| {
+            let c = self.conn(conn?)?;
+            (c.backend() == Backend::MySql).then(|| c.info.database.clone().map(Scope::Database)).flatten()
+        });
         let mut q = QueryTab::new(backend);
+        q.scope = scope;
+        q.editor.set_vim(self.config.main.vi);
         if let Some(t) = text {
             q.editor.set_text(&t);
         }
@@ -796,6 +907,7 @@ impl App {
         if let Some(c) = self.conn_mut(conn) {
             c.completer = Some(completer);
             c.catalog = Some(cat);
+            c.scoped_completers.clear();
         }
         if self.editor_focused() && self.tabs.get(self.active).and_then(|t| t.conn) == Some(conn) {
             self.update_completion(false);
@@ -832,6 +944,7 @@ impl App {
                     c.catalog = Some(cat);
                     c.loading_catalog = false;
                     c.requested_schemas.clear();
+                    c.scoped_completers.clear();
                 }
             }
             Err(e) => {
@@ -1147,6 +1260,17 @@ impl App {
                 Ok(special::Special::Llm { question }) => self.start_llm(tab_id, question),
                 Ok(cmd) => {
                     q.running = Some(Running { started: Instant::now(), total: 1, current: 0 });
+                    let scope = q.scope.clone();
+                    if let Some(setup) = self.session_setup(conn_id, scope)
+                        && let Some(c) = self.conn(conn_id)
+                    {
+                        // a special command has no script to fail with, so a failed switch shows as a toast
+                        let (req, tag) = match setup {
+                            Setup::Database(db) => (Request::ChangeDatabase(db), Tag::Silent),
+                            Setup::Sql(sql) => (Request::Query(sql), Tag::Silent),
+                        };
+                        c.main.send(tag, req);
+                    }
                     if let Some(c) = self.conn(conn_id) {
                         c.main.send(Tag::Tab(tab_id, 0), Request::Special(cmd));
                     }
@@ -1219,8 +1343,10 @@ impl App {
         let more = if statements.len() > 1 { format!(" (+{} more)", statements.len() - 1) } else { String::new() };
         q.log(MessageKind::Info, format!("{} {preview}{more}", crate::icons::get().run));
         self.completion = None;
+        let scope = q.scope.clone();
+        let setup = conn_id.and_then(|id| self.session_setup(id, scope));
         if let Some(c) = conn_id.and_then(|c| self.conn(c)) {
-            c.main.send(Tag::Tab(tab_id, 0), Request::Script { statements, keep_going: false, max_rows });
+            c.main.send(Tag::Tab(tab_id, 0), Request::Script { statements, keep_going: false, max_rows, setup });
         }
     }
 
@@ -1354,50 +1480,46 @@ impl App {
     }
 
     fn on_global_key(&mut self, key: KeyEvent) -> bool {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
-        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
-        let cmd = match key.code {
-            KeyCode::Char('q') if ctrl => Command::Quit,
-            KeyCode::Char('p') if ctrl => {
-                self.open_commands();
-                return true;
+        if let KeyCode::Char(c @ '1'..='9') = key.code
+            && alt
+        {
+            let i = (c as usize) - ('1' as usize);
+            if i < self.tabs.len() {
+                self.active = i;
+                self.focus = Focus::Main;
+                self.completion = None;
             }
-            KeyCode::F(1) => Command::Help,
-            KeyCode::Char('o') if ctrl => Command::Connections,
-            KeyCode::Char('t') if ctrl => Command::NewQuery,
-            KeyCode::Char('w') if ctrl => Command::CloseTab,
-            KeyCode::Char('b') if ctrl => Command::ToggleSidebar,
-            KeyCode::Char('g') if ctrl => Command::GoToTable,
-            KeyCode::Char('y') if ctrl && !self.editor_focused() => Command::Themes,
-            KeyCode::Char('r') if ctrl => Command::History,
-            KeyCode::PageDown if ctrl => Command::NextTab,
-            KeyCode::PageUp if ctrl => Command::PrevTab,
-            KeyCode::Right if alt => Command::NextTab,
-            KeyCode::Left if alt => Command::PrevTab,
-            KeyCode::Char('0') if alt => Command::FocusSidebar,
-            KeyCode::Char(c @ '1'..='9') if alt => {
-                let i = (c as usize) - ('1' as usize);
-                if i < self.tabs.len() {
-                    self.active = i;
-                    self.focus = Focus::Main;
-                    self.completion = None;
-                }
-                return true;
-            }
-            KeyCode::F(6) if shift => {
-                self.cycle_focus(false);
-                return true;
-            }
-            KeyCode::F(6) => {
+            return true;
+        }
+        if key.code == KeyCode::BackTab && self.focus == Focus::Sidebar {
+            self.cycle_focus(false);
+            return true;
+        }
+        let in_editor = self.editor_focused();
+        let typing = in_editor || self.sidebar.is_filtering() || self.table_filter_active();
+        let cmd = match self.keymap.action(&key, typing, in_editor) {
+            Some(Action::Commands) => Command::Commands,
+            Some(Action::Help) => Command::Help,
+            Some(Action::Connections) => Command::Connections,
+            Some(Action::NewQuery) => Command::NewQuery,
+            Some(Action::CloseTab) => Command::CloseTab,
+            Some(Action::NextTab) => Command::NextTab,
+            Some(Action::PrevTab) => Command::PrevTab,
+            Some(Action::FocusExplorer) => Command::FocusSidebar,
+            Some(Action::ToggleExplorer) => Command::ToggleSidebar,
+            Some(Action::GoToTable) => Command::GoToTable,
+            Some(Action::Themes) => Command::Themes,
+            Some(Action::History) => Command::History,
+            Some(Action::Quit) => Command::Quit,
+            Some(Action::NextPane) => {
                 self.cycle_focus(true);
                 return true;
             }
-            KeyCode::BackTab if self.focus == Focus::Sidebar => {
+            Some(Action::PrevPane) => {
                 self.cycle_focus(false);
                 return true;
             }
-            KeyCode::Char('?') if !self.editor_focused() && !self.sidebar.is_filtering() && !self.table_filter_active() => Command::Help,
             _ => return false,
         };
         self.run_command(cmd);
@@ -1460,30 +1582,30 @@ impl App {
     }
 
     fn on_query_key(&mut self, key: KeyEvent) {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let alt = key.modifiers.contains(KeyModifiers::ALT);
-        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         let running = self.tabs[self.active].is_busy();
-        match key.code {
-            KeyCode::Enter if ctrl && shift => return self.run_query(true),
-            KeyCode::Enter if ctrl || alt => return self.run_query(false),
-            KeyCode::Char('e') if ctrl => return self.run_query(false),
-            KeyCode::F(5) => return self.run_query(true),
-            KeyCode::F(7) => return self.open_explain(shift),
-            KeyCode::Char('f') if alt => return self.run_command(Command::FormatSql),
-            KeyCode::Char('s') if ctrl => return self.run_command(Command::SaveFavorite),
-            KeyCode::Char('x') if ctrl && !self.editor_focused() => return self.run_command(Command::Export),
-            KeyCode::Esc | KeyCode::Char('c') if running && (key.code == KeyCode::Esc || ctrl) => {
-                self.cancel_active();
-                return;
-            }
-            KeyCode::Up if ctrl => {
+        let in_editor = self.editor_focused();
+        // Esc belongs to vim first: it leaves insert or visual mode even while a query runs
+        let vim_busy = in_editor
+            && matches!(&self.tabs[self.active].kind, TabKind::Query(q) if !matches!(q.editor.vim_mode(), None | Some(VimMode::Normal)));
+        if running && !(vim_busy && key.code == KeyCode::Esc) && self.keymap.action(&key, false, false) == Some(Action::Cancel) {
+            self.cancel_active();
+            return;
+        }
+        match self.keymap.action(&key, in_editor, in_editor) {
+            Some(Action::RunAll) => return self.run_query(true),
+            Some(Action::RunStatement) => return self.run_query(false),
+            Some(Action::Explain) => return self.open_explain(false),
+            Some(Action::ExplainAnalyze) => return self.open_explain(true),
+            Some(Action::FormatSql) => return self.run_command(Command::FormatSql),
+            Some(Action::SaveFavorite) => return self.run_command(Command::SaveFavorite),
+            Some(Action::Export) => return self.run_command(Command::Export),
+            Some(Action::EditorSmaller) => {
                 if let TabKind::Query(q) = &mut self.tabs[self.active].kind {
                     q.split = q.split.saturating_sub(5).max(15);
                 }
                 return;
             }
-            KeyCode::Down if ctrl => {
+            Some(Action::EditorLarger) => {
                 if let TabKind::Query(q) = &mut self.tabs[self.active].kind {
                     q.split = (q.split + 5).min(85);
                 }
@@ -1491,19 +1613,21 @@ impl App {
             }
             _ => {}
         }
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let tab_id = self.tabs[self.active].id;
         let conn = self.tabs[self.active].conn;
         let TabKind::Query(q) = &mut self.tabs[self.active].kind else { return };
         match q.pane {
             Pane::Editor => {
-                if key.code == KeyCode::Esc {
+                let ev = q.editor.handle_key(key);
+                if key.code == KeyCode::Esc && ev == EditorEvent::Unhandled {
                     q.pane = Pane::Results;
                     return;
                 }
-                let ev = q.editor.handle_key(key);
+                let inserting = matches!(q.editor.vim_mode(), None | Some(VimMode::Insert));
                 match ev {
                     EditorEvent::Changed => {
-                        let typed_word = matches!(key.code, KeyCode::Char(c) if c.is_alphanumeric() || c == '_' || c == '.');
+                        let typed_word = inserting && matches!(key.code, KeyCode::Char(c) if c.is_alphanumeric() || c == '_' || c == '.');
                         if typed_word && self.config.main.complete_while_typing {
                             self.update_completion(false);
                         } else {
@@ -2047,9 +2171,28 @@ impl App {
 
     // ---------------------------------------------------------------- completion
 
+    /// The completer for a tab: unqualified names resolve in the tab's database or schema first.
+    fn completer_for(&mut self, conn: ConnId, scope: Option<&Scope>) -> Option<Arc<Completer>> {
+        let Some(scope) = scope else { return self.conn(conn)?.completer.clone() };
+        let c = self.conn(conn)?;
+        if let Some(done) = c.scoped_completers.get(scope.name()) {
+            return Some(done.clone());
+        }
+        let mut cat = (**c.catalog.as_ref()?).clone();
+        cat.search_path.retain(|s| s != scope.name());
+        cat.search_path.insert(0, scope.name().to_string());
+        let completer = Arc::new(self.make_completer(Arc::new(cat)));
+        self.conn_mut(conn)?.scoped_completers.insert(scope.name().to_string(), completer.clone());
+        Some(completer)
+    }
+
     fn update_completion(&mut self, explicit: bool) {
         let conn = self.tabs.get(self.active).and_then(|t| t.conn);
-        let completer = conn.and_then(|c| self.conn(c)).and_then(|c| c.completer.clone());
+        let scope = match self.tabs.get(self.active).map(|t| &t.kind) {
+            Some(TabKind::Query(q)) => q.scope.clone(),
+            _ => None,
+        };
+        let completer = conn.and_then(|c| self.completer_for(c, scope.as_ref()));
         let Some(Tab { kind: TabKind::Query(q), .. }) = self.tabs.get_mut(self.active) else { return };
         let Some(completer) = completer else {
             self.completion = None;
@@ -2098,7 +2241,11 @@ impl App {
                     q.editor.replace_range(start..cursor, &item.text);
                 }
             }
-            KeyCode::Esc => self.completion = None,
+            KeyCode::Esc => {
+                self.completion = None;
+                // in vim, the same Esc also leaves insert mode
+                return self.vim_mode().is_none();
+            }
             _ => return false,
         }
         true
@@ -2342,47 +2489,49 @@ impl App {
     // ---------------------------------------------------------------- commands
 
     fn open_commands(&mut self) {
+        let keymap = &self.keymap;
+        let key = |a: Action| keymap.short(a);
         let mut items: Vec<Item<Command>> = Vec::new();
         let mut add = |label: &str, hint: &str, cmd: Command| {
             items.push(Item { label: label.into(), category: String::new(), hint: hint.into(), value: cmd });
         };
-        add("Run statement", "Ctrl+Enter", Command::RunStatement);
-        add("Run all", "F5", Command::RunAll);
-        add("Cancel running query", "Esc", Command::Cancel);
-        add("Explain", "F7", Command::Explain(false));
-        add("Explain analyze", "Shift+F7", Command::Explain(true));
-        add("Format SQL", "Alt+F", Command::FormatSql);
+        add("Run statement", &key(Action::RunStatement), Command::RunStatement);
+        add("Run all", &key(Action::RunAll), Command::RunAll);
+        add("Cancel running query", &key(Action::Cancel), Command::Cancel);
+        add("Explain", &key(Action::Explain), Command::Explain(false));
+        add("Explain analyze", &key(Action::ExplainAnalyze), Command::Explain(true));
+        add("Format SQL", &key(Action::FormatSql), Command::FormatSql);
         add("Ask the model to write SQL…", "\\llm", Command::AskLlm);
-        add("New query tab", "Ctrl+T", Command::NewQuery);
-        add("Close tab", "Ctrl+W", Command::CloseTab);
-        add("Next tab", "Alt+→", Command::NextTab);
-        add("Previous tab", "Alt+←", Command::PrevTab);
-        add("Go to table…", "Ctrl+G", Command::GoToTable);
+        add("New query tab", &key(Action::NewQuery), Command::NewQuery);
+        add("Close tab", &key(Action::CloseTab), Command::CloseTab);
+        add("Next tab", &key(Action::NextTab), Command::NextTab);
+        add("Previous tab", &key(Action::PrevTab), Command::PrevTab);
+        add("Go to table…", &key(Action::GoToTable), Command::GoToTable);
         add("Table structure", "s in explorer", Command::Structure);
-        add("Toggle explorer", "Ctrl+B", Command::ToggleSidebar);
-        add("Focus explorer", "Alt+0", Command::FocusSidebar);
+        add("Toggle explorer", &key(Action::ToggleExplorer), Command::ToggleSidebar);
+        add("Focus explorer", &key(Action::FocusExplorer), Command::FocusSidebar);
         add("Focus editor", "", Command::FocusEditor);
         add("Focus results", "", Command::FocusResults);
         add("Commit transaction", "", Command::Commit);
         add("Rollback transaction", "", Command::Rollback);
         add("Server activity / sessions", "", Command::Activity);
-        add("Query history", "Ctrl+R", Command::History);
-        add("Switch theme…", "Ctrl+Y", Command::Themes);
+        add("Query history", &key(Action::History), Command::History);
+        add("Switch theme…", &key(Action::Themes), Command::Themes);
         add("Toggle transparent background", "", Command::ToggleTransparent);
-        add("Connections…", "Ctrl+O", Command::Connections);
+        add("Connections…", &key(Action::Connections), Command::Connections);
         add("Refresh schema", "r in explorer", Command::Refresh);
-        add("Export results to file…", "Ctrl+X", Command::Export);
+        add("Export results to file…", &key(Action::Export), Command::Export);
         add("Copy results as CSV", "", Command::Copy(TableFormat::Csv));
         add("Copy results as JSON", "", Command::Copy(TableFormat::Json));
         add("Copy results as Markdown", "", Command::Copy(TableFormat::Markdown));
         add("Copy results as SQL INSERT", "", Command::Copy(TableFormat::SqlInsert));
-        add("Save query as favorite…", "Ctrl+S", Command::SaveFavorite);
+        add("Save query as favorite…", &key(Action::SaveFavorite), Command::SaveFavorite);
         add("Favorite queries…", "", Command::Favorites);
         add("Save editor to file…", "", Command::SaveFile);
         add("Open SQL file…", "", Command::OpenFile);
         add("Toggle read-only for this connection", "", Command::ToggleReadonly);
-        add("Keyboard shortcuts", "F1", Command::Help);
-        add("Quit", "Ctrl+Q", Command::Quit);
+        add("Keyboard shortcuts", &key(Action::Help), Command::Help);
+        add("Quit", &key(Action::Quit), Command::Quit);
         for name in self.favorites.queries.keys() {
             items.push(Item { label: name.clone(), category: "Favorite".into(), hint: String::new(), value: Command::OpenFavorite(name.clone()) });
         }
@@ -2391,9 +2540,14 @@ impl App {
 
     pub fn run_command(&mut self, cmd: Command) {
         match cmd {
-            Command::NewQuery => {
-                self.new_query_tab(None, None);
-            }
+            Command::NewQuery => match self.sidebar.console_target() {
+                Some(sidebar::Action::NewConsole { conn, scope, database }) if self.focus == Focus::Sidebar => {
+                    self.open_console(conn, scope, database)
+                }
+                _ => {
+                    self.new_query_tab(None, None);
+                }
+            },
             Command::CloseTab => self.close_tab(self.active),
             Command::CloseTabAt(i) => self.close_tab(i),
             Command::Commands => self.open_commands(),
@@ -2589,7 +2743,18 @@ impl App {
             Command::OpenFile => {
                 self.overlay = Some(Overlay::Prompt(Prompt { title: "Open SQL file".into(), hint: String::new(), input: Input::new("~/"), purpose: PromptPurpose::OpenFile }));
             }
-            Command::Help => self.overlay = Some(Overlay::Help(HelpView { scroll: 0 })),
+            Command::Help => {
+                let rows = Action::ALL
+                    .iter()
+                    .map(|&a| HelpRow {
+                        section: a.section().to_string(),
+                        keys: self.keymap.label(a),
+                        what: a.description().to_string(),
+                        action: a.name().to_string(),
+                    })
+                    .collect();
+                self.overlay = Some(Overlay::Help(HelpView::new(rows)));
+            }
             Command::Quit => {
                 let busy = self.tabs.iter().any(|t| t.is_busy());
                 let tx = self.conns.iter().flatten().any(|c| c.in_tx);
@@ -2724,6 +2889,7 @@ impl App {
                 }
             }
             Action::NewConnection => self.open_connection_manager(),
+            Action::NewConsole { conn, scope, database } => self.open_console(conn, scope, database),
             Action::Disconnect(conn) => {
                 self.sidebar.remove_connection(conn);
                 self.tabs.retain(|t| t.conn != Some(conn));

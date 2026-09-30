@@ -15,6 +15,9 @@ use crate::theme::Theme;
 const INDENT: &str = "  ";
 const TAB_WIDTH: usize = 4;
 const UNDO_LIMIT: usize = 500;
+
+mod vim;
+pub use vim::VimMode;
 const WHEEL_LINES: usize = 3;
 const PLACEHOLDER: &str = "-- Write SQL here · Ctrl+Enter run statement · F5 run all · Ctrl+Space complete";
 
@@ -92,6 +95,8 @@ pub struct Editor {
     clipboard: Option<arboard::Clipboard>,
     system_clipboard: bool,
     mouse_selecting: bool,
+    /// Modal editing, when `vi = true`.
+    vim: Option<vim::Vim>,
 }
 
 impl Editor {
@@ -117,6 +122,7 @@ impl Editor {
             // tests must not clobber the developer's clipboard
             system_clipboard: !cfg!(test),
             mouse_selecting: false,
+            vim: None,
         }
     }
 
@@ -265,6 +271,11 @@ impl Editor {
         use EditorEvent::*;
         if key.kind == KeyEventKind::Release {
             return Unhandled;
+        }
+        if self.vim.is_some()
+            && let Some(ev) = self.vim_key(key)
+        {
+            return ev;
         }
         let m = key.modifiers;
         let ctrl = m.contains(KeyModifiers::CONTROL);
@@ -456,7 +467,14 @@ impl Editor {
         let (sr, sc) = (self.scroll_row, self.scroll_col);
         let Some(hl) = self.highlight.as_ref() else { return };
         let flat = |p: Pos| hl.line_starts[p.row] + p.col;
-        let sel = self.selection().map(|(a, b)| flat(a)..flat(b));
+        // vim's charwise visual selection includes the character under the cursor
+        let sel = match self.vim_mode() {
+            Some(VimMode::Visual) => self.anchor.map(|a| {
+                let (lo, hi) = (a.min(self.cursor), a.max(self.cursor));
+                flat(lo)..flat(self.right_of(hi))
+            }),
+            _ => self.selection().map(|(a, b)| flat(a)..flat(b)),
+        };
         let brackets = matching_brackets(&hl.tokens, flat(self.cursor));
         let error_at = self.error_marker;
         let text_x = area.x + gutter;
@@ -1271,6 +1289,114 @@ mod tests {
 
     fn row_text(buf: &Buffer, y: u16) -> String {
         (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect()
+    }
+
+    /// A vim editor holding `text` with the cursor at byte `at`, in normal mode.
+    fn vim(text: &str, at: usize) -> Editor {
+        let mut e = editor(text);
+        e.set_vim(true);
+        e.set_cursor_byte(at);
+        e
+    }
+
+    /// Feeds vim keys; `\x1b` is Esc.
+    fn vk(e: &mut Editor, keys: &str) {
+        for c in keys.chars() {
+            if c == '\x1b' {
+                key(e, KeyCode::Esc, NONE);
+            } else {
+                key(e, KeyCode::Char(c), NONE);
+            }
+        }
+    }
+
+    #[test]
+    fn vim_normal_mode_does_not_type_and_insert_mode_does() {
+        let mut e = vim("select 1", 0);
+        vk(&mut e, "xyz");
+        assert_eq!(e.vim_mode(), Some(VimMode::Normal));
+        assert_eq!(e.text(), "elect 1", "x deleted one char; y waits for a motion, z is ignored");
+        vk(&mut e, "\x1bis\x1b");
+        assert_eq!(e.text(), "select 1");
+        assert_eq!(e.cursor_byte(), 0, "leaving insert mode steps back onto the typed char");
+        vk(&mut e, "A;\x1b");
+        assert_eq!(e.text(), "select 1;");
+        assert_eq!(key(&mut e, KeyCode::Esc, NONE), EditorEvent::Unhandled, "a bare Esc is left to the app");
+    }
+
+    #[test]
+    fn vim_line_operators_delete_yank_and_paste_whole_lines() {
+        let mut e = vim("a\nb\nc", 0);
+        vk(&mut e, "ddp");
+        assert_eq!(e.text(), "b\na\nc", "dd then p moves a line down");
+        vk(&mut e, "ggyyP");
+        assert_eq!(e.text(), "b\nb\na\nc");
+        vk(&mut e, "G2kd2d");
+        assert_eq!(e.text(), "b\nc");
+        vk(&mut e, "Gdd");
+        assert_eq!(e.text(), "b", "deleting the last line leaves no empty line behind");
+    }
+
+    #[test]
+    fn vim_word_operators_and_text_objects() {
+        let mut e = vim("select name from users", 7);
+        vk(&mut e, "ciwid\x1b");
+        assert_eq!(e.text(), "select id from users");
+        vk(&mut e, "wdw");
+        assert_eq!(e.text(), "select id users");
+        vk(&mut e, "0cwSELECT\x1b");
+        assert_eq!(e.text(), "SELECT id users");
+        vk(&mut e, "$d0");
+        assert_eq!(e.text(), "s", "d0 deletes back to the line start, keeping the char under the cursor");
+    }
+
+    #[test]
+    fn vim_motions_take_counts() {
+        let mut e = vim("one two three four\n2\n3\n4", 0);
+        vk(&mut e, "2w");
+        assert_eq!(e.cursor_byte(), 8);
+        vk(&mut e, "e");
+        assert_eq!(e.cursor_byte(), 12, "e lands on the last char of the word");
+        vk(&mut e, "b$");
+        assert_eq!(e.cursor_byte(), 17, "$ rests on the last character, not after it");
+        vk(&mut e, "3j");
+        assert_eq!(e.cursor_pos().0, 3);
+        vk(&mut e, "gg");
+        assert_eq!(e.cursor_pos(), (0, 0));
+        vk(&mut e, "2G");
+        assert_eq!(e.cursor_pos().0, 1);
+    }
+
+    #[test]
+    fn vim_visual_modes_select_inclusively() {
+        let mut e = vim("select id from t", 7);
+        vk(&mut e, "vey");
+        assert_eq!(e.vim_mode(), Some(VimMode::Normal));
+        vk(&mut e, "$p");
+        assert_eq!(e.text(), "select id from tid", "v e y yanks the word including its last char");
+        let mut e = vim("a\nb\nc", 0);
+        vk(&mut e, "Vjd");
+        assert_eq!(e.text(), "c");
+        let mut e = vim("a\nb", 0);
+        vk(&mut e, "Vj>");
+        assert_eq!(e.text(), format!("{INDENT}a\n{INDENT}b"));
+    }
+
+    #[test]
+    fn vim_small_edits_undo_as_single_steps() {
+        let mut e = vim("select 1\nfrom t", 0);
+        vk(&mut e, "rS");
+        assert_eq!(e.text(), "Select 1\nfrom t");
+        vk(&mut e, "J");
+        assert_eq!(e.text(), "Select 1 from t");
+        vk(&mut e, "u");
+        assert_eq!(e.text(), "Select 1\nfrom t");
+        vk(&mut e, "u");
+        assert_eq!(e.text(), "select 1\nfrom t");
+        key(&mut e, KeyCode::Char('r'), KeyModifiers::CONTROL);
+        assert_eq!(e.text(), "Select 1\nfrom t");
+        vk(&mut e, "oorder by 1\x1b");
+        assert_eq!(e.text(), "Select 1\norder by 1\nfrom t");
     }
 
     #[test]

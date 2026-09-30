@@ -24,8 +24,9 @@ pub enum Tag {
 }
 
 pub enum Request {
-    /// Runs statements in order; stops at the first error unless `keep_going`.
-    Script { statements: Vec<String>, keep_going: bool, max_rows: usize },
+    /// Runs statements in order; stops at the first error unless `keep_going`. `setup` runs first
+    /// (a query tab's database or schema) and, if it fails, nothing else does.
+    Script { statements: Vec<String>, keep_going: bool, max_rows: usize, setup: Option<Setup> },
     /// One statement, collected (table browser pages, counts, generated SQL).
     Query(String),
     /// Several statements inside one transaction (applying grid edits).
@@ -41,6 +42,12 @@ pub enum Request {
     ChangeDatabase(String),
     /// Backslash / dot command typed into a query editor.
     Special(crate::special::Special),
+}
+
+/// Points the session at a query tab's database or schema before its statements.
+pub enum Setup {
+    Database(String),
+    Sql(String),
 }
 
 pub enum Reply {
@@ -131,8 +138,21 @@ async fn run(
         busy.store(true, Ordering::Relaxed);
         let started = Instant::now();
         let alive = match req {
-            Request::Script { statements, keep_going, max_rows } => {
-                script(id, &mut conn, &app, tag, statements, keep_going, max_rows, &cancel).await
+            Request::Script { statements, keep_going, max_rows, setup } => {
+                let ready = match setup {
+                    None => Ok(()),
+                    Some(Setup::Database(db)) => conn.change_database(&db).await.map(|_| ()),
+                    Some(Setup::Sql(sql)) => conn.query(&sql).await.map(|_| ()),
+                };
+                match ready {
+                    Ok(()) => script(id, &mut conn, &app, tag, statements, keep_going, max_rows, &cancel).await,
+                    Err(e) => {
+                        let sql = statements.first().cloned().unwrap_or_default();
+                        post(&app, id, tag, Reply::StatementStart { index: 0, sql });
+                        post(&app, id, tag, Reply::StatementDone { index: 0, result: Err(e), elapsed: started.elapsed(), truncated: false });
+                        post(&app, id, tag, Reply::ScriptDone { elapsed: started.elapsed(), ok: false })
+                    }
+                }
             }
             Request::Query(sql) => {
                 let r = conn.query(&sql).await;
