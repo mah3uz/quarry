@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress'
 const repo = 'https://github.com/mah3uz/quarry'
 const site = 'https://quarry.asmechanics.com'
 const description =
-  'A fast SQL client for the terminal: a smart REPL and a full-screen TUI for PostgreSQL, MySQL / MariaDB and SQLite.'
+  'A modern SQL client, smart and fast, that lives in your terminal: a smart REPL and a full-screen TUI for PostgreSQL, MySQL / MariaDB and SQLite.'
 
 export default defineConfig({
   title: 'quarry',
@@ -21,7 +21,7 @@ export default defineConfig({
     ['meta', { property: 'og:image', content: `${site}/og.png` }],
     ['meta', { property: 'og:image:width', content: '1200' }],
     ['meta', { property: 'og:image:height', content: '630' }],
-    ['meta', { property: 'og:image:alt', content: 'quarry: a SQL client that lives in your terminal' }],
+    ['meta', { property: 'og:image:alt', content: 'quarry: a modern SQL client, smart and fast, that lives in your terminal' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:image', content: `${site}/og.png` }],
   ],
@@ -29,7 +29,7 @@ export default defineConfig({
   transformHead({ pageData }) {
     const path = pageData.relativePath.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '')
     const url = `${site}/${path}`
-    const title = pageData.frontmatter.layout === false ? 'quarry: a SQL client for your terminal' : `${pageData.title} | quarry`
+    const title = pageData.frontmatter.layout === false ? 'quarry: a modern SQL client for your terminal' : `${pageData.title} | quarry`
     const text = pageData.frontmatter.description || pageData.description || description
     return [
       ['link', { rel: 'canonical', href: url }],

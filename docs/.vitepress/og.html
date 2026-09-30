@@ -25,9 +25,11 @@
   .brand { display: flex; align-items: center; gap: 14px; font-size: 34px; font-weight: 850;
     font-variation-settings: 'CASL' 0.8; letter-spacing: -0.02em; }
   .brand img { width: 52px; height: 52px; }
-  h1 { margin: 44px 0 0; font-size: 70px; line-height: 1.02; font-weight: 850;
+  h1 { margin: 36px 0 0; font-size: 58px; line-height: 1.04; font-weight: 850;
     font-variation-settings: 'CASL' 1; letter-spacing: -0.035em; }
-  p { margin: 26px 0 0; font-size: 27px; line-height: 1.45; color: #a9b0cc; }
+  /* as on the home page: a little smaller than the words, facing right */
+  .zoom { display: inline-block; font-size: 0.7em; transform: scaleX(-1); }
+  p { margin: 22px 0 0; font-size: 25px; line-height: 1.42; color: #a9b0cc; }
   .url { position: absolute; left: 76px; bottom: 58px; font-family: 'JetBrains Mono', monospace;
     font-size: 22px; color: #4cc6ee; }
   .mascot { position: absolute; right: 60px; top: 96px; width: 380px; height: 380px; }
@@ -43,8 +45,8 @@
   </svg>
   <div class="copy">
     <div class="brand"><img src="../public/logo.svg" alt="">quarry</div>
-    <h1>A SQL client that lives in your terminal.</h1>
-    <p>A smart REPL and a full-screen TUI for PostgreSQL, MySQL / MariaDB and SQLite.</p>
+    <h1>A modern SQL client, smart and fast <span class="zoom">🏎️💨</span> that lives in your terminal.</h1>
+    <p>Full-featured for PostgreSQL, MySQL / MariaDB and SQLite: a smart REPL and a full-screen TUI.</p>
   </div>
   <img class="mascot" src="../public/logo.svg" alt="">
   <div class="url">quarry.asmechanics.com</div>
