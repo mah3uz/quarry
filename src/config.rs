@@ -113,14 +113,28 @@ pub fn config_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("QUARRY_CONFIG_DIR") {
         return PathBuf::from(d);
     }
-    dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("quarry")
+    xdg_dir("XDG_CONFIG_HOME", ".config", dirs::config_dir).unwrap_or_else(|| PathBuf::from(".")).join("quarry")
 }
 
 pub fn data_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("QUARRY_DATA_DIR") {
         return PathBuf::from(d);
     }
-    dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("quarry")
+    xdg_dir("XDG_DATA_HOME", ".local/share", dirs::data_dir).unwrap_or_else(|| PathBuf::from(".")).join("quarry")
+}
+
+// `dirs` uses `~/Library/Application Support` on macOS; CLI users expect the XDG layout there too.
+#[cfg(unix)]
+fn xdg_dir(var: &str, default_under_home: &str, _native: fn() -> Option<PathBuf>) -> Option<PathBuf> {
+    std::env::var_os(var)
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| dirs::home_dir().map(|h| h.join(default_under_home)))
+}
+
+#[cfg(not(unix))]
+fn xdg_dir(_var: &str, _default_under_home: &str, native: fn() -> Option<PathBuf>) -> Option<PathBuf> {
+    native()
 }
 
 mod zero_is_none {

@@ -93,6 +93,44 @@ fn bad_target_is_a_clear_error() {
     assert!(String::from_utf8_lossy(&o.stderr).contains("unsupported scheme"));
 }
 
+// macOS included: the README documents `~/.config/quarry` and `~/.local/share/quarry`, not
+// `~/Library/Application Support`.
+#[cfg(unix)]
+#[test]
+fn config_and_data_follow_xdg_on_every_unix() {
+    let home = std::env::temp_dir().join(format!("quarry-cli-xdg-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    let run = |xdg: Option<(&std::path::Path, &std::path::Path)>| {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_quarry"));
+        cmd.args([":memory:", "-e", "select 1"])
+            .env("HOME", &home)
+            .env_remove("QUARRY_CONFIG_DIR")
+            .env_remove("QUARRY_DATA_DIR")
+            .env_remove("XDG_CONFIG_HOME")
+            .env_remove("XDG_DATA_HOME");
+        if let Some((config, data)) = xdg {
+            cmd.env("XDG_CONFIG_HOME", config).env("XDG_DATA_HOME", data);
+        }
+        assert!(cmd.output().unwrap().status.success());
+    };
+    let enable_query_log = |config: &std::path::Path| {
+        let text = std::fs::read_to_string(config).unwrap();
+        std::fs::write(config, text.replace("log_queries = false", "log_queries = true")).unwrap();
+    };
+
+    run(None);
+    enable_query_log(&home.join(".config/quarry/config.toml"));
+    run(None);
+    assert!(home.join(".local/share/quarry/quarry.log").exists());
+
+    let (config, data) = (home.join("xdg-config"), home.join("xdg-data"));
+    run(Some((&config, &data)));
+    enable_query_log(&config.join("quarry/config.toml"));
+    run(Some((&config, &data)));
+    assert!(data.join("quarry/quarry.log").exists());
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 fn server(env: &str, default: &str) -> Option<String> {
     let url = std::env::var(env).unwrap_or_else(|_| default.to_string());
     let o = quarry(&[&url, "-e", "select 1"], None);
