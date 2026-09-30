@@ -6,11 +6,12 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget, Wrap};
 use unicode_width::UnicodeWidthStr;
 
-use super::app::{App, Focus, Level, Overlay};
+use super::app::{App, Command, Focus, Level, Overlay};
 use super::sidebar::compact_count;
 use super::tabs::*;
 use crate::complete::SuggestionKind;
 use crate::db::Backend;
+use super::widgets::bar::Pill;
 use crate::icons::{self, Icons};
 use crate::repl::prompt::human_duration;
 use crate::theme::Theme;
@@ -55,38 +56,64 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 }
 
 fn draw_header(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
-    buf.set_style(area, Style::default().bg(theme.surface));
+    let bar = theme.surface;
+    buf.set_style(area, Style::default().bg(bar));
     let ic = icons::get();
-    let logo = format!(" {} quarry ", ic.logo);
-    buf.set_string(area.x, area.y, &logo, Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD));
-    let mut x = area.x + logo.width() as u16 + 1;
-    let right_reserve = 22u16;
+    let right_edge = area.x + area.width;
+    let y = area.y;
+
+    let theme_label = format!("{} {}", ic.palette, theme.name);
+    let cmd_label = format!("{} ^P", ic.commands);
+    let theme_pill = Pill { text: &theme_label, fg: theme.accent2, bg: theme.highlight, bold: false };
+    let cmd_pill = Pill { text: &cmd_label, fg: theme.bg, bg: theme.accent2, bold: true };
+    let right_w = theme_pill.width() + cmd_pill.width() + 2;
+    let tabs_limit = right_edge.saturating_sub(right_w + 1);
+
+    let logo = format!("{} quarry", ic.logo);
+    let r = Pill { text: &logo, fg: theme.bg, bg: theme.accent, bold: true }.draw(buf, area.x, y, bar, right_edge);
+    let mut x = r.x + r.width + 1;
     for (i, tab) in app.tabs.iter().enumerate() {
         let active = i == app.active;
         let busy = if tab.is_busy() { format!(" {}", app.spinner()) } else { String::new() };
         let dirty = matches!(&tab.kind, TabKind::Table(t) if t.dirty());
-        let label = format!(" {} {}{}{} ", tab.icon(), truncate(&tab.title, 22), if dirty { format!(" {}", ic.dirty) } else { String::new() }, busy);
-        let w = label.width() as u16;
-        if x + w + right_reserve > area.x + area.width {
-            buf.set_string(x, area.y, " … ", Style::default().fg(theme.muted).bg(theme.surface));
+        let label = format!(
+            "{} {}{}{} {}",
+            tab.icon(),
+            truncate(&tab.title, 22),
+            if dirty { format!(" {}", ic.dirty) } else { String::new() },
+            busy,
+            ic.close
+        );
+        let (fg, bg) = if active { (theme.fg, theme.highlight) } else { (theme.muted, bar) };
+        let pill = Pill { text: &label, fg, bg, bold: active };
+        if x + pill.width() + 4 > tabs_limit {
+            buf.set_string(x, y, "…", Style::default().fg(theme.muted).bg(bar));
+            x += 2;
             break;
         }
-        let style = if active {
-            Style::default().bg(theme.bg).fg(theme.fg).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().bg(theme.surface).fg(theme.muted)
-        };
-        buf.set_string(x, area.y, &label, style);
+        let r = pill.draw(buf, x, y, bar, tabs_limit);
         if active {
-            buf.set_string(x, area.y, "▎", Style::default().bg(theme.bg).fg(theme.accent));
+            buf.set_string(r.x + 1, y, tab.icon(), Style::default().fg(theme.accent).bg(bg));
         }
-        app.areas.header_tabs.push((Rect { x, y: area.y, width: w, height: 1 }, i));
-        x += w + 1;
+        let close_x = r.x + r.width - 1 - ic.cap_right.width().max(1) as u16;
+        app.areas.buttons.push((Rect { x: close_x, y, width: 1, height: 1 }, Command::CloseTabAt(i)));
+        app.areas.header_tabs.push((r, i));
+        x += r.width + 1;
     }
-    let hint = format!("{}  ^P ", theme.name);
-    let hx = area.x + area.width.saturating_sub(hint.width() as u16 + 1);
-    if hx > x {
-        buf.set_string(hx, area.y, &hint, Style::default().fg(theme.muted).bg(theme.surface));
+    if x + 3 <= tabs_limit {
+        buf.set_string(x, y, format!(" {} ", ic.add), Style::default().fg(theme.muted).bg(bar));
+        app.areas.buttons.push((Rect { x, y, width: 3, height: 1 }, Command::NewQuery));
+    }
+
+    let mut rx = right_edge.saturating_sub(cmd_pill.width() + 1);
+    if rx >= x + 3 {
+        let r = cmd_pill.draw(buf, rx, y, bar, right_edge);
+        app.areas.buttons.push((r, Command::Commands));
+        rx = rx.saturating_sub(theme_pill.width() + 1);
+        if rx >= x + 3 {
+            let r = theme_pill.draw(buf, rx, y, bar, right_edge);
+            app.areas.buttons.push((r, Command::Themes));
+        }
     }
 }
 
@@ -473,71 +500,104 @@ fn draw_welcome(buf: &mut Buffer, area: Rect, theme: &Theme) {
     Paragraph::new(lines).render(Rect { y, height: h.min(area.height), ..area }, buf);
 }
 
-fn draw_status(buf: &mut Buffer, area: Rect, app: &App, theme: &Theme) {
-    buf.set_style(area, Style::default().bg(theme.surface).fg(theme.fg));
-    let mode = match (app.focus, app.active_tab().map(|t| &t.kind)) {
-        (Focus::Sidebar, _) => "EXPLORER",
-        (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => "EDITOR",
-        (_, Some(TabKind::Query(_))) => "RESULTS",
-        (_, Some(TabKind::Table(_))) => "TABLE",
-        (_, Some(TabKind::Structure(_))) => "STRUCTURE",
-        (_, Some(TabKind::Activity(_))) => "ACTIVITY",
-        (_, Some(TabKind::Explain(_))) => "EXPLAIN",
-        (_, Some(TabKind::History(_))) => "HISTORY",
-        (_, Some(TabKind::Text(_))) => "VIEW",
-        (_, None) => "READY",
+fn draw_status(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
+    let bar = theme.surface;
+    buf.set_style(area, Style::default().bg(bar).fg(theme.fg));
+    let ic = icons::get();
+    let y = area.y;
+    let right_edge = area.x + area.width;
+    let (mode, mode_bg) = match (app.focus, app.active_tab().map(|t| &t.kind)) {
+        (Focus::Sidebar, _) => ("EXPLORER", theme.accent2),
+        (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => ("EDITOR", theme.accent),
+        (_, Some(TabKind::Query(_))) => ("RESULTS", theme.success),
+        (_, Some(TabKind::Table(_))) => ("TABLE", theme.success),
+        (_, Some(TabKind::Structure(_))) => ("STRUCTURE", theme.info),
+        (_, Some(TabKind::Activity(_))) => ("ACTIVITY", theme.warning),
+        (_, Some(TabKind::Explain(_))) => ("EXPLAIN", theme.info),
+        (_, Some(TabKind::History(_))) => ("HISTORY", theme.info),
+        (_, Some(TabKind::Text(_))) => ("VIEW", theme.info),
+        (_, None) => ("READY", theme.muted),
     };
-    let mut x = area.x;
-    let mut put = |buf: &mut Buffer, text: &str, style: Style| {
-        buf.set_string(x, area.y, text, style);
-        x += text.width() as u16;
-    };
-    put(buf, &format!(" {mode} "), Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD));
+    let r = Pill { text: mode, fg: theme.bg, bg: mode_bg, bold: true }.draw(buf, area.x, y, bar, right_edge);
+    let mut x = r.x + r.width + 1;
+
     let conn = app.active_tab().and_then(|t| t.conn).and_then(|c| app.conn(c));
+    let mut buttons = Vec::new();
     match conn {
         Some(c) => {
-            let (tag, color) = match c.backend() {
-                Backend::Postgres => ("PG", theme.info),
-                Backend::MySql if c.info.is_mariadb => ("MDB", theme.warning),
-                Backend::MySql => ("MY", theme.warning),
-                Backend::Sqlite => ("SQ", theme.success),
+            let tag = match c.backend() {
+                Backend::Postgres => "PG",
+                Backend::MySql if c.info.is_mariadb => "MDB",
+                Backend::MySql => "MY",
+                Backend::Sqlite => "SQ",
             };
-            let ic = icons::get();
-            put(buf, " ", Style::default());
-            put(buf, &Icons::badge(ic.backend(c.backend(), c.info.is_mariadb), tag), Style::default().fg(color).add_modifier(Modifier::BOLD).bg(theme.highlight));
-            let label = match c.color {
-                Some(color) => Style::default().fg(theme.bg).bg(color).add_modifier(Modifier::BOLD),
-                None => Style::default().fg(theme.fg).bg(theme.surface),
+            let logo = ic.backend(c.backend(), c.info.is_mariadb);
+            let label = if logo.is_empty() { format!("{tag} {}", c.short_label()) } else { format!("{logo} {}", c.short_label()) };
+            let (fg, bg) = match c.color {
+                Some(color) => (theme.bg, color),
+                None => (theme.fg, theme.highlight),
             };
-            put(buf, &format!(" {} ", c.short_label()), label);
+            let r = Pill { text: &label, fg, bg, bold: true }.draw(buf, x, y, bar, right_edge);
+            buttons.push((r, Command::Connections));
+            x += r.width + 1;
+            let mut badge = |text: &str, fg: Color, bg: Color, x: &mut u16| {
+                let r = Pill { text, fg, bg, bold: true }.draw(buf, *x, y, bar, right_edge);
+                *x += r.width + 1;
+            };
             if c.in_tx {
-                put(buf, &Icons::badge(ic.tx, "TX"), Style::default().bg(theme.warning).fg(theme.bg).add_modifier(Modifier::BOLD));
-                put(buf, " ", Style::default());
+                badge(Icons::badge(ic.tx, "TX").trim(), theme.bg, theme.warning, &mut x);
             }
             if c.readonly {
-                put(buf, &Icons::badge(ic.ro, "READ-ONLY"), Style::default().bg(theme.info).fg(theme.bg).add_modifier(Modifier::BOLD));
-                put(buf, " ", Style::default());
+                badge(Icons::badge(ic.ro, "READ-ONLY").trim(), theme.bg, theme.info, &mut x);
             }
             if c.spec.ssh.is_some() {
-                put(buf, &Icons::badge(ic.ssh, "ssh"), Style::default().fg(theme.accent2));
+                badge(Icons::badge(ic.ssh, "ssh").trim(), theme.accent2, bar, &mut x);
             }
             if c.info.tls {
-                put(buf, &Icons::badge(ic.tls, "TLS"), Style::default().fg(theme.success));
+                badge(Icons::badge(ic.tls, "TLS").trim(), theme.success, bar, &mut x);
             }
         }
-        None => put(buf, "  not connected ", Style::default().fg(theme.muted)),
+        None => {
+            let r = Pill { text: "not connected", fg: theme.muted, bg: theme.highlight, bold: false }.draw(buf, x, y, bar, right_edge);
+            buttons.push((r, Command::Connections));
+            x += r.width + 1;
+        }
     }
+    app.areas.buttons.extend(buttons);
+
+    let clock = chrono::Local::now().format("%H:%M").to_string();
+    let clock = if ic.clock.is_empty() { clock } else { format!("{} {clock}", ic.clock) };
+    let position = match app.active_tab().map(|t| &t.kind) {
+        Some(TabKind::Query(q)) if q.pane == Pane::Editor => None,
+        Some(TabKind::Query(q)) if !q.showing_messages() => grid_position(&q.grid),
+        Some(TabKind::Table(t)) => grid_position(&t.grid),
+        _ => None,
+    };
+    let clock_pill = Pill { text: &clock, fg: theme.bg, bg: mode_bg, bold: true };
+    let mut rx = right_edge.saturating_sub(clock_pill.width());
+    clock_pill.draw(buf, rx, y, bar, right_edge);
+    if let Some(pos) = &position {
+        let p = Pill { text: pos, fg: theme.fg, bg: theme.highlight, bold: false };
+        rx = rx.saturating_sub(p.width() + 1);
+        p.draw(buf, rx, y, bar, right_edge);
+    }
+
     let hints = match (app.focus, app.active_tab().map(|t| &t.kind)) {
         (Focus::Sidebar, _) => "⏎ open  s structure  g script  / filter  r refresh",
-        (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => "^⏎ run  F5 all  F7 explain  ^Space complete  ^P commands",
-        (_, Some(TabKind::Query(_))) => "⏎ view  y copy  / search  [ ] results  m messages  ^X export",
+        (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => "^⏎ run  F5 all  F7 explain  ^Space complete",
+        (_, Some(TabKind::Query(_))) => "⏎ view  y copy  / search  [ ] results  m messages",
         (_, Some(TabKind::Table(_))) => "f filter  s sort  e edit  o insert  D delete  ^S apply",
-        _ => "^P commands  F1 help",
+        _ => "F1 help",
     };
-    let hw = hints.width() as u16 + 1;
-    if area.x + area.width > x + hw + 2 {
-        buf.set_string(area.x + area.width - hw, area.y, hints, Style::default().fg(theme.muted));
+    let hw = hints.width() as u16;
+    if rx > x + hw + 2 {
+        buf.set_string(rx - hw - 2, y, hints, Style::default().fg(theme.muted).bg(bar));
     }
+}
+
+fn grid_position(g: &super::widgets::grid::GridState) -> Option<String> {
+    let (row, _) = g.selected_cell()?;
+    Some(format!("{}/{}", fmt_count(row + 1), fmt_count(g.row_count())))
 }
 
 fn kind_glyph(kind: SuggestionKind, theme: &Theme) -> (&'static str, Color) {
@@ -571,14 +631,7 @@ fn draw_completion(buf: &mut Buffer, screen: Rect, app: &mut App, theme: &Theme)
     let y = if below { cy + 1 } else { cy.saturating_sub(height) };
     let x = cx.saturating_sub(1).min(screen.x + screen.width.saturating_sub(width));
     let area = Rect { x, y, width: width.min(screen.width), height };
-    Clear.render(area, buf);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.border_focus))
-        .style(Style::default().bg(theme.surface));
-    let inner = block.inner(area);
-    block.render(area, buf);
+    let inner = super::dialogs::modal(area, buf, theme, None, theme.border_focus);
     if popup.selected < popup.offset {
         popup.offset = popup.selected;
     } else if popup.selected >= popup.offset + visible {

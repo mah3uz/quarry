@@ -3,7 +3,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Widget};
+use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthStr;
 
 use super::widgets::input::{Input, InputEvent};
@@ -173,15 +173,8 @@ impl<T: Clone> Palette<T> {
             width,
             height,
         };
-        Clear.render(area, buf);
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(theme.border_focus))
-            .title(Span::styled(format!(" {} ", self.title), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)))
-            .style(Style::default().bg(theme.surface).fg(theme.fg));
-        let inner = block.inner(area);
-        block.render(area, buf);
+        let title = Span::styled(format!(" {} ", self.title), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD));
+        let inner = super::dialogs::modal(area, buf, theme, Some(title), theme.border_focus);
         if inner.height < 2 {
             return None;
         }

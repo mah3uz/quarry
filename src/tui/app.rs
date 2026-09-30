@@ -89,6 +89,8 @@ pub struct Toast {
 pub enum Command {
     NewQuery,
     CloseTab,
+    CloseTabAt(usize),
+    Commands,
     NextTab,
     PrevTab,
     ToggleSidebar,
@@ -170,6 +172,8 @@ pub struct Areas {
     pub result_tabs: Vec<(Rect, usize)>,
     pub grid: Rect,
     pub struct_tabs: Vec<(Rect, usize)>,
+    /// Anything clickable that runs a command: tab close, new tab, run, status-bar pills.
+    pub buttons: Vec<(Rect, Command)>,
 }
 
 pub struct App {
@@ -392,7 +396,9 @@ impl App {
     pub fn open_connection_manager(&mut self) {
         let saved: Vec<(String, SavedConnection)> =
             self.config.connections.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        self.overlay = Some(Overlay::Connect(ConnectForm::new(saved)));
+        let mut form = ConnectForm::new(saved);
+        form.open = self.conns.iter().flatten().map(|c| c.name.clone()).collect();
+        self.overlay = Some(Overlay::Connect(form));
     }
 
     fn start_connect(&mut self, name: String, spec: ConnSpec, save_as: Option<String>) {
@@ -2150,33 +2156,42 @@ impl App {
                 }
                 DialogResult::None => {}
             },
-            Overlay::Connect(form) => match form.handle_key(key) {
-                ConnectEvent::Close => {
+            Overlay::Connect(form) => {
+                let ev = form.handle_key(key);
+                self.on_connect_event(ev);
+            }
+        }
+    }
+
+    fn on_connect_event(&mut self, ev: ConnectEvent) {
+        match ev {
+            ConnectEvent::Close => self.overlay = None,
+            ConnectEvent::Connect { spec, save_as, name } => {
+                if let Some(id) = open_conn_named(&self.conns, &name, spec.backend) {
                     self.overlay = None;
+                    self.focus_connection(id);
+                    self.toast(Level::Info, format!("Already connected to {name}"));
+                    return;
                 }
-                ConnectEvent::Connect { spec, save_as, name } => {
-                    if let Some(id) = open_conn_named(&self.conns, &name, spec.backend) {
-                        self.overlay = None;
-                        self.focus_connection(id);
-                        self.toast(Level::Info, format!("Already connected to {name}"));
-                        return;
-                    }
-                    if self.pending_connects.values().any(|(n, _, _)| *n == name) {
-                        return;
-                    }
+                if self.pending_connects.values().any(|(n, _, _)| *n == name) {
+                    return;
+                }
+                if let Some(Overlay::Connect(form)) = &mut self.overlay {
                     form.busy = true;
-                    self.start_connect(name, *spec, save_as);
                 }
-                ConnectEvent::Delete(name) => {
-                    self.config.connections.remove(&name);
+                self.start_connect(name, *spec, save_as);
+            }
+            ConnectEvent::Delete(name) => {
+                self.config.connections.remove(&name);
+                if let Some(Overlay::Connect(form)) = &mut self.overlay {
                     form.saved.retain(|(n, _)| *n != name);
-                    match self.config.save() {
-                        Ok(()) => self.toast(Level::Info, format!("Deleted connection '{name}'")),
-                        Err(e) => self.toast(Level::Error, e.to_string()),
-                    }
                 }
-                ConnectEvent::None => {}
-            },
+                match self.config.save() {
+                    Ok(()) => self.toast(Level::Info, format!("Deleted connection '{name}'")),
+                    Err(e) => self.toast(Level::Error, e.to_string()),
+                }
+            }
+            ConnectEvent::None => {}
         }
     }
 
@@ -2361,6 +2376,8 @@ impl App {
                 self.new_query_tab(None, None);
             }
             Command::CloseTab => self.close_tab(self.active),
+            Command::CloseTabAt(i) => self.close_tab(i),
+            Command::Commands => self.open_commands(),
             Command::NextTab => {
                 if !self.tabs.is_empty() {
                     self.active = (self.active + 1) % self.tabs.len();
@@ -2755,11 +2772,32 @@ impl App {
 
     // ---------------------------------------------------------------- mouse
 
+    fn on_overlay_mouse(&mut self, m: MouseEvent) {
+        if let Some(Overlay::Connect(form)) = &mut self.overlay {
+            let ev = form.handle_mouse(m);
+            self.on_connect_event(ev);
+        }
+    }
+
     fn on_mouse(&mut self, m: MouseEvent) {
         if self.overlay.is_some() {
+            self.on_overlay_mouse(m);
             return;
         }
         let inside = |r: Rect| m.column >= r.x && m.column < r.x + r.width && m.row >= r.y && m.row < r.y + r.height;
+        if let MouseEventKind::Down(MouseButton::Left) = m.kind
+            && let Some((_, cmd)) = self.areas.buttons.iter().find(|(r, _)| inside(*r))
+        {
+            let cmd = cmd.clone();
+            self.run_command(cmd);
+            return;
+        }
+        if let MouseEventKind::Down(MouseButton::Middle) = m.kind
+            && let Some((_, i)) = self.areas.header_tabs.iter().find(|(r, _)| inside(*r))
+        {
+            self.close_tab(*i);
+            return;
+        }
         if let MouseEventKind::Down(MouseButton::Left) = m.kind {
             if let Some((_, i)) = self.areas.header_tabs.iter().find(|(r, _)| inside(*r)) {
                 self.active = *i;

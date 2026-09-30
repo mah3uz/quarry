@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -20,15 +20,25 @@ pub fn centered(screen: Rect, width: u16, height: u16) -> Rect {
 }
 
 pub fn frame(area: Rect, buf: &mut Buffer, theme: &Theme, title: &str, accent: ratatui::style::Color) -> Rect {
+    let title = Span::styled(format!(" {title} "), Style::default().fg(accent).add_modifier(Modifier::BOLD));
+    modal(area, buf, theme, Some(title), accent)
+}
+
+/// A floating box: the border sits on the app background so its rounded corners read as round,
+/// and only the inside takes the popup colour.
+pub fn modal(area: Rect, buf: &mut Buffer, theme: &Theme, title: Option<Span<'_>>, border: ratatui::style::Color) -> Rect {
     Clear.render(area, buf);
-    let block = Block::default()
+    let mut block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(accent))
-        .title(Span::styled(format!(" {title} "), Style::default().fg(accent).add_modifier(Modifier::BOLD)))
-        .style(Style::default().bg(theme.surface).fg(theme.fg));
+        .border_style(Style::default().fg(border).bg(theme.bg))
+        .style(Style::default().bg(theme.bg).fg(theme.fg));
+    if let Some(t) = title {
+        block = block.title(t);
+    }
     let inner = block.inner(area);
     block.render(area, buf);
+    buf.set_style(inner, Style::default().bg(theme.surface).fg(theme.fg));
     inner
 }
 
@@ -336,9 +346,8 @@ impl HelpView {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Field {
-    Name,
-    Url,
     Backend,
+    Url,
     Host,
     Port,
     User,
@@ -346,13 +355,12 @@ enum Field {
     Database,
     Ssl,
     ReadOnly,
-    Save,
+    Name,
 }
 
-const FIELDS: [Field; 11] = [
-    Field::Name,
-    Field::Url,
+const FIELDS: [Field; 10] = [
     Field::Backend,
+    Field::Url,
     Field::Host,
     Field::Port,
     Field::User,
@@ -360,7 +368,16 @@ const FIELDS: [Field; 11] = [
     Field::Database,
     Field::Ssl,
     Field::ReadOnly,
-    Field::Save,
+    Field::Name,
+];
+
+const BACKENDS: [(Backend, &str); 3] = [(Backend::Postgres, "PostgreSQL"), (Backend::MySql, "MySQL / MariaDB"), (Backend::Sqlite, "SQLite")];
+const SSL_MODES: [(SslMode, &str); 5] = [
+    (SslMode::Disable, "disable"),
+    (SslMode::Prefer, "prefer"),
+    (SslMode::Require, "require"),
+    (SslMode::VerifyCa, "verify-ca"),
+    (SslMode::VerifyFull, "verify-full"),
 ];
 
 pub enum ConnectEvent {
@@ -371,8 +388,23 @@ pub enum ConnectEvent {
     Delete(String),
 }
 
+/// What a click at a spot in the dialog means; filled in while rendering.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Hit {
+    Saved(usize),
+    NewConnection,
+    Field(usize),
+    Backend(Backend),
+    SslPrev,
+    SslNext,
+    Connect,
+    Back,
+}
+
 pub struct ConnectForm {
     pub saved: Vec<(String, SavedConnection)>,
+    /// Names of the connections already open, marked in the list.
+    pub open: Vec<String>,
     list_selected: usize,
     in_list: bool,
     field: usize,
@@ -386,7 +418,7 @@ pub struct ConnectForm {
     database: Input,
     ssl: SslMode,
     readonly: bool,
-    save: bool,
+    hits: Vec<(Rect, Hit)>,
     pub error: Option<String>,
     pub busy: bool,
 }
@@ -396,20 +428,21 @@ impl ConnectForm {
         let in_list = !saved.is_empty();
         ConnectForm {
             saved,
+            open: Vec::new(),
             list_selected: 0,
             in_list,
             field: 1,
-            name: Input::new("").with_placeholder("optional — saves the connection"),
-            url: Input::new("").with_placeholder("postgres://user@host/db · mysql://… · sqlite:file.db (overrides fields)"),
+            name: Input::new("").with_placeholder("optional; saves the connection under this name"),
+            url: Input::new("").with_placeholder("paste a URL, or fill in the fields below"),
             backend: Backend::Postgres,
             host: Input::new("").with_placeholder("localhost"),
             port: Input::new("").with_placeholder("default"),
             user: Input::new("").with_placeholder("current user"),
-            password: Input::new("").masked().with_placeholder("prompted if needed"),
+            password: Input::new("").masked().with_placeholder("asked for if needed"),
             database: Input::new(""),
             ssl: SslMode::Prefer,
             readonly: false,
-            save: true,
+            hits: Vec::new(),
             error: None,
             busy: false,
         }
@@ -472,58 +505,65 @@ impl ConnectForm {
     /// URL stored in the config: never contains the password.
     pub fn url_for_saving(spec: &ConnSpec) -> String {
         let mut url = spec.display_url();
-        let mut params = Vec::new();
         if spec.backend != Backend::Sqlite && spec.ssl_mode != SslMode::Prefer {
-            params.push(format!("sslmode={}", match spec.ssl_mode {
-                SslMode::Disable => "disable",
-                SslMode::Prefer => "prefer",
-                SslMode::Require => "require",
-                SslMode::VerifyCa => "verify-ca",
-                SslMode::VerifyFull => "verify-full",
-            }));
-        }
-        if !params.is_empty() {
-            url.push('?');
-            url.push_str(&params.join("&"));
+            let mode = SSL_MODES.iter().find(|(m, _)| *m == spec.ssl_mode).map_or("prefer", |(_, n)| n);
+            url.push_str(&format!("?sslmode={mode}"));
         }
         url
     }
 
+    fn connect_saved(&mut self, i: usize) -> ConnectEvent {
+        let Some((name, saved)) = self.saved.get(i) else { return ConnectEvent::None };
+        match ConnSpec::parse(&saved.url) {
+            Ok(mut spec) => {
+                spec.readonly |= saved.readonly;
+                if let Some(ssh) = &saved.ssh {
+                    spec.ssh = crate::conn::SshSpec::parse(ssh);
+                }
+                spec.init_commands.extend(saved.init_commands.iter().cloned());
+                ConnectEvent::Connect { spec: Box::new(spec), save_as: None, name: name.clone() }
+            }
+            Err(e) => {
+                self.error = Some(e);
+                ConnectEvent::None
+            }
+        }
+    }
+
+    fn cycle_backend(&mut self, forward: bool) {
+        let i = BACKENDS.iter().position(|(b, _)| *b == self.backend).unwrap_or(0);
+        self.backend = BACKENDS[if forward { (i + 1) % 3 } else { (i + 2) % 3 }].0;
+    }
+
+    fn cycle_ssl(&mut self, forward: bool) {
+        let n = SSL_MODES.len();
+        let i = SSL_MODES.iter().position(|(m, _)| *m == self.ssl).unwrap_or(1);
+        self.ssl = SSL_MODES[if forward { (i + 1) % n } else { (i + n - 1) % n }].0;
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> ConnectEvent {
         self.error = None;
-        if key.code == KeyCode::Esc {
-            return ConnectEvent::Close;
-        }
         if self.in_list {
             match key.code {
+                KeyCode::Esc => return ConnectEvent::Close,
                 KeyCode::Down | KeyCode::Char('j') => self.list_selected = (self.list_selected + 1).min(self.saved.len().saturating_sub(1)),
                 KeyCode::Up | KeyCode::Char('k') => self.list_selected = self.list_selected.saturating_sub(1),
-                KeyCode::Tab | KeyCode::Right | KeyCode::Char('n') => self.in_list = false,
+                KeyCode::Tab | KeyCode::Char('n') => self.in_list = false,
                 KeyCode::Char('d') | KeyCode::Delete => {
                     if let Some((name, _)) = self.saved.get(self.list_selected) {
                         return ConnectEvent::Delete(name.clone());
                     }
                 }
-                KeyCode::Enter => {
-                    if let Some((name, saved)) = self.saved.get(self.list_selected) {
-                        return match ConnSpec::parse(&saved.url) {
-                            Ok(mut spec) => {
-                                spec.readonly |= saved.readonly;
-                                if let Some(ssh) = &saved.ssh {
-                                    spec.ssh = crate::conn::SshSpec::parse(ssh);
-                                }
-                                spec.init_commands.extend(saved.init_commands.iter().cloned());
-                                ConnectEvent::Connect { spec: Box::new(spec), save_as: None, name: name.clone() }
-                            }
-                            Err(e) => {
-                                self.error = Some(e);
-                                ConnectEvent::None
-                            }
-                        };
-                    }
-                }
+                KeyCode::Enter => return self.connect_saved(self.list_selected),
                 _ => {}
             }
+            return ConnectEvent::None;
+        }
+        if key.code == KeyCode::Esc {
+            if self.saved.is_empty() {
+                return ConnectEvent::Close;
+            }
+            self.in_list = true;
             return ConnectEvent::None;
         }
         let fields = self.visible_fields();
@@ -536,47 +576,28 @@ impl ConnectForm {
                 return ConnectEvent::None;
             }
             KeyCode::BackTab | KeyCode::Up => {
-                if self.field == 0 && !self.saved.is_empty() {
-                    self.in_list = true;
-                } else {
-                    self.field = (self.field + fields.len() - 1) % fields.len();
-                }
+                self.field = (self.field + fields.len() - 1) % fields.len();
                 return ConnectEvent::None;
             }
-            KeyCode::Enter if !matches!(f, Field::Backend | Field::Ssl | Field::ReadOnly | Field::Save) || ctrl => {
+            KeyCode::Enter if !matches!(f, Field::Backend | Field::Ssl | Field::ReadOnly) || ctrl => {
                 return self.submit();
             }
             _ => {}
         }
         match f {
-            Field::Backend => {
-                let order = [Backend::Postgres, Backend::MySql, Backend::Sqlite];
-                let i = order.iter().position(|b| *b == self.backend).unwrap_or(0);
-                match key.code {
-                    KeyCode::Left | KeyCode::Char('h') => self.backend = order[(i + 2) % 3],
-                    KeyCode::Right | KeyCode::Char('l') | KeyCode::Char(' ') | KeyCode::Enter => self.backend = order[(i + 1) % 3],
-                    _ => {}
-                }
-            }
-            Field::Ssl => {
-                let order = [SslMode::Disable, SslMode::Prefer, SslMode::Require, SslMode::VerifyCa, SslMode::VerifyFull];
-                let i = order.iter().position(|m| *m == self.ssl).unwrap_or(1);
-                match key.code {
-                    KeyCode::Left | KeyCode::Char('h') => self.ssl = order[(i + 4) % 5],
-                    KeyCode::Right | KeyCode::Char('l') | KeyCode::Char(' ') | KeyCode::Enter => self.ssl = order[(i + 1) % 5],
-                    _ => {}
-                }
-            }
+            Field::Backend => match key.code {
+                KeyCode::Left | KeyCode::Char('h') => self.cycle_backend(false),
+                KeyCode::Right | KeyCode::Char('l') | KeyCode::Char(' ') | KeyCode::Enter => self.cycle_backend(true),
+                _ => {}
+            },
+            Field::Ssl => match key.code {
+                KeyCode::Left | KeyCode::Char('h') => self.cycle_ssl(false),
+                KeyCode::Right | KeyCode::Char('l') | KeyCode::Char(' ') | KeyCode::Enter => self.cycle_ssl(true),
+                _ => {}
+            },
             Field::ReadOnly => {
                 if matches!(key.code, KeyCode::Char(' ') | KeyCode::Enter | KeyCode::Left | KeyCode::Right) {
                     self.readonly = !self.readonly;
-                }
-            }
-            Field::Save => {
-                if matches!(key.code, KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right) {
-                    self.save = !self.save;
-                } else if key.code == KeyCode::Enter {
-                    return self.submit();
                 }
             }
             other => {
@@ -588,12 +609,54 @@ impl ConnectForm {
         ConnectEvent::None
     }
 
+    pub fn handle_mouse(&mut self, m: MouseEvent) -> ConnectEvent {
+        match m.kind {
+            MouseEventKind::ScrollDown if self.in_list => {
+                self.list_selected = (self.list_selected + 1).min(self.saved.len().saturating_sub(1));
+            }
+            MouseEventKind::ScrollUp if self.in_list => self.list_selected = self.list_selected.saturating_sub(1),
+            MouseEventKind::Down(MouseButton::Left) => {
+                let at = |r: &Rect| m.column >= r.x && m.column < r.x + r.width && m.row >= r.y && m.row < r.y + r.height;
+                let Some(&(_, hit)) = self.hits.iter().find(|(r, _)| at(r)) else { return ConnectEvent::None };
+                self.error = None;
+                match hit {
+                    Hit::Saved(i) => {
+                        self.list_selected = i;
+                        return self.connect_saved(i);
+                    }
+                    Hit::NewConnection => self.in_list = false,
+                    Hit::Field(i) => {
+                        self.field = i;
+                        if self.visible_fields().get(i) == Some(&Field::ReadOnly) {
+                            self.readonly = !self.readonly;
+                        }
+                    }
+                    Hit::Backend(b) => {
+                        self.backend = b;
+                        self.field = 0;
+                    }
+                    Hit::SslPrev => self.cycle_ssl(false),
+                    Hit::SslNext => self.cycle_ssl(true),
+                    Hit::Connect => return self.submit(),
+                    Hit::Back => {
+                        if self.saved.is_empty() {
+                            return ConnectEvent::Close;
+                        }
+                        self.in_list = true;
+                    }
+                }
+            }
+            _ => {}
+        }
+        ConnectEvent::None
+    }
+
     fn submit(&mut self) -> ConnectEvent {
         match self.build_spec() {
             Ok(spec) => {
                 let name = self.name.value().trim().to_string();
                 let label = if name.is_empty() { spec.label() } else { name.clone() };
-                let save_as = (self.save && !name.is_empty()).then_some(name);
+                let save_as = (!name.is_empty()).then_some(name);
                 ConnectEvent::Connect { spec: Box::new(spec), save_as, name: label }
             }
             Err(e) => {
@@ -604,119 +667,165 @@ impl ConnectForm {
     }
 
     pub fn render(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> Option<(u16, u16)> {
-        let rows = (self.visible_fields().len() + 5).max(self.saved.len() + 4) as u16;
-        let area = centered(screen, 100, rows.min(30));
-        let inner = frame(area, buf, theme, "Connections", theme.border_focus);
-        let list_w = if self.saved.is_empty() { 0 } else { 30.min(inner.width / 3) };
-        let mut cursor = None;
-        if list_w > 0 {
-            buf.set_string(inner.x + 1, inner.y, "Saved", Style::default().fg(theme.muted).add_modifier(Modifier::BOLD));
-            for (i, (name, c)) in self.saved.iter().enumerate().take(inner.height.saturating_sub(3) as usize) {
-                let y = inner.y + 1 + i as u16;
-                let sel = i == self.list_selected;
-                let style = if sel && self.in_list {
-                    Style::default().bg(theme.selection).fg(theme.fg).add_modifier(Modifier::BOLD)
-                } else if sel {
-                    Style::default().bg(theme.highlight).fg(theme.fg)
-                } else {
-                    Style::default().fg(theme.fg)
-                };
-                let backend = ConnSpec::parse(&c.url).map(|s| match (icons::get().backend(s.backend, false), s.backend) {
-                    (icon, _) if !icon.is_empty() => icon,
-                    (_, Backend::Postgres) => "pg",
-                    (_, Backend::MySql) => "my",
-                    (_, Backend::Sqlite) => "sq",
-                }).unwrap_or("??");
-                buf.set_style(Rect { x: inner.x, y, width: list_w, height: 1 }, style);
-                buf.set_string(inner.x + 1, y, backend, Style::default().fg(theme.accent2));
-                buf.set_stringn(inner.x + 4, y, name, list_w.saturating_sub(6) as usize, style);
-                if c.readonly {
-                    buf.set_string(inner.x + list_w - 2, y, icons::get().readonly_mark, Style::default().fg(theme.info));
-                }
-            }
-            for y in inner.y..inner.y + inner.height {
-                buf.set_string(inner.x + list_w, y, "│", Style::default().fg(theme.border));
-            }
+        self.hits.clear();
+        if self.in_list {
+            self.render_list(screen, buf, theme);
+            None
+        } else {
+            self.render_form(screen, buf, theme)
         }
-        let fx = inner.x + list_w + 2;
-        let fw = inner.width.saturating_sub(list_w + 3);
-        let label_w = 11u16;
-        buf.set_string(fx, inner.y, "New connection", Style::default().fg(theme.muted).add_modifier(Modifier::BOLD));
+    }
+
+    fn footer(&self, buf: &mut Buffer, inner: Rect, theme: &Theme, hint: &str) {
+        let x = inner.x + 2;
+        let w = inner.width.saturating_sub(4) as usize;
+        let y = inner.y + inner.height - 1;
+        if let Some(e) = &self.error {
+            buf.set_stringn(x, y - 1, format!("{} {e}", icons::get().error), w, Style::default().fg(theme.error));
+        } else if self.busy {
+            buf.set_string(x, y - 1, "Connecting…", Style::default().fg(theme.info));
+        }
+        buf.set_stringn(x, y, hint, w, Style::default().fg(theme.muted));
+    }
+
+    fn render_list(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) {
+        let ic = icons::get();
+        let rows = self.saved.len() as u16 + 7;
+        let area = centered(screen, 72, rows.min(screen.height.saturating_sub(2)));
+        let inner = frame(area, buf, theme, "Connections", theme.border_focus);
+        let x = inner.x + 1;
+        let w = inner.width.saturating_sub(2);
+        let list_h = inner.height.saturating_sub(5) as usize;
+        let offset = self.list_selected.saturating_sub(list_h.saturating_sub(1));
+        let name_w = self.saved.iter().map(|(n, _)| n.width()).max().unwrap_or(0).clamp(8, 28) as u16;
+        for (row, (i, (name, c))) in self.saved.iter().enumerate().skip(offset).take(list_h).enumerate() {
+            let y = inner.y + 1 + row as u16;
+            let sel = i == self.list_selected;
+            let line = Rect { x, y, width: w, height: 1 };
+            let bg = if sel { theme.selection } else { theme.surface };
+            buf.set_style(line, Style::default().bg(bg));
+            let spec = ConnSpec::parse(&c.url).ok();
+            let icon = spec.as_ref().map_or(ic.connection, |s| ic.connection(s.backend, false));
+            buf.set_string(x + 1, y, icon, Style::default().fg(theme.accent2).bg(bg));
+            let mut st = Style::default().fg(theme.fg).bg(bg);
+            if sel {
+                st = st.add_modifier(Modifier::BOLD);
+            }
+            buf.set_stringn(x + 3, y, name, name_w as usize, st);
+            let target = spec.map(|s| {
+                let url = s.display_url();
+                url.split_once("://").map_or(url.clone(), |(_, rest)| rest.trim_end_matches('/').to_string())
+            });
+            let tx = x + 3 + name_w + 2;
+            let marks_w = 4u16;
+            let target_w = (x + w).saturating_sub(tx + marks_w) as usize;
+            buf.set_stringn(tx, y, target.unwrap_or_else(|| c.url.clone()), target_w, Style::default().fg(theme.muted).bg(bg));
+            let mut mx = x + w - marks_w + 1;
+            if c.readonly {
+                buf.set_string(mx, y, ic.readonly_mark, Style::default().fg(theme.info).bg(bg));
+            }
+            mx += 2;
+            if self.open.contains(name) {
+                buf.set_string(mx, y, ic.ok, Style::default().fg(theme.success).bg(bg));
+            }
+            self.hits.push((line, Hit::Saved(i)));
+        }
+        let ny = inner.y + 1 + list_h.min(self.saved.len()) as u16 + 1;
+        let label = format!("{} New connection", ic.add);
+        buf.set_string(x + 1, ny, &label, Style::default().fg(theme.accent));
+        self.hits.push((Rect { x, y: ny, width: label.width() as u16 + 2, height: 1 }, Hit::NewConnection));
+        self.footer(buf, inner, theme, "⏎ connect   n new   d delete   esc close");
+    }
+
+    fn render_form(&mut self, screen: Rect, buf: &mut Buffer, theme: &Theme) -> Option<(u16, u16)> {
+        let ic = icons::get();
         let fields = self.visible_fields();
-        let focused_field = (!self.in_list).then(|| fields[self.field.min(fields.len() - 1)]);
-        for (y, f) in (inner.y + 1..).zip(fields) {
+        let area = centered(screen, 72, fields.len() as u16 + 7);
+        let inner = frame(area, buf, theme, "New connection", theme.border_focus);
+        let focused = fields[self.field.min(fields.len() - 1)];
+        let label_w = 10u16;
+        let x = inner.x + 2;
+        let vx = x + label_w;
+        let vw = inner.width.saturating_sub(label_w + 4);
+        let mut cursor = None;
+        let mut y = inner.y + 1;
+        for (i, f) in fields.iter().copied().enumerate() {
             let label = match f {
-                Field::Name => "Name",
-                Field::Url => "URL",
                 Field::Backend => "Type",
+                Field::Url => "URL",
                 Field::Host => "Host",
                 Field::Port => "Port",
                 Field::User => "User",
                 Field::Password => "Password",
-                Field::Database => if self.backend == Backend::Sqlite { "File" } else { "Database" },
-                Field::Ssl => "SSL",
-                Field::ReadOnly => "Read-only",
-                Field::Save => "Save",
+                Field::Database if self.backend == Backend::Sqlite => "File",
+                Field::Database => "Database",
+                Field::Ssl => "TLS",
+                Field::ReadOnly => "",
+                Field::Name => "Save as",
             };
-            let focused = focused_field == Some(f);
-            let lstyle = if focused { Style::default().fg(theme.accent).add_modifier(Modifier::BOLD) } else { Style::default().fg(theme.muted) };
-            buf.set_string(fx, y, format!("{}{label}", if focused { format!("{} ", icons::get().more_right) } else { "  ".into() }), lstyle);
-            let vx = fx + label_w + 2;
-            let vw = fw.saturating_sub(label_w + 3);
-            let varea = Rect { x: vx, y, width: vw, height: 1 };
-            if focused {
-                buf.set_style(varea, Style::default().bg(theme.highlight));
+            if f == Field::Name {
+                y += 1;
             }
-            let choice = |buf: &mut Buffer, opts: &[&str], cur: usize| {
-                let mut x = vx;
-                for (i, o) in opts.iter().enumerate() {
-                    let st = if i == cur {
-                        Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(theme.muted)
-                    };
-                    let t = format!(" {o} ");
-                    buf.set_string(x, y, &t, st);
-                    x += t.width() as u16 + 1;
-                }
-            };
+            let is_focus = f == focused;
+            let lstyle = if is_focus { Style::default().fg(theme.accent).add_modifier(Modifier::BOLD) } else { Style::default().fg(theme.muted) };
+            buf.set_string(x, y, label, lstyle);
+            let varea = Rect { x: vx, y, width: vw, height: 1 };
+            self.hits.push((Rect { x, y, width: label_w + vw, height: 1 }, Hit::Field(i)));
             match f {
-                Field::Backend => choice(buf, &["PostgreSQL", "MySQL/MariaDB", "SQLite"], match self.backend {
-                    Backend::Postgres => 0,
-                    Backend::MySql => 1,
-                    Backend::Sqlite => 2,
-                }),
-                Field::Ssl => choice(buf, &["disable", "prefer", "require", "verify-ca", "verify-full"], match self.ssl {
-                    SslMode::Disable => 0,
-                    SslMode::Prefer => 1,
-                    SslMode::Require => 2,
-                    SslMode::VerifyCa => 3,
-                    SslMode::VerifyFull => 4,
-                }),
-                Field::ReadOnly => choice(buf, &["off", "on"], self.readonly as usize),
-                Field::Save => choice(buf, &["no", "yes"], self.save as usize),
+                Field::Backend => {
+                    let mut bx = vx;
+                    for (b, name) in BACKENDS {
+                        let on = b == self.backend;
+                        let st = match (on, is_focus) {
+                            (true, _) => Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD),
+                            (false, true) => Style::default().fg(theme.fg),
+                            (false, false) => Style::default().fg(theme.muted),
+                        };
+                        let t = format!(" {name} ");
+                        buf.set_string(bx, y, &t, st);
+                        self.hits.push((Rect { x: bx, y, width: t.width() as u16, height: 1 }, Hit::Backend(b)));
+                        bx += t.width() as u16 + 1;
+                    }
+                }
+                Field::Ssl => {
+                    let name = SSL_MODES.iter().find(|(m, _)| *m == self.ssl).map_or("prefer", |(_, n)| n);
+                    let st = if is_focus { Style::default().fg(theme.fg).bg(theme.highlight) } else { Style::default().fg(theme.fg) };
+                    let arrow = Style::default().fg(theme.accent);
+                    buf.set_string(vx, y, ic.more_left, arrow);
+                    buf.set_string(vx + 2, y, format!("{name:<11}"), st);
+                    buf.set_string(vx + 14, y, ic.more_right, arrow);
+                    self.hits.push((Rect { x: vx, y, width: 2, height: 1 }, Hit::SslPrev));
+                    self.hits.push((Rect { x: vx + 13, y, width: 2, height: 1 }, Hit::SslNext));
+                }
+                Field::ReadOnly => {
+                    let mark = if self.readonly { "[x]" } else { "[ ]" };
+                    let st = if is_focus { Style::default().fg(theme.fg).bg(theme.highlight) } else { Style::default().fg(theme.fg) };
+                    buf.set_string(vx, y, format!("{mark} read-only"), st);
+                }
                 other => {
+                    if is_focus {
+                        buf.set_style(varea, Style::default().bg(theme.highlight));
+                    }
                     if let Some(input) = self.input_mut(other) {
-                        let c = input.render(varea, buf, theme, focused);
-                        if focused {
+                        let c = input.render(varea, buf, theme, is_focus);
+                        if is_focus {
                             cursor = c;
                         }
                     }
                 }
             }
+            y += 1;
         }
-        let msg_y = inner.y + inner.height - 2;
-        if let Some(e) = &self.error {
-            buf.set_stringn(fx, msg_y, format!("{} {e}", icons::get().error), fw as usize, Style::default().fg(theme.error));
-        } else if self.busy {
-            buf.set_string(fx, msg_y, "Connecting…", Style::default().fg(theme.info));
-        }
-        let hint = if self.in_list {
-            "⏎ connect · d delete · Tab new connection · Esc close"
-        } else {
-            "Tab/↑↓ fields · ←→ choose · ⏎ connect · Esc close"
-        };
-        buf.set_stringn(fx, inner.y + inner.height - 1, hint, fw as usize, Style::default().fg(theme.muted));
+        let by = inner.y + inner.height - 1;
+        let connect = " Connect ";
+        let back = if self.saved.is_empty() { " Cancel " } else { " Back " };
+        let cx = inner.x + inner.width - connect.width() as u16 - 2;
+        let bx = cx - back.width() as u16 - 1;
+        buf.set_string(cx, by, connect, Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD));
+        buf.set_string(bx, by, back, Style::default().bg(theme.highlight).fg(theme.fg));
+        self.hits.push((Rect { x: cx, y: by, width: connect.width() as u16, height: 1 }, Hit::Connect));
+        self.hits.push((Rect { x: bx, y: by, width: back.width() as u16, height: 1 }, Hit::Back));
+        self.footer(buf, Rect { width: inner.width.saturating_sub(connect.width() as u16 + back.width() as u16 + 3), ..inner }, theme, "⏎ connect  tab next  esc back");
         cursor
     }
 }
@@ -745,10 +854,40 @@ mod tests {
         }
     }
 
+    /// There is no separate "save" switch any more: a name is what saves a connection.
+    #[test]
+    fn a_name_saves_the_connection_and_no_name_does_not() {
+        let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+        let mut f = ConnectForm::new(Vec::new());
+        type_str(&mut f, "sqlite::memory:");
+        match f.handle_key(key(KeyCode::Enter)) {
+            ConnectEvent::Connect { save_as, .. } => assert_eq!(save_as, None),
+            _ => panic!("expected connect"),
+        }
+        f.field = FIELDS.iter().position(|x| *x == Field::Name).unwrap();
+        type_str(&mut f, "scratch");
+        match f.handle_key(key(KeyCode::Enter)) {
+            ConnectEvent::Connect { save_as, name, .. } => {
+                assert_eq!(save_as.as_deref(), Some("scratch"));
+                assert_eq!(name, "scratch");
+            }
+            _ => panic!("expected connect"),
+        }
+    }
+
+    #[test]
+    fn escape_in_the_form_goes_back_to_the_saved_list_before_closing() {
+        let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+        let mut f = ConnectForm::new(vec![("local".into(), SavedConnection { url: "sqlite::memory:".into(), ..Default::default() })]);
+        f.handle_key(key(KeyCode::Char('n')));
+        assert!(matches!(f.handle_key(key(KeyCode::Esc)), ConnectEvent::None));
+        assert!(matches!(f.handle_key(key(KeyCode::Esc)), ConnectEvent::Close));
+    }
+
     #[test]
     fn sqlite_requires_a_file() {
         let mut f = ConnectForm::new(Vec::new());
-        f.field = 2;
+        f.field = 0;
         f.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
         assert_eq!(f.backend, Backend::Sqlite);
         assert!(f.build_spec().is_err());

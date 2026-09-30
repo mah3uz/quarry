@@ -369,13 +369,20 @@ pub(super) fn render(columns: &[Column], rows: &[Row], opts: &OutputOptions) -> 
     let vertical_only = opts.format == TableFormat::Vertical || opts.expanded == Expanded::On;
     let grid = Grid::build(columns, rows, opts, fr.markdown && !vertical_only);
     let paint = Paint::new(opts);
+    let cards = fr.top.is_some() && fr.row.is_some();
     if vertical_only {
+        if cards && opts.format != TableFormat::Vertical {
+            return render_cards(&grid, &fr, &paint, opts.terminal_width);
+        }
         return render_vertical(&grid, &paint);
     }
     let n = grid.widths.len();
     let total = str_width(fr.left) + str_width(fr.right) + str_width(fr.sep) * n.saturating_sub(1)
         + grid.widths.iter().sum::<usize>();
     if opts.expanded == Expanded::Auto && opts.terminal_width > 0 && total > opts.terminal_width && !rows.is_empty() {
+        if cards {
+            return render_cards(&grid, &fr, &paint, opts.terminal_width);
+        }
         return render_vertical(&grid, &paint);
     }
     render_table(&grid, &fr, &paint, opts, total)
@@ -538,6 +545,80 @@ fn push_spaces(out: &mut String, n: usize) {
         out.push_str(&SPACES[..k]);
         n -= k;
     }
+}
+
+/// Expanded output in the boxed formats: one record per section of a two-column frame (names, values),
+/// numbered in the rule above it. Open on the right, since values can be wider than the terminal.
+fn render_cards(grid: &Grid, fr: &Frame, paint: &Paint, terminal_width: usize) -> String {
+    let (Some(top), Some(mid), Some(bottom)) = (fr.top, fr.row, fr.bottom) else { return render_vertical(grid, paint) };
+    let n_rows = grid.cells.len() / grid.header.len().max(1);
+    let name_w = grid.header.iter().map(|c| c.width).max().unwrap_or(0).max(n_rows.to_string().len() + 2);
+    let value_w = grid.cells.iter().map(|c| c.width).max().unwrap_or(0);
+    let room = if terminal_width > 0 { terminal_width.saturating_sub(name_w + 5) } else { value_w + 1 };
+    let fill_w = (value_w + 1).min(room).max(4);
+    let bar = fr.left.trim_end();
+    let rule = |out: &mut String, r: &Rule, label: Option<usize>| {
+        out.push_str(&paint.border);
+        out.push_str(r.left);
+        let first = match label {
+            Some(n) => {
+                let l = format!("{} {n} ", r.fill);
+                let w = str_width(&l);
+                out.push_str(&l);
+                w
+            }
+            None => 0,
+        };
+        for _ in first..name_w + 2 {
+            out.push_str(r.fill);
+        }
+        out.push_str(r.cross);
+        for _ in 0..fill_w {
+            out.push_str(r.fill);
+        }
+        if !paint.border.is_empty() {
+            out.push_str(theme::RESET);
+        }
+        out.push('\n');
+    };
+    let bytes: usize = grid.cells.iter().map(|c| c.text.len() + name_w + 16).sum();
+    let mut out = String::with_capacity(bytes + n_rows * (name_w + fill_w) * 4);
+    let border = |s: &str| paint.border(s);
+    let (left, sep) = (border(&format!("{bar} ")), border(&format!(" {bar} ")));
+    for (r, cells) in grid.rows().filter(|c| !c.is_empty()).enumerate() {
+        rule(&mut out, if r == 0 { &top } else { &mid }, Some(r + 1));
+        for (h, c) in grid.header.iter().zip(cells) {
+            out.push_str(&left);
+            push_spaces(&mut out, name_w - h.width);
+            if paint.header.is_empty() {
+                out.push_str(&h.text);
+            } else {
+                out.push_str(&paint.header);
+                out.push_str(&h.text);
+                out.push_str(theme::RESET);
+            }
+            out.push_str(&sep);
+            let style = paint.style(c.style);
+            for (k, line) in c.text.split('\n').enumerate() {
+                if k > 0 {
+                    out.push('\n');
+                    out.push_str(&left);
+                    push_spaces(&mut out, name_w);
+                    out.push_str(&sep);
+                }
+                if style.is_empty() || line.is_empty() {
+                    out.push_str(line);
+                } else {
+                    out.push_str(style);
+                    out.push_str(line);
+                    out.push_str(theme::RESET);
+                }
+            }
+            out.push('\n');
+        }
+    }
+    rule(&mut out, &bottom, None);
+    out
 }
 
 fn render_vertical(grid: &Grid, paint: &Paint) -> String {

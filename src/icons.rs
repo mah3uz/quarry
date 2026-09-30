@@ -100,6 +100,18 @@ pub struct Icons {
     pub prompt_vi: &'static str,
     pub prompt_db: &'static str,
 
+    pub close: &'static str,
+    pub add: &'static str,
+    pub palette: &'static str,
+    pub commands: &'static str,
+    pub keys: &'static str,
+    pub stop: &'static str,
+    /// Empty where the set has no clock; the status bar then shows the time alone.
+    pub clock: &'static str,
+    /// Rounded ends of the header and status-bar pills; empty draws square pills padded with spaces.
+    pub cap_left: &'static str,
+    pub cap_right: &'static str,
+
     /// Leading icons for the status badges; empty keeps the badge text alone.
     pub tx: &'static str,
     pub ro: &'static str,
@@ -221,6 +233,15 @@ pub static NERD: Icons = Icons {
     prompt: "❯",
     prompt_vi: "❮",
     prompt_db: "\u{f01bc}",    // md-database
+    close: "\u{f0156}",        // md-close
+    add: "\u{f0415}",          // md-plus
+    palette: "\u{f03d8}",      // md-palette
+    commands: "\u{f0633}",     // md-apple_keyboard_command
+    keys: "\u{f030c}",         // md-keyboard
+    stop: "\u{f04db}",         // md-stop
+    clock: "\u{f0150}",        // md-clock_outline
+    cap_left: "\u{e0b6}",      // ple-left_half_circle_thick
+    cap_right: "\u{e0b4}",     // ple-right_half_circle_thick
     tx: "\u{f051f}",           // md-timer_sand
     ro: "\u{f03ef}",           // md-pencil_off
     tls: "\u{f033e}",          // md-lock
@@ -292,6 +313,15 @@ pub static UNICODE: Icons = Icons {
     prompt: "❯",
     prompt_vi: "❮",
     prompt_db: "▸",
+    close: "×",
+    add: "+",
+    palette: "◐",
+    commands: "⌘",
+    keys: "⌨",
+    stop: "■",
+    clock: "◷",
+    cap_left: "",
+    cap_right: "",
     tx: "",
     ro: "",
     tls: "",
@@ -363,6 +393,15 @@ pub static ASCII: Icons = Icons {
     prompt: ">",
     prompt_vi: "<",
     prompt_db: ">",
+    close: "x",
+    add: "+",
+    palette: "*",
+    commands: ">",
+    keys: "?",
+    stop: "#",
+    clock: "",
+    cap_left: "",
+    cap_right: "",
     tx: "",
     ro: "",
     tls: "",
@@ -398,7 +437,8 @@ mod tests {
             database_current, schema, table, view, matview, foreign_table, system_table, column, key,
             function, not_null, query, structure, activity, text, explain, history, ok, error, warning,
             info, notice, note, logo, dirty, search, filter, sort, asc, desc, more_left, more_right, run,
-            ask, readonly_mark, prompt, prompt_vi, prompt_db, tx, ro, tls, ssh, kinds,
+            ask, readonly_mark, prompt, prompt_vi, prompt_db, close, add, palette, commands, keys, stop, clock,
+            cap_left, cap_right, tx, ro, tls, ssh, kinds,
         } = icons;
         let Kinds {
             keyword, table: k_table, view: k_view, column: k_column, schema: k_schema,
@@ -416,7 +456,9 @@ mod tests {
             ("notice", notice), ("note", note), ("logo", logo), ("dirty", dirty), ("search", search),
             ("filter", filter), ("sort", sort), ("asc", asc), ("desc", desc), ("more_left", more_left),
             ("more_right", more_right), ("run", run), ("ask", ask), ("readonly_mark", readonly_mark),
-            ("prompt", prompt), ("prompt_vi", prompt_vi), ("prompt_db", prompt_db), ("tx", tx),
+            ("prompt", prompt), ("prompt_vi", prompt_vi), ("prompt_db", prompt_db), ("close", close), ("add", add), ("palette", palette),
+            ("commands", commands), ("keys", keys), ("stop", stop), ("clock", clock), ("cap_left", cap_left),
+            ("cap_right", cap_right), ("tx", tx),
             ("ro", ro), ("tls", tls), ("ssh", ssh), ("kinds.keyword", keyword), ("kinds.table", k_table),
             ("kinds.view", k_view), ("kinds.column", k_column), ("kinds.schema", k_schema),
             ("kinds.database", k_database), ("kinds.function", k_function), ("kinds.datatype", datatype),
@@ -451,7 +493,7 @@ mod tests {
     /// would leave a stray space where the marker should be.
     #[test]
     fn only_badges_and_logos_may_be_blank() {
-        let optional = ["postgres", "mysql", "mariadb", "sqlite", "group", "tx", "ro", "tls", "ssh"];
+        let optional = ["postgres", "mysql", "mariadb", "sqlite", "group", "clock", "cap_left", "cap_right", "tx", "ro", "tls", "ssh"];
         for set in [IconSet::Nerd, IconSet::Unicode, IconSet::Ascii] {
             for (name, icon) in all(set.icons()) {
                 assert!(!icon.is_empty() || optional.contains(&name), "{set:?}.{name} is blank");

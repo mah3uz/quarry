@@ -223,6 +223,32 @@ fn sql_update_keys_on_first_column() {
     );
 }
 
+/// Expanded output keeps the look of the table style in use: a wide result in `rounded` must not
+/// fall back to mysql's `*** 1. row ***` banners.
+#[test]
+fn expanded_rounded_output_is_a_framed_record_per_row() {
+    let (c, r) = sample();
+    let on = OutputOptions { expanded: Expanded::On, terminal_width: 40, ..opts(TableFormat::Rounded) };
+    let expected = "\
+╭─ 1 ────┬───────
+│     id │ 1
+│   name │ alice
+│   note │ NULL
+│ amount │ 12.50
+├─ 2 ────┼───────
+│     id │ 22
+│   name │ 日本語
+│   note │ two
+│        │ lines
+│ amount │ 3
+╰────────┴───────
+";
+    assert_eq!(render(&c, &r, &on), expected);
+    // A table wider than the terminal switches too, and the rules shrink to fit.
+    let auto = OutputOptions { expanded: Expanded::Auto, terminal_width: 12, ..opts(TableFormat::Rounded) };
+    assert_eq!(render(&c, &r, &auto), expected.replace("───────\n", "────\n"));
+}
+
 #[test]
 fn vertical_golden_right_aligned_names() {
     let (c, r) = sample();
@@ -248,11 +274,14 @@ amount: 3
 fn auto_expanded_switches_to_vertical_only_when_too_wide() {
     let (c, r) = sample();
     let narrow = OutputOptions { expanded: Expanded::Auto, terminal_width: 20, ..opts(TableFormat::Rounded) };
-    assert!(render(&c, &r, &narrow).starts_with("*****"));
+    let record = |s: String| s.starts_with("╭─ 1 ");
+    assert!(record(render(&c, &r, &narrow)));
     let wide = OutputOptions { terminal_width: 200, ..narrow.clone() };
-    assert!(render(&c, &r, &wide).starts_with('╭'));
+    assert!(!record(render(&c, &r, &wide)));
     let exact = OutputOptions { terminal_width: 32, ..narrow.clone() };
-    assert!(render(&c, &r, &exact).starts_with('╭'), "a table exactly as wide as the terminal fits");
+    assert!(!record(render(&c, &r, &exact)), "a table exactly as wide as the terminal fits");
+    let psql = OutputOptions { format: TableFormat::Psql, ..narrow.clone() };
+    assert!(render(&c, &r, &psql).starts_with("*****"), "unboxed formats keep mysql-style records");
     let machine = OutputOptions { format: TableFormat::Csv, ..narrow };
     assert!(render(&c, &r, &machine).starts_with("id,"));
 }
