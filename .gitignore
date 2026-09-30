@@ -1,0 +1,11 @@
+/mycli/
+/pgcli/
+/litecli/
+/.claude/
+/target/
+*.swp
+
+
+# Added by cargo
+
+/target
