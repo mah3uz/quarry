@@ -171,12 +171,11 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             let inner = block.inner(rest);
             block.render(rest, buf);
             app.areas.grid = inner;
-            if let Some(e) = &t.error {
-                if t.grid.column_count() == 0 {
+            if let Some(e) = &t.error
+                && t.grid.column_count() == 0 {
                     Paragraph::new(format!("✗ {e}")).style(Style::default().fg(theme.error)).wrap(Wrap { trim: false }).render(inner, buf);
                     return None;
                 }
-            }
             if t.grid.column_count() == 0 && t.loading {
                 center(buf, inner, &format!("{spinner} Loading {}…", t.name), Style::default().fg(theme.muted));
             } else {
@@ -412,11 +411,10 @@ fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme,
         spans.extend(highlight_spans(&truncate(&t.filter, 50), backend.unwrap_or(Backend::Postgres), theme));
         spans.push(Span::raw(" "));
     }
-    if let Some((c, asc)) = t.order {
-        if let Some(col) = t.grid.columns().get(c) {
+    if let Some((c, asc)) = t.order
+        && let Some(col) = t.grid.columns().get(c) {
             spans.push(Span::styled(format!(" ⇅ {} {} ", col.name, if asc { "▲" } else { "▼" }), Style::default().fg(theme.accent2)));
         }
-    }
     let count = match t.total {
         Some(n) => format!(" {} rows", fmt_count(n as usize)),
         None => " counting…".into(),

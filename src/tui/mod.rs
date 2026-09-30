@@ -24,6 +24,7 @@ use ratatui::backend::CrosstermBackend;
 use crate::cli::Opened;
 use crate::config::Config;
 
+#[allow(clippy::large_enum_variant)]
 pub enum Event {
     Term(event::Event),
     App(worker::AppEvent),
@@ -86,14 +87,9 @@ pub fn run(rt: &tokio::runtime::Runtime, config: Config, initial: Option<Opened>
     let (mut term, _guard) = TerminalGuard::enter(config.main.mouse)?;
     let input_tx = tx.clone();
     std::thread::spawn(move || {
-        loop {
-            match event::read() {
-                Ok(ev) => {
-                    if input_tx.send(Event::Term(ev)).is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
+        while let Ok(ev) = event::read() {
+            if input_tx.send(Event::Term(ev)).is_err() {
+                break;
             }
         }
     });

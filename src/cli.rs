@@ -169,11 +169,10 @@ pub fn resolve(args: &Args, config: &Config) -> Result<Option<Resolved>> {
         None => return Ok(None),
     };
 
-    if let Some(extra) = &args.extra {
-        if spec.database.is_none() && spec.backend != Backend::Sqlite {
+    if let Some(extra) = &args.extra
+        && spec.database.is_none() && spec.backend != Backend::Sqlite {
             spec.database = Some(extra.clone());
         }
-    }
     if let Some(h) = &args.host {
         spec.host = Some(h.clone());
     }
@@ -264,11 +263,10 @@ pub async fn open(
         }
         _ => None,
     };
-    if spec.password.is_none() {
-        if let Some(cmd) = password_command {
+    if spec.password.is_none()
+        && let Some(cmd) = password_command {
             spec.password = Some(run_password_command(cmd)?);
         }
-    }
     let can_prompt = allow_prompt && std::io::stdin().is_terminal();
     if force_prompt && can_prompt && spec.backend != Backend::Sqlite {
         spec.password = Some(prompt_password(&spec)?);

@@ -148,11 +148,10 @@ impl<T: Clone> Palette<T> {
                 _ => {}
             },
         }
-        if self.selected != before || key.code != KeyCode::Enter {
-            if let Some(i) = self.current() {
+        if (self.selected != before || key.code != KeyCode::Enter)
+            && let Some(i) = self.current() {
                 return PaletteEvent::Preview(i.value.clone());
             }
-        }
         PaletteEvent::None
     }
 

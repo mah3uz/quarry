@@ -45,8 +45,8 @@ pub fn split(src: &str, backend: Backend, delimiter: &str) -> Vec<Statement> {
         }
         let at_depth0 = routine.depth == 0;
 
-        if at_depth0 {
-            if let Some((term, next)) = terminator_at(src, &tokens, i, semicolon, delimiter) {
+        if at_depth0
+            && let Some((term, next)) = terminator_at(src, &tokens, i, semicolon, delimiter) {
                 if let Some(s) = stmt_start.take() {
                     push(&mut out, src, s, last_end, term);
                 }
@@ -54,7 +54,6 @@ pub fn split(src: &str, backend: Backend, delimiter: &str) -> Vec<Statement> {
                 i = next;
                 continue;
             }
-        }
 
         if stmt_start.is_none() {
             stmt_start = Some(t.start);
@@ -99,15 +98,14 @@ fn terminator_at(
 ) -> Option<(Terminator, usize)> {
     let t = tokens[i];
     if t.kind == TokenKind::Backslash {
-        if let Some(n) = tokens.get(i + 1) {
-            if n.start == t.end {
+        if let Some(n) = tokens.get(i + 1)
+            && n.start == t.end {
                 match n.text(src) {
                     "G" => return Some((Terminator::Vertical, i + 2)),
                     "g" => return Some((Terminator::Go, i + 2)),
                     _ => {}
                 }
             }
-        }
         return None;
     }
     if semicolon {
@@ -165,11 +163,10 @@ impl RoutineState {
                     self.depth += 1;
                 }
             }
-            "END" if self.depth > 0 => {
-                if !matches!(next, Some("IF" | "LOOP" | "WHILE" | "REPEAT" | "FOR")) {
+            "END" if self.depth > 0
+                && !matches!(next, Some("IF" | "LOOP" | "WHILE" | "REPEAT" | "FOR")) => {
                     self.depth -= 1;
                 }
-            }
             _ => {}
         }
     }

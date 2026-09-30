@@ -136,7 +136,7 @@ impl Prompt for QPrompt {
 
     fn render_prompt_indicator(&self, mode: PromptEditMode) -> Cow<'_, str> {
         match mode {
-            PromptEditMode::Vi(PromptViMode::Normal) => Cow::Owned(format!("{}", self.indicator.replace('❯', "❮"))),
+            PromptEditMode::Vi(PromptViMode::Normal) => Cow::Owned(self.indicator.replace('❯', "❮").to_string()),
             _ => Cow::Borrowed(&self.indicator),
         }
     }

@@ -136,6 +136,7 @@ pub enum PromptPurpose {
     GridSearch { tab: u64 },
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum Overlay {
     Commands(Palette<Command>),
     Themes(Palette<String>, Box<Theme>),
@@ -326,11 +327,10 @@ impl App {
         let has_query = self.tabs.iter().any(|t| matches!(t.kind, TabKind::Query(_)));
         if !has_query {
             self.new_query_tab(Some(id), None);
-        } else if let Some(t) = self.tabs.get_mut(self.active) {
-            if t.conn.is_none() {
+        } else if let Some(t) = self.tabs.get_mut(self.active)
+            && t.conn.is_none() {
                 t.conn = Some(id);
             }
-        }
         for t in &mut self.tabs {
             if t.conn.is_none() {
                 t.conn = Some(id);
@@ -447,8 +447,8 @@ impl App {
         if idx >= self.tabs.len() {
             return;
         }
-        if let TabKind::Table(t) = &self.tabs[idx].kind {
-            if t.dirty() {
+        if let TabKind::Table(t) = &self.tabs[idx].kind
+            && t.dirty() {
                 let id = self.tabs[idx].id;
                 self.overlay = Some(Overlay::Confirm(Confirm {
                     title: "Discard changes?".into(),
@@ -460,12 +460,10 @@ impl App {
                 }));
                 return;
             }
-        }
-        if self.tabs[idx].is_busy() {
-            if let Some(c) = self.tabs[idx].conn.and_then(|c| self.conn(c)) {
+        if self.tabs[idx].is_busy()
+            && let Some(c) = self.tabs[idx].conn.and_then(|c| self.conn(c)) {
                 c.main.cancel();
             }
-        }
         self.tabs.remove(idx);
         if self.active >= self.tabs.len() {
             self.active = self.tabs.len().saturating_sub(1);
@@ -631,12 +629,11 @@ impl App {
             Some(Overlay::Prompt(p)) => p.input.insert_str(text),
             Some(_) => {}
             None => {
-                if self.focus == Focus::Main {
-                    if let Some(Tab { kind: TabKind::Query(q), .. }) = self.tabs.get_mut(self.active) {
+                if self.focus == Focus::Main
+                    && let Some(Tab { kind: TabKind::Query(q), .. }) = self.tabs.get_mut(self.active) {
                         q.pane = Pane::Editor;
                         q.editor.handle_paste(text);
                     }
-                }
             }
         }
     }
@@ -651,12 +648,11 @@ impl App {
                 }
             }
             AppEvent::State { conn, main, info, in_transaction } => {
-                if let Some(c) = self.conn_mut(conn) {
-                    if main {
+                if let Some(c) = self.conn_mut(conn)
+                    && main {
                         c.in_tx = in_transaction;
                         c.info = info;
                     }
-                }
             }
             AppEvent::Db { conn, tag, reply } => self.on_reply(conn, tag, reply),
         }
@@ -869,7 +865,7 @@ impl App {
                                     first = false;
                                 }
                             }
-                            q.shown = if q.results.is_empty() { 0 } else { 0 };
+                            q.shown = 0;
                         }
                         Ok(None) => toast = Some((Level::Info, "That command is only available in the CLI".into())),
                         Err(e) => {
@@ -1057,13 +1053,12 @@ impl App {
         q.exec_starts = stmts.iter().map(|s| base + s.start).collect();
         let texts: Vec<String> = stmts.iter().map(|s| s.text.clone()).collect();
         let Some(conn) = self.conn(conn_id) else { return };
-        if conn.readonly {
-            if let Some(bad) = texts.iter().find(|s| !classify::is_read_only(s, backend)) {
+        if conn.readonly
+            && let Some(bad) = texts.iter().find(|s| !classify::is_read_only(s, backend)) {
                 let short: String = bad.chars().take(60).collect();
                 self.toast(Level::Error, format!("Read-only connection: refused `{short}`"));
                 return;
             }
-        }
         let rules = self.config.main.destructive_warning.clone();
         let flagged: Vec<(String, String)> = texts
             .iter()
@@ -1125,11 +1120,10 @@ impl App {
         }
         if let Some(c) = tab.conn.and_then(|c| self.conn(c)) {
             c.main.cancel();
-            if let Some(m) = &c.meta_worker {
-                if m.is_busy() {
+            if let Some(m) = &c.meta_worker
+                && m.is_busy() {
                     m.cancel();
                 }
-            }
         }
         self.toast(Level::Warning, "Cancelling…");
         true
@@ -1710,8 +1704,8 @@ impl App {
                 return;
             }
             KeyCode::Char('u') => {
-                if let TabKind::Table(t) = &mut self.tabs[idx].kind {
-                    if t.dirty() {
+                if let TabKind::Table(t) = &mut self.tabs[idx].kind
+                    && t.dirty() {
                         t.edits.clear();
                         t.deleted.clear();
                         t.inserted.clear();
@@ -1720,7 +1714,6 @@ impl App {
                         self.toast(Level::Info, "Discarded pending changes");
                         self.fetch_table_page(idx, true);
                     }
-                }
                 return;
             }
             KeyCode::Char('F') => {
@@ -2058,11 +2051,10 @@ impl App {
                 if old.as_ref() == Some(&new) {
                     return;
                 }
-                if !t.original.contains_key(&row) {
-                    if let Some(r) = t.grid.rows().get(row) {
+                if !t.original.contains_key(&row)
+                    && let Some(r) = t.grid.rows().get(row) {
                         t.original.insert(row, r.clone());
                     }
-                }
                 t.grid.set_cell(row, col, new.clone());
                 t.grid.mark_edited(row, col);
                 t.edits.insert(CellKey { row, col }, new);
@@ -2466,11 +2458,10 @@ impl App {
                 }
             }
             Command::Kill(tab, sid) => {
-                if let Some(idx) = self.tab_index(tab) {
-                    if let Some(c) = self.tabs[idx].conn.and_then(|c| self.conn(c)) {
+                if let Some(idx) = self.tab_index(tab)
+                    && let Some(c) = self.tabs[idx].conn.and_then(|c| self.conn(c)) {
                         c.meta().send(Tag::Tab(tab, 0), Request::Kill(sid));
                     }
-                }
             }
             Command::SwitchDatabase(conn, name) => {
                 if let Some(c) = self.conn(conn) {
@@ -2721,13 +2712,11 @@ fn grid_copy(grid: &GridState, format: TableFormat, table: &str, backend: Backen
 
 fn pretty_value(s: &str) -> String {
     let t = s.trim_start();
-    if t.starts_with('{') || t.starts_with('[') {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(s) {
-            if let Ok(p) = serde_json::to_string_pretty(&v) {
+    if (t.starts_with('{') || t.starts_with('['))
+        && let Ok(v) = serde_json::from_str::<serde_json::Value>(s)
+            && let Ok(p) = serde_json::to_string_pretty(&v) {
                 return p;
             }
-        }
-    }
     s.to_string()
 }
 

@@ -106,6 +106,7 @@ struct Row {
     last: bool,
 }
 
+#[derive(Default)]
 pub struct Sidebar {
     pub roots: Vec<Node>,
     selected: usize,
@@ -119,21 +120,6 @@ pub struct Sidebar {
     pending_g: bool,
 }
 
-impl Default for Sidebar {
-    fn default() -> Self {
-        Sidebar {
-            roots: Vec::new(),
-            selected: 0,
-            offset: 0,
-            rows: Vec::new(),
-            expanded_keys: HashSet::new(),
-            filter: None,
-            filter_text: String::new(),
-            area: Rect::default(),
-            pending_g: false,
-        }
-    }
-}
 
 impl Sidebar {
     pub fn set_connection(&mut self, conn: ConnId, label: &str, detail: &str) {
@@ -215,8 +201,8 @@ impl Sidebar {
         // auto-expand the obvious default schema the first time
         if root.children.iter().all(|c| !c.expanded) {
             let default = cat.search_path.first().cloned().or(cat.current_database.clone());
-            if let Some(d) = default {
-                if let Some(c) = root.children.iter_mut().find(|c| matches!(&c.kind, NodeKind::Schema { name } if *name == d)) {
+            if let Some(d) = default
+                && let Some(c) = root.children.iter_mut().find(|c| matches!(&c.kind, NodeKind::Schema { name } if *name == d)) {
                     c.expanded = true;
                     let k = format!("{key}/{}", c.label);
                     self.expanded_keys.insert(k.clone());
@@ -225,14 +211,13 @@ impl Sidebar {
                         self.expanded_keys.insert(format!("{k}/{}", t.label));
                     }
                 }
-            }
         }
         self.rebuild_rows();
     }
 
     pub fn set_relations(&mut self, conn: ConnId, schema: &str, rels: &[Relation]) {
-        if let Some(root) = self.roots.iter_mut().find(|r| r.conn == conn) {
-            if let Some(sn) = root.children.iter_mut().find(|c| matches!(&c.kind, NodeKind::Schema { name } if name == schema)) {
+        if let Some(root) = self.roots.iter_mut().find(|r| r.conn == conn)
+            && let Some(sn) = root.children.iter_mut().find(|c| matches!(&c.kind, NodeKind::Schema { name } if name == schema)) {
                 sn.lazy = false;
                 sn.children = schema_children(conn, schema, rels, &[]);
                 sn.detail = rels.len().to_string();
@@ -240,7 +225,6 @@ impl Sidebar {
                     sn.children.push(Node::new(conn, NodeKind::Message, "empty"));
                 }
             }
-        }
         self.rebuild_rows();
     }
 
@@ -340,14 +324,13 @@ impl Sidebar {
     }
 
     fn move_to_parent(&mut self) {
-        if let Some(row) = self.rows.get(self.selected) {
-            if row.path.len() > 1 {
+        if let Some(row) = self.rows.get(self.selected)
+            && row.path.len() > 1 {
                 let parent = row.path[..row.path.len() - 1].to_vec();
                 if let Some(i) = self.rows.iter().position(|r| r.path == parent) {
                     self.selected = i;
                 }
             }
-        }
     }
 
     fn activate(&mut self) -> Option<Action> {
@@ -620,9 +603,9 @@ fn node_line<'a>(node: &'a Node, row: &Row, theme: &Theme, filter: &str) -> Line
         _ => style,
     };
     spans.push(Span::styled(icon, icon_style));
-    if !filter.is_empty() {
-        if let Some(pos) = node.label.to_lowercase().find(filter) {
-            if node.label.is_char_boundary(pos) && node.label.is_char_boundary(pos + filter.len()) {
+    if !filter.is_empty()
+        && let Some(pos) = node.label.to_lowercase().find(filter)
+            && node.label.is_char_boundary(pos) && node.label.is_char_boundary(pos + filter.len()) {
                 spans.push(Span::styled(&node.label[..pos], style));
                 spans.push(Span::styled(
                     &node.label[pos..pos + filter.len()],
@@ -631,8 +614,6 @@ fn node_line<'a>(node: &'a Node, row: &Row, theme: &Theme, filter: &str) -> Line
                 spans.push(Span::styled(&node.label[pos + filter.len()..], style));
                 return Line::from(spans);
             }
-        }
-    }
     spans.push(Span::styled(node.label.as_str(), style));
     if let NodeKind::Column { data_type, nullable, .. } = &node.kind {
         spans.push(Span::styled(format!(" {data_type}"), Style::default().fg(theme.datatype).add_modifier(Modifier::DIM)));

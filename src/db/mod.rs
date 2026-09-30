@@ -538,23 +538,6 @@ impl Connection {
     }
 }
 
-#[cfg(test)]
-mod quote_tests {
-    use super::*;
-
-    #[test]
-    fn only_reserved_or_unsafe_identifiers_are_quoted() {
-        assert_eq!(quote_ident("public", Backend::Postgres), "public");
-        assert_eq!(quote_ident("type", Backend::Postgres), "type");
-        assert_eq!(quote_ident("user", Backend::Postgres), "\"user\"");
-        assert_eq!(quote_ident("UserId", Backend::Postgres), "\"UserId\"", "pg folds case");
-        assert_eq!(quote_ident("UserId", Backend::MySql), "UserId");
-        assert_eq!(quote_ident("order", Backend::MySql), "`order`");
-        assert_eq!(quote_ident("my col", Backend::Sqlite), "\"my col\"");
-        assert_eq!(quote_ident("a\"b", Backend::Sqlite), "\"a\"\"b\"");
-    }
-}
-
 /// Gathers a statement's events into a `ResultSet` (driver-internal counterpart of `Connection::query`).
 pub(crate) async fn collect_events(mut rx: mpsc::Receiver<ExecEvent>) -> ResultSet {
     let mut rs = ResultSet::default();
@@ -582,3 +565,20 @@ pub(crate) fn json_text(v: &serde_json::Value) -> String {
 
 /// Rows per `ExecEvent::Rows` batch.
 pub(crate) const BATCH_ROWS: usize = 256;
+
+#[cfg(test)]
+mod quote_tests {
+    use super::*;
+
+    #[test]
+    fn only_reserved_or_unsafe_identifiers_are_quoted() {
+        assert_eq!(quote_ident("public", Backend::Postgres), "public");
+        assert_eq!(quote_ident("type", Backend::Postgres), "type");
+        assert_eq!(quote_ident("user", Backend::Postgres), "\"user\"");
+        assert_eq!(quote_ident("UserId", Backend::Postgres), "\"UserId\"", "pg folds case");
+        assert_eq!(quote_ident("UserId", Backend::MySql), "UserId");
+        assert_eq!(quote_ident("order", Backend::MySql), "`order`");
+        assert_eq!(quote_ident("my col", Backend::Sqlite), "\"my col\"");
+        assert_eq!(quote_ident("a\"b", Backend::Sqlite), "\"a\"\"b\"");
+    }
+}

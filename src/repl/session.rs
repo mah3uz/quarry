@@ -152,11 +152,10 @@ impl Session {
         let config = self.config.clone();
         let favorites = self.favorites.clone();
         self.rt.spawn(async move {
-            if let Ok(mut c) = Connection::connect(&spec).await {
-                if let Ok(cat) = c.load_catalog().await {
+            if let Ok(mut c) = Connection::connect(&spec).await
+                && let Ok(cat) = c.load_catalog().await {
                     install_catalog(&edit, &config, &favorites, cat);
                 }
-            }
         });
     }
 
@@ -234,8 +233,8 @@ impl Session {
             self.last = Some((Duration::ZERO, false));
             return false;
         }
-        if let Some(d) = classify::destructive(sql, backend, &self.config.main.destructive_warning) {
-            if self.interactive && std::io::stdin().is_terminal() {
+        if let Some(d) = classify::destructive(sql, backend, &self.config.main.destructive_warning)
+            && self.interactive && std::io::stdin().is_terminal() {
                 eprintln!("{} {}", self.palette.warning("⚠ Destructive statement:"), self.palette.warning(&d.reason));
                 eprintln!("  {}", render_sql(&truncate_sql(sql, 400), backend, &self.palette));
                 if !self.confirm(&self.palette.warning("Do you want to proceed?")) {
@@ -243,7 +242,6 @@ impl Session {
                     return true;
                 }
             }
-        }
 
         let outcome = self.execute_streaming(sql);
         self.after_execute(sql, &outcome);
@@ -260,11 +258,10 @@ impl Session {
         if outcome.result.is_err() {
             return;
         }
-        if classify::use_database(sql, backend).is_some() {
-            if let Some(db) = self.conn.info().database.clone() {
+        if classify::use_database(sql, backend).is_some()
+            && let Some(db) = self.conn.info().database.clone() {
                 self.spec.database = Some(db);
             }
-        }
         if self.config.main.auto_refresh_catalog && classify::changes_schema(sql, backend) {
             self.refresh_catalog();
         }
@@ -342,13 +339,11 @@ impl Session {
                 }
             }
             let mut result = result.unwrap_or(Ok(()));
-            if truncated.is_some() {
-                if let Err(e) = &result {
-                    if e.kind == ErrorKind::Cancelled || e.message.to_ascii_lowercase().contains("cancel") || e.message.contains("interrupt") {
+            if truncated.is_some()
+                && let Err(e) = &result
+                    && (e.kind == ErrorKind::Cancelled || e.message.to_ascii_lowercase().contains("cancel") || e.message.contains("interrupt")) {
                         result = Ok(());
                     }
-                }
-            }
             Outcome { blocks, notices, result, truncated, elapsed: started.elapsed() }
         })
     }

@@ -642,8 +642,7 @@ impl ConnectForm {
         buf.set_string(fx, inner.y, "New connection", Style::default().fg(theme.muted).add_modifier(Modifier::BOLD));
         let fields = self.visible_fields();
         let focused_field = (!self.in_list).then(|| fields[self.field.min(fields.len() - 1)]);
-        let mut y = inner.y + 1;
-        for f in fields {
+        for (y, f) in (inner.y + 1..).zip(fields) {
             let label = match f {
                 Field::Name => "Name",
                 Field::Url => "URL",
@@ -703,7 +702,6 @@ impl ConnectForm {
                     }
                 }
             }
-            y += 1;
         }
         let msg_y = inner.y + inner.height - 2;
         if let Some(e) = &self.error {
