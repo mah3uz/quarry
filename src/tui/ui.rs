@@ -194,17 +194,18 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             );
             let inner = block.inner(ea);
             block.render(ea, buf);
+            // set into the border like the title, so it lines up with the frame
             let ic = icons::get();
-            let (label, cmd, bg) = if q.running.is_some() {
-                (format!("{} Stop", ic.stop), Command::Cancel, theme.error)
+            let (label, cmd, color) = if q.running.is_some() {
+                (format!(" {} Stop ", ic.stop), Command::Cancel, theme.error)
             } else {
-                (format!("{} Run", ic.run), Command::RunStatement, theme.success)
+                (format!(" {} Run ", ic.run), Command::RunStatement, theme.success)
             };
-            let pill = Pill { text: &label, fg: theme.bg, bg, bold: true };
-            let px = (ea.x + ea.width).saturating_sub(pill.width() + 2);
+            let w = label.width() as u16;
+            let px = (ea.x + ea.width).saturating_sub(w + 2);
             if px > ea.x + 30 {
-                let r = pill.draw(buf, px, ea.y, theme.bg, ea.x + ea.width - 1);
-                app.areas.buttons.push((r, cmd));
+                buf.set_string(px, ea.y, &label, Style::default().fg(color).add_modifier(Modifier::BOLD));
+                app.areas.buttons.push((Rect { x: px, y: ea.y, width: w, height: 1 }, cmd));
             }
             app.areas.split = Rect { x: ea.x, y: ea.y + ea.height - 1, width: ea.width, height: 2 };
             app.areas.editor = inner;
