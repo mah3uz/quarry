@@ -6,7 +6,7 @@ use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
 
 /// `~/.config/quarry/config.toml`. Every field has a default so partial files work.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub main: MainConfig,
@@ -103,11 +103,6 @@ pub struct SavedConnection {
     pub init_commands: Vec<String>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config { main: MainConfig::default(), connections: BTreeMap::new(), path: None, warnings: Vec::new() }
-    }
-}
 
 pub fn config_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("QUARRY_CONFIG_DIR") {

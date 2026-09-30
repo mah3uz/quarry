@@ -7,12 +7,13 @@ use super::table::str_width;
 /// Prints `text`, through a pager when stdout is a terminal and the text does not fit on screen.
 /// Pager: `pager_cmd`, else `$PAGER`, else `less -SRXF` when installed.
 pub fn page_or_print(text: &str, pager_cmd: Option<&str>, enabled: bool) {
-    if enabled && io::stdout().is_terminal() && exceeds_screen(text) {
-        if let Some(cmd) = pager_command(pager_cmd) {
-            if run_pager(&cmd, text).is_ok() {
-                return;
-            }
-        }
+    if enabled
+        && io::stdout().is_terminal()
+        && exceeds_screen(text)
+        && let Some(cmd) = pager_command(pager_cmd)
+        && run_pager(&cmd, text).is_ok()
+    {
+        return;
     }
     print_text(text);
 }
@@ -36,10 +37,10 @@ fn pager_command(explicit: Option<&str>) -> Option<String> {
     if let Some(p) = explicit.map(str::trim).filter(|p| !p.is_empty()) {
         return Some(p.to_string());
     }
-    if let Ok(p) = std::env::var("PAGER") {
-        if !p.trim().is_empty() {
-            return Some(p);
-        }
+    if let Ok(p) = std::env::var("PAGER")
+        && !p.trim().is_empty()
+    {
+        return Some(p);
     }
     which::which("less").ok().map(|_| "less -SRXF".to_string())
 }
