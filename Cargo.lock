@@ -2090,6 +2090,7 @@ dependencies = [
  "dirs",
  "futures-util",
  "mysql_async",
+ "nu-ansi-term",
  "nucleo-matcher",
  "percent-encoding",
  "ratatui",

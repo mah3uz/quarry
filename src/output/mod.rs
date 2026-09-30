@@ -1,3 +1,6 @@
+pub mod pager;
+pub mod sink;
+
 use std::sync::Arc;
 use std::time::Duration;
 
