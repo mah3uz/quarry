@@ -20,21 +20,36 @@ async function copyInstall(command: string) {
 }
 
 // Layered rock behind the REPL: each boundary is a gentle, deterministic wave so the strata look
-// cut by hand but render the same on every build.
+// cut by hand but render the same on every build. The waves repeat every W and each band is drawn
+// 2W wide, so sliding it left by W (the drift) loops without a seam.
+//
+// Each band is its own element, only as tall as its slice of rock, and drifts with a CSS transform:
+// the GPU moves it without redrawing, which is what keeps the section smooth.
 const W = 1440
 const H = 620
-function wave(y: number, seed: number, amp: number): string {
+const TOPS = [60, 140, 214, 290, 372, 450, 530]
+const amp = (i: number) => 9 + (i % 3) * 4
+function wave(y: number, seed: number, a: number): string {
   const pts: string[] = []
-  for (let x = 0; x <= W; x += 48) {
-    const dy = Math.sin(x / 210 + seed) * amp + Math.sin(x / 77 + seed * 2.3) * amp * 0.35
+  const turn = (2 * Math.PI) / W
+  for (let x = 0; x <= 2 * W; x += 48) {
+    const dy = Math.sin(x * turn + seed) * a + Math.sin(x * turn * 3 + seed * 2.3) * a * 0.35
     pts.push(`${x},${(y + dy).toFixed(1)}`)
   }
   return pts.join(' L')
 }
-const layers = [60, 140, 214, 290, 372, 450, 530].map((y, i) => ({
-  d: `M0,${H} L0,${y} L${wave(y, i * 1.7 + 0.4, 9 + (i % 3) * 4)} L${W},${H} Z`,
-  cls: `s${i}`,
-}))
+const layers = TOPS.map((y, i) => {
+  const reach = (k: number) => amp(k) * 1.35 + 2
+  const top = y - reach(i)
+  // down to where the next band's wave can dip, which covers the rest
+  const bottom = i + 1 < TOPS.length ? TOPS[i + 1] + reach(i + 1) : H
+  return {
+    cls: `s${i}`,
+    d: `M0,${bottom} L0,${y} L${wave(y, i * 1.7 + 0.4, amp(i))} L${2 * W},${bottom} Z`,
+    viewBox: `0 ${top.toFixed(1)} ${2 * W} ${(bottom - top).toFixed(1)}`,
+    style: { top: `${(top / H) * 100}%`, height: `${((bottom - top) / H) * 100}%` },
+  }
+})
 const vein = `M0,318 C220,286 380,356 620,310 S1020,254 1240,304 S1400,318 ${W},288`
 
 // Crystals in the rock, placed from a fixed seed so every build draws the same face.
@@ -59,30 +74,44 @@ const flecks = Array.from({ length: 46 }, (_, i) => {
 })
 
 // A headlamp on the rock face: it follows the pointer, or wanders slowly when the pointer is
-// elsewhere, lighting the strata and making the crystals glint. Still with reduced motion, and
-// paused while the section is off screen.
+// elsewhere, lighting the rock and making the crystals glint. The lamp is a disc moved by
+// transform; the bright crystals inside it are shifted back the other way so they stay in place.
+// Nothing is redrawn as it moves. Still with reduced motion, and stopped while off screen.
 const face = ref<HTMLElement | null>(null)
-const lampEl = ref<SVGEllipseElement | null>(null)
-const LAMP_PX = 230
+const lampEl = ref<HTMLElement | null>(null)
+const glintEl = ref<SVGSVGElement | null>(null)
+const LAMP = 230
 let stopLamp = () => {}
 onMounted(() => {
   const el = face.value
-  const lampNode = lampEl.value
-  if (!el || !lampNode || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  const lamp = lampEl.value
+  const glints = glintEl.value
+  if (!el || !lamp || !glints) return
   let rect = el.getBoundingClientRect()
-  let target: { x: number; y: number } | null = null
-  const pos = { x: W * 0.1, y: H * 0.5 }
-  let raf = 0
+  const pos = { x: rect.width * 0.1, y: rect.height * 0.5 }
   const place = () => {
-    lampNode.setAttribute('cx', pos.x.toFixed(1))
-    lampNode.setAttribute('cy', pos.y.toFixed(1))
-    // the SVG is stretched to the section, so size the lamp in pixels to keep it round
-    lampNode.setAttribute('rx', ((LAMP_PX * W) / rect.width).toFixed(1))
-    lampNode.setAttribute('ry', ((LAMP_PX * H) / rect.height).toFixed(1))
+    const x = pos.x - LAMP
+    const y = pos.y - LAMP
+    lamp.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
+    glints.style.transform = `translate3d(${(-x).toFixed(1)}px, ${(-y).toFixed(1)}px, 0)`
   }
+  const size = () => {
+    rect = el.getBoundingClientRect()
+    glints.style.width = `${rect.width}px`
+    glints.style.height = `${rect.height}px`
+  }
+  size()
+  place()
+  addEventListener('resize', size)
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    stopLamp = () => removeEventListener('resize', size)
+    return
+  }
+  let target: { x: number; y: number } | null = null
+  let raf = 0
   const tick = (t: number) => {
     // idling, sweep the whole face: the terminal covers the middle, the rock shows at the sides
-    const goal = target ?? { x: W * (0.5 + 0.47 * Math.sin(t / 5200)), y: H * (0.48 + 0.3 * Math.sin(t / 3700)) }
+    const goal = target ?? { x: rect.width * (0.5 + 0.47 * Math.sin(t / 5200)), y: rect.height * (0.48 + 0.3 * Math.sin(t / 3700)) }
     pos.x += (goal.x - pos.x) * (target ? 0.14 : 0.02)
     pos.y += (goal.y - pos.y) * (target ? 0.14 : 0.02)
     place()
@@ -90,24 +119,24 @@ onMounted(() => {
   }
   const move = (e: PointerEvent) => {
     rect = el.getBoundingClientRect()
-    target = { x: ((e.clientX - rect.left) / rect.width) * W, y: ((e.clientY - rect.top) / rect.height) * H }
+    target = { x: e.clientX - rect.left, y: e.clientY - rect.top }
   }
   const leave = () => (target = null)
-  const resize = () => (rect = el.getBoundingClientRect())
+  // off screen, nothing runs: the lamp stops and the CSS animations pause
   const seen = new IntersectionObserver(([entry]) => {
     cancelAnimationFrame(raf)
+    el.classList.toggle('asleep', !entry.isIntersecting)
     if (entry.isIntersecting) raf = requestAnimationFrame(tick)
   })
   el.addEventListener('pointermove', move)
   el.addEventListener('pointerleave', leave)
-  addEventListener('resize', resize)
   seen.observe(el)
   stopLamp = () => {
     cancelAnimationFrame(raf)
     seen.disconnect()
     el.removeEventListener('pointermove', move)
     el.removeEventListener('pointerleave', leave)
-    removeEventListener('resize', resize)
+    removeEventListener('resize', size)
   }
 })
 onBeforeUnmount(() => stopLamp())
@@ -199,32 +228,26 @@ const features = [
       </section>
 
       <section ref="face" class="face" aria-label="A quarry REPL session">
-        <svg class="strata" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <radialGradient id="lamp-light">
-              <stop offset="0" stop-color="#fff" />
-              <stop offset="0.5" stop-color="#fff" stop-opacity="0.45" />
-              <stop offset="1" stop-color="#fff" stop-opacity="0" />
-            </radialGradient>
-            <mask id="lamp" maskUnits="userSpaceOnUse" x="0" y="0" :width="W" :height="H">
-              <ellipse ref="lampEl" :cx="W * 0.1" :cy="H * 0.5" rx="240" ry="240" fill="url(#lamp-light)" />
-            </mask>
-          </defs>
-          <path v-for="l in layers" :key="l.cls" :d="l.d" :class="l.cls" />
-          <path class="vein" :d="vein" />
-          <g class="flecks">
-            <path v-for="f in flecks" :key="f.key" :d="f.d" :style="{ animationDelay: f.delay }" />
-          </g>
-          <g class="lit" mask="url(#lamp)">
-            <path v-for="l in layers" :key="l.cls" :d="l.d" :class="l.cls" />
-            <path class="vein" :d="vein" />
-            <g class="glint">
-              <path v-for="f in flecks" :key="f.key" :d="f.d" />
+        <div class="rock" aria-hidden="true">
+          <svg v-for="l in layers" :key="l.cls" :class="['band', l.cls]" :style="l.style" :viewBox="l.viewBox" preserveAspectRatio="none">
+            <path :d="l.d" />
+          </svg>
+          <svg class="seam" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
+            <g class="flecks">
+              <path v-for="f in flecks" :key="f.key" :d="f.d" :style="{ animationDelay: f.delay }" />
             </g>
-          </g>
-          <path class="pulse" :d="vein" pathLength="1" />
-          <path class="pulse late" :d="vein" pathLength="1" />
-        </svg>
+            <path class="vein-glow" :d="vein" />
+            <path class="vein" :d="vein" />
+            <path class="pulse glow" :d="vein" pathLength="1" />
+            <path class="pulse" :d="vein" pathLength="1" />
+            <path class="pulse late" :d="vein" pathLength="1" />
+          </svg>
+          <div ref="lampEl" class="lamp">
+            <svg ref="glintEl" class="glints" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
+              <path v-for="f in flecks" :key="f.key" :d="f.d" />
+            </svg>
+          </div>
+        </div>
         <div class="set">
           <Terminal capture="repl" title="quarry shop.db"
             label="A quarry REPL session: a join query with a table of results, then column completion for an alias" />
@@ -529,27 +552,35 @@ h1 {
   padding-bottom: 104px;
   isolation: isolate;
 }
-.strata {
+.rock {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
   z-index: -1;
+  overflow: hidden;
   mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 80%, transparent);
 }
-.s0 { fill: #eaeef5; }
-.s1 { fill: #e2e7f0; }
-.s2 { fill: #d8deea; }
-.s3 { fill: #cdd4e3; }
-.s4 { fill: #c2cadc; }
-.s5 { fill: #b6bfd4; }
-.s6 { fill: #aab4cb; }
-.vein {
-  fill: none;
-  stroke: #16a8d8;
-  stroke-width: 2;
-  opacity: 0.6;
+.rock > svg {
+  position: absolute;
+  left: 0;
+  display: block;
 }
+/* The rock creeps: each band drifts left at its own pace, the deeper ones slower. The bands are
+   200% wide and move by half of that, one wave period. */
+.band {
+  width: 200%;
+  will-change: transform;
+  animation: drift var(--drift) linear infinite;
+}
+@keyframes drift {
+  to { transform: translate3d(-50%, 0, 0); }
+}
+.s0 { --drift: 70s; fill: #eaeef5; }
+.s1 { --drift: 84s; fill: #e2e7f0; }
+.s2 { --drift: 98s; fill: #d8deea; }
+.s3 { --drift: 112s; fill: #cdd4e3; }
+.s4 { --drift: 126s; fill: #c2cadc; }
+.s5 { --drift: 140s; fill: #b6bfd4; }
+.s6 { --drift: 156s; fill: #aab4cb; }
 .dark .s0 { fill: #191c29; }
 .dark .s1 { fill: #1c2030; }
 .dark .s2 { fill: #202436; }
@@ -557,9 +588,29 @@ h1 {
 .dark .s4 { fill: #272c41; }
 .dark .s5 { fill: #2b3047; }
 .dark .s6 { fill: #2f354d; }
+.seam {
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+.vein {
+  fill: none;
+  stroke: #16a8d8;
+  stroke-width: 2;
+  opacity: 0.6;
+}
 .dark .vein {
   opacity: 0.85;
-  filter: drop-shadow(0 0 6px rgba(76, 198, 238, 0.6));
+}
+/* Glows are wide faint strokes rather than blur filters, which are costly to draw. */
+.vein-glow {
+  fill: none;
+  stroke: #4cc6ee;
+  stroke-width: 9;
+  opacity: 0;
+}
+.dark .vein-glow {
+  opacity: 0.12;
 }
 /* Crystals twinkle faintly on their own and glint where the lamp shines. */
 .flecks path {
@@ -574,19 +625,6 @@ h1 {
 @keyframes twinkle {
   50% { opacity: 0.32; }
 }
-.lit {
-  filter: brightness(1.05);
-}
-.dark .lit {
-  filter: brightness(1.45) saturate(1.15);
-}
-.glint path {
-  fill: #0f93c2;
-}
-.dark .glint path {
-  fill: #e6fbff;
-  filter: drop-shadow(0 0 3px #4cc6ee);
-}
 /* Light running along the seam, into the terminal and out the other side. */
 .pulse {
   fill: none;
@@ -599,7 +637,11 @@ h1 {
 }
 .dark .pulse {
   stroke: #c9f3ff;
-  filter: drop-shadow(0 0 6px #4cc6ee);
+}
+.pulse.glow {
+  stroke: #4cc6ee;
+  stroke-width: 10;
+  opacity: 0.25;
 }
 .pulse.late {
   stroke-dasharray: 0.025 0.975;
@@ -609,6 +651,42 @@ h1 {
 }
 @keyframes seam {
   to { stroke-dashoffset: 0; }
+}
+/* The headlamp: a soft disc of light, moved by transform. */
+.lamp {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 460px;
+  height: 460px;
+  border-radius: 50%;
+  overflow: hidden;
+  will-change: transform;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.2) 55%, transparent);
+  -webkit-mask-image: radial-gradient(closest-side, #000 35%, transparent);
+  mask-image: radial-gradient(closest-side, #000 35%, transparent);
+}
+.dark .lamp {
+  background: radial-gradient(closest-side, rgba(170, 200, 255, 0.16), rgba(170, 200, 255, 0.06) 55%, transparent);
+}
+.glints {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+.glints path {
+  fill: #0f93c2;
+}
+.dark .glints path {
+  fill: #eefcff;
+  stroke: rgba(76, 198, 238, 0.55);
+  stroke-width: 3;
+  paint-order: stroke;
+}
+/* Off screen, the animations pause (the class is set by the lamp's observer). */
+.face.asleep .rock * {
+  animation-play-state: paused;
 }
 .set {
   --term-max: 17px;
@@ -829,7 +907,8 @@ dd {
   .top nav button {
     transition: none;
   }
-  .flecks path {
+  .flecks path,
+  .band {
     animation: none;
   }
   .pulse {
