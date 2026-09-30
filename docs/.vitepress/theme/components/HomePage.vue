@@ -6,10 +6,15 @@ import Terminal from './Terminal.vue'
 const { isDark } = useData()
 const repo = 'https://github.com/mah3uz/quarry'
 
-const install = 'cargo install --git https://github.com/mah3uz/quarry'
+const installs = [
+  { id: 'aur', label: 'Arch (AUR)', command: 'paru -S quarry-sql-bin' },
+  { id: 'cargo', label: 'Cargo', command: 'cargo install --git https://github.com/mah3uz/quarry' },
+  { id: 'binary', label: 'Prebuilt', command: '' },
+]
+const chosen = ref('aur')
 const copied = ref(false)
-async function copyInstall() {
-  await navigator.clipboard.writeText(install)
+async function copyInstall(command: string) {
+  await navigator.clipboard.writeText(command)
   copied.value = true
   setTimeout(() => (copied.value = false), 1600)
 }
@@ -93,13 +98,26 @@ const features = [
             <a class="button primary" :href="withBase('/start/quick-start')">Get started</a>
             <a class="button" :href="withBase('/start/introduction')">Read the docs</a>
           </div>
-          <div class="install">
-            <code>{{ install }}</code>
-            <button type="button" @click="copyInstall">{{ copied ? 'Copied' : 'Copy' }}</button>
+          <div class="installer">
+            <div class="choices" role="tablist" aria-label="How to install">
+              <button v-for="i in installs" :key="i.id" type="button" role="tab" :aria-selected="chosen === i.id"
+                @click="chosen = i.id; copied = false">{{ i.label }}</button>
+            </div>
+            <template v-for="i in installs" :key="i.id">
+              <div v-if="chosen === i.id" class="install" role="tabpanel">
+                <template v-if="i.command">
+                  <code>{{ i.command }}</code>
+                  <button type="button" @click="copyInstall(i.command)">{{ copied ? 'Copied' : 'Copy' }}</button>
+                </template>
+                <p v-else class="download">
+                  Linux x86_64: <a :href="`${repo}/releases/latest`">download the latest release</a>
+                </p>
+              </div>
+            </template>
+            <p class="alt">
+              Other ways, and macOS, in the <a :href="withBase('/start/installation')">installation guide</a>.
+            </p>
           </div>
-          <p class="alt">
-            Or download the <a :href="`${repo}/releases/latest`">Linux build</a>.
-          </p>
         </div>
         <img class="mascot" :src="withBase('/logo.svg')" width="340" height="340"
           alt="The quarry mascot: a stone database cylinder with a glowing crystal and a pickaxe" />
@@ -317,13 +335,50 @@ h1 {
 .button.primary:hover {
   background: var(--vp-button-brand-hover-bg);
 }
+.installer {
+  margin-top: 28px;
+  max-width: 100%;
+}
+.choices {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.choices button {
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--vp-c-text-3);
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.choices button:hover {
+  color: var(--vp-c-text-1);
+}
+.choices button[aria-selected='true'] {
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg-soft);
+  border-color: var(--vp-c-divider);
+}
+.download {
+  margin: 0;
+  padding: 6px 10px 6px 0;
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+}
+.download a {
+  color: var(--vp-c-brand-1);
+  text-underline-offset: 3px;
+}
 .install {
   display: flex;
   align-items: center;
   gap: 8px;
   width: fit-content;
   max-width: 100%;
-  margin-top: 28px;
+  min-height: 46px;
   padding: 6px 6px 6px 16px;
   border-radius: 10px;
   background: var(--vp-code-block-bg);

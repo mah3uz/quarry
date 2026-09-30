@@ -1,5 +1,5 @@
-pkgbase = quarry
-	pkgdesc = A fast, beautiful SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite
+pkgbase = quarry-sql
+	pkgdesc = A fast SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite
 	pkgver = 0.1.0
 	pkgrel = 1
 	url = https://github.com/mah3uz/quarry
@@ -10,8 +10,9 @@ pkgbase = quarry
 	depends = glibc
 	optdepends = openssh: SSH tunnels (--ssh)
 	optdepends = less: paging long results
+	conflicts = quarry
 	options = !lto
-	source = quarry-0.1.0.tar.gz::https://github.com/mah3uz/quarry/archive/refs/tags/v0.1.0.tar.gz
+	source = quarry-sql-0.1.0.tar.gz::https://github.com/mah3uz/quarry/archive/refs/tags/v0.1.0.tar.gz
 	sha256sums = SKIP
 
-pkgname = quarry
+pkgname = quarry-sql

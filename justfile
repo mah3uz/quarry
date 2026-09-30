@@ -5,7 +5,7 @@ set positional-arguments
 
 version := `sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1`
 target := `rustc -vV | sed -n 's/^host: //p'`
-pkgver := `sed -n 's/^pkgver=//p' packaging/aur/quarry/PKGBUILD`
+pkgver := `sed -n 's/^pkgver=//p' packaging/aur/quarry-sql/PKGBUILD`
 
 [private]
 default:
@@ -48,12 +48,12 @@ check: lint test
 # Build the Arch package from HEAD and install it with pacman
 [group('install')]
 install: package
-    sudo pacman -U dist/quarry-{{pkgver}}-*-x86_64.pkg.tar.zst
+    sudo pacman -U dist/quarry-sql-{{pkgver}}-*-x86_64.pkg.tar.zst
 
 # Remove the installed package (settings and history are kept)
 [group('install')]
 uninstall:
-    sudo pacman -R quarry
+    sudo pacman -R quarry-sql
 
 # Install the binary into ~/.cargo/bin with Cargo instead (for systems without pacman)
 [group('install')]
@@ -88,12 +88,12 @@ package:
       echo "note: packaging HEAD; uncommitted changes are left out" >&2
     fi
     rm -rf dist/build && mkdir -p dist/build
-    git archive --prefix=quarry-{{pkgver}}/ -o dist/build/quarry-{{pkgver}}.tar.gz HEAD
-    cp packaging/aur/quarry/PKGBUILD dist/build/
+    git archive --prefix=quarry-{{pkgver}}/ -o dist/build/quarry-sql-{{pkgver}}.tar.gz HEAD
+    cp packaging/aur/quarry-sql/PKGBUILD dist/build/
     (cd dist/build && makepkg -f --noconfirm --skipchecksums)
-    mv dist/build/quarry-{{pkgver}}-*-x86_64.pkg.tar.zst dist/
+    mv dist/build/quarry-sql-{{pkgver}}-*-x86_64.pkg.tar.zst dist/
     rm -rf dist/build
-    ls dist/quarry-{{pkgver}}-*-x86_64.pkg.tar.zst
+    ls dist/quarry-sql-{{pkgver}}-*-x86_64.pkg.tar.zst
 
 # After pushing tag v<version>: the release tarball, AUR checksums and .SRCINFO
 [group('release')]
@@ -122,7 +122,7 @@ release-notes v:
       }
     ' CHANGELOG.md
 
-# The whole release: checks, version bump, tag and GitHub Release, e.g. `just ship 0.1.0`
+# The whole release: checks, version bump, tag, GitHub Release and AUR, e.g. `just ship 0.1.0`
 [group('release')]
 ship v:
     #!/usr/bin/env bash
@@ -143,13 +143,14 @@ ship v:
     ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null || fail "tag v$v already exists"
     ! git ls-remote --exit-code --tags origin "v$v" >/dev/null || fail "tag v$v already exists on origin"
     gh auth status >/dev/null 2>&1 || fail "gh is not logged in; run gh auth login"
+    ssh -o BatchMode=yes aur@aur.archlinux.org help >/dev/null 2>&1 || fail "can't reach the AUR over SSH; add your key at https://aur.archlinux.org/account"
 
     echo "==> lint and tests"
     just check
 
     echo "==> version $v (last release: $last)"
     sed -i "0,/^version = \".*\"/s//version = \"$v\"/" Cargo.toml
-    for p in packaging/aur/quarry/PKGBUILD packaging/aur/quarry-bin/PKGBUILD; do
+    for p in packaging/aur/quarry-sql/PKGBUILD packaging/aur/quarry-sql-bin/PKGBUILD; do
       sed -i "s/^pkgver=.*/pkgver=$v/; s/^pkgrel=.*/pkgrel=1/; s/^sha256sums=.*/sha256sums=('SKIP')/" "$p"
     done
     cargo update --workspace -q
@@ -157,7 +158,7 @@ ship v:
     git commit -q -am "Version $v"
 
     # Everything after this is public and can't be taken back.
-    read -rp "Push v$v to origin and publish the GitHub Release? [y/N] " answer
+    read -rp "Push v$v to origin and publish the GitHub Release and AUR packages? [y/N] " answer
     if [[ $answer != [yY] ]]; then
       echo "Stopped before pushing. To undo the version commit: git reset --hard HEAD~1"
       exit 1
@@ -179,14 +180,17 @@ ship v:
     echo "==> commit the checksums"
     git commit -q -am "Release $v"
     git push origin main
-    echo "Released $v. packaging/aur is ready for the AUR; publish it with 'just aur' when you decide to."
+
+    echo "==> AUR: quarry-sql and quarry-sql-bin"
+    just aur
+    echo "Released $v."
 
 # Regenerate both AUR packages' .SRCINFO
 [group('release')]
 srcinfo:
-    @for p in quarry quarry-bin; do (cd packaging/aur/$p && makepkg --printsrcinfo > .SRCINFO); done
+    @for p in quarry-sql quarry-sql-bin; do (cd packaging/aur/$p && makepkg --printsrcinfo > .SRCINFO); done
 
-# Publish packaging/aur to the AUR, through throwaway clones in dist/aur (not part of `ship`)
+# Publish packaging/aur (quarry-sql, quarry-sql-bin) to the AUR, through throwaway clones in dist/aur
 [group('release')]
 aur:
     #!/usr/bin/env bash
@@ -195,12 +199,12 @@ aur:
       echo "commit packaging/aur first" >&2
       exit 1
     fi
-    url=$(sed -n "s/^url='\(.*\)'/\1/p" packaging/aur/quarry/PKGBUILD)
+    url=$(sed -n "s/^url='\(.*\)'/\1/p" packaging/aur/quarry-sql/PKGBUILD)
     if ! curl -fsIL -o /dev/null "$url/releases/download/v{{pkgver}}/quarry-{{pkgver}}-x86_64-unknown-linux-gnu.tar.gz"; then
-      echo "the v{{pkgver}} GitHub Release has no tarball yet, which quarry-bin downloads" >&2
+      echo "the v{{pkgver}} GitHub Release has no tarball yet, which quarry-sql-bin downloads" >&2
       exit 1
     fi
-    for pkg in quarry quarry-bin; do
+    for pkg in quarry-sql quarry-sql-bin; do
       src=packaging/aur/$pkg
       if grep -q "^sha256sums=('SKIP')" "$src/PKGBUILD"; then
         echo "$pkg: no checksum; run just release first" >&2

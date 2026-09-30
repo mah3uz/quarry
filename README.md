@@ -24,8 +24,9 @@ quarry                                   # TUI with the connection manager
 
 ## Install
 
-Download the Linux x86_64 build from the [latest release](https://github.com/mah3uz/quarry/releases/latest),
-or build from source:
+On Arch Linux, install `quarry-sql-bin` (prebuilt) or `quarry-sql` (built from source) from the
+AUR, e.g. `paru -S quarry-sql-bin`. On other Linux systems, download the x86_64 build from the
+[latest release](https://github.com/mah3uz/quarry/releases/latest), or build from source:
 
 ```
 cargo install --path .

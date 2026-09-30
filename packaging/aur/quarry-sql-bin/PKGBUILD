@@ -1,10 +1,10 @@
 # Maintainer: Mahfuz Shaikh <mah3uz at gmail dot com>
 
-pkgname=quarry-bin
+pkgname=quarry-sql-bin
 _pkgname=quarry
 pkgver=0.1.0
 pkgrel=1
-pkgdesc='A fast, beautiful SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite (prebuilt)'
+pkgdesc='A fast SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite (prebuilt)'
 arch=('x86_64')
 url='https://github.com/mah3uz/quarry'
 license=('MIT')
@@ -13,8 +13,9 @@ optdepends=(
   'openssh: SSH tunnels (--ssh)'
   'less: paging long results'
 )
-provides=("$_pkgname")
-conflicts=("$_pkgname")
+provides=('quarry-sql')
+# quarry-sql is this built from source; the AUR's `quarry` (a board-game GUI) also installs /usr/bin/quarry.
+conflicts=('quarry-sql' 'quarry')
 options=('!strip' '!debug')
 source=("$url/releases/download/v$pkgver/$_pkgname-$pkgver-x86_64-unknown-linux-gnu.tar.gz")
 sha256sums=('SKIP')
@@ -26,6 +27,6 @@ package() {
   ./quarry --completions bash > "$pkgdir/usr/share/bash-completion/completions/quarry"
   ./quarry --completions zsh > "$pkgdir/usr/share/zsh/site-functions/_quarry"
   ./quarry --completions fish > "$pkgdir/usr/share/fish/vendor_completions.d/quarry.fish"
-  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$_pkgname"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
 }

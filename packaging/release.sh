@@ -5,8 +5,8 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 aur=$root/packaging/aur
-ver=$(sed -n 's/^pkgver=//p' "$aur/quarry/PKGBUILD")
-url=$(sed -n "s/^url='\(.*\)'/\1/p" "$aur/quarry/PKGBUILD")
+ver=$(sed -n 's/^pkgver=//p' "$aur/quarry-sql/PKGBUILD")
+url=$(sed -n "s/^url='\(.*\)'/\1/p" "$aur/quarry-sql/PKGBUILD")
 target=x86_64-unknown-linux-gnu
 name=quarry-$ver-$target
 dist=$root/dist
@@ -21,7 +21,7 @@ set_sum() {
 
 echo "==> quarry $ver: checksum of the v$ver source tarball"
 curl -fsSL "$url/archive/refs/tags/v$ver.tar.gz" -o "$work/source.tar.gz"
-set_sum "$aur/quarry/PKGBUILD" "$(sha256sum "$work/source.tar.gz" | cut -d' ' -f1)"
+set_sum "$aur/quarry-sql/PKGBUILD" "$(sha256sum "$work/source.tar.gz" | cut -d' ' -f1)"
 
 echo "==> building $name from the tag"
 tar -xzf "$work/source.tar.gz" -C "$work"
@@ -32,10 +32,10 @@ cp "$root/target/release-build/release/quarry" "$work/quarry-$ver"/{README.md,LI
 tar -C "$work" -czf "$dist/$name.tar.gz" "$name"
 (cd "$dist" && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
 
-echo "==> quarry-bin: checksum of the release asset"
-set_sum "$aur/quarry-bin/PKGBUILD" "$(sha256sum "$dist/$name.tar.gz" | cut -d' ' -f1)"
+echo "==> quarry-sql-bin: checksum of the release asset"
+set_sum "$aur/quarry-sql-bin/PKGBUILD" "$(sha256sum "$dist/$name.tar.gz" | cut -d' ' -f1)"
 
-for pkg in quarry quarry-bin; do
+for pkg in quarry-sql quarry-sql-bin; do
   (cd "$aur/$pkg" && makepkg --printsrcinfo > .SRCINFO)
 done
 
@@ -48,4 +48,5 @@ Done: $dist/$name.tar.gz
 Next, by hand:
   gh release create v$ver "$dist/$name.tar.gz" "$dist/$name.tar.gz.sha256" --title "v$ver" --notes-file <(just release-notes $ver)
   git commit -am "Release $ver" && git push
+  just aur
 NEXT

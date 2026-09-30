@@ -15,7 +15,7 @@ quarry is a Rust project. Common tasks are in the `justfile` at the repository r
 | `just run …` / `just tui …` | Run quarry from source, e.g. `just run demo.db` |
 | `just check` | Clippy (warnings are errors), then the tests |
 | `just test-slow` | The slow timing tests, in release mode |
-| `just install` | Build the Arch package from `HEAD` and install it with pacman (`just uninstall` removes it) |
+| `just install` | Build the `quarry-sql` Arch package from `HEAD` and install it with pacman (`just uninstall` removes it) |
 | `just install-cargo` | Install the binary into `~/.cargo/bin` instead, on systems without pacman |
 | `just tarball` | Build `dist/quarry-<version>-<target>.tar.gz` with a checksum |
 | `just ship <version>` | Make a release; see [Releasing](/help/releasing) |

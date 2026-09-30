@@ -1,11 +1,41 @@
 ---
 title: 'Installation'
-description: 'Download a prebuilt quarry for Linux, or build it from source with Cargo.'
+description: 'Install quarry from the AUR on Arch Linux, download the prebuilt Linux binary, or build it from source with Cargo.'
 ---
 
 # Installation
 
-There are two ways to get quarry: download the prebuilt binary for Linux, or build it from source.
+| You're on | Easiest way |
+|---|---|
+| Arch Linux or a derivative | [The AUR](#arch-linux-aur) |
+| Another Linux on x86_64 | [The prebuilt binary](#prebuilt-binary-linux-x86-64) |
+| macOS, or anything else | [Cargo](#build-from-source) |
+
+## Arch Linux (AUR)
+
+Two packages install the same `quarry` command, with shell completion for bash, zsh and fish:
+
+| Package | What it installs |
+|---|---|
+| `quarry-sql-bin` | The prebuilt binary from the GitHub release. Quick to install. |
+| `quarry-sql` | Built from source on your machine. Needs Rust (`cargo`). |
+
+With an AUR helper such as `paru` or `yay`:
+
+```sh
+paru -S quarry-sql-bin     # or: yay -S quarry-sql-bin
+```
+
+Or by hand:
+
+```sh
+git clone https://aur.archlinux.org/quarry-sql-bin.git
+cd quarry-sql-bin
+makepkg -si
+```
+
+The packages are called `quarry-sql` because the AUR's `quarry` is an unrelated game. Both provide
+`/usr/bin/quarry`, so pacman won't install them side by side.
 
 ## Prebuilt binary (Linux x86_64)
 
@@ -73,7 +103,7 @@ quarry completes its options in bash, zsh and fish, and it knows your setup: <kb
 `--theme` your themes, including your own; after `--ssh` the hosts in `~/.ssh/config`; after
 `--host`, `--user` or `--database` the values your saved connections use.
 
-The Arch packages install it for you. Otherwise add one line to your shell's startup file:
+The AUR packages install it for you. Otherwise add one line to your shell's startup file:
 
 | Shell | Add to | Line |
 |---|---|---|

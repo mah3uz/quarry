@@ -50,7 +50,7 @@ tag colour (red for production). `\c name` switches to one without restarting.
 
 Tab completion for bash, zsh and fish that knows your setup: saved connections (with their URLs,
 never their passwords), SQLite files, your themes, output formats, TLS modes, hosts from
-`~/.ssh/config`, and the hosts, users and databases your saved connections use. The Arch packages
+`~/.ssh/config`, and the hosts, users and databases your saved connections use. The AUR packages
 install it; elsewhere add `source <(quarry --completions zsh)` (or `bash`, or
 `quarry --completions fish | source`) to your shell's startup file.
 
@@ -74,5 +74,6 @@ Solarized, Rosé Pine and Kanagawa, plus your own TOML palettes and any base16 o
 
 ### Install
 
-Download `quarry-<version>-x86_64-unknown-linux-gnu.tar.gz` from this release (Linux, x86_64), or build from source
-with `cargo install --path .`.
+- **Arch Linux:** `quarry-sql-bin` (prebuilt) or `quarry-sql` (from source) from the AUR, e.g. `paru -S quarry-sql-bin`.
+- **Other Linux (x86_64):** download `quarry-<version>-x86_64-unknown-linux-gnu.tar.gz` from this release.
+- **Anywhere with Rust:** `cargo install --git https://github.com/mah3uz/quarry`.
