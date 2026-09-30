@@ -14,7 +14,8 @@ quarry is a Rust project. Common tasks are in the `justfile` at the repository r
 | `just check` | Clippy (warnings are errors), then the tests |
 | `just test-slow` | The slow timing tests, in release mode |
 | `just install` | Install the binary into `~/.cargo/bin` |
-| `just release` | Build and package `target/dist/quarry-<version>-<target>.tar.gz` with a checksum |
+| `just tarball` | Build `dist/quarry-<version>-<target>.tar.gz` with a checksum |
+| `just ship <version>` | Make a release; see [Releasing](/help/releasing/) |
 | `just art` | Regenerate the logo and banner |
 | `just docs` / `just docs-build` | Preview or build this site |
 

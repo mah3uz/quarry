@@ -9,6 +9,8 @@ export default defineConfig({
 			description:
 				'A fast, beautiful SQL client for the terminal: a REPL and a full-screen TUI for PostgreSQL, MySQL / MariaDB and SQLite.',
 			logo: { src: './src/assets/logo.svg', alt: 'quarry' },
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/mah3uz/quarry' }],
+			editLink: { baseUrl: 'https://github.com/mah3uz/quarry/edit/main/docs/' },
 			favicon: '/favicon.svg',
 			customCss: [
 				'@fontsource-variable/inter',
@@ -68,6 +70,7 @@ export default defineConfig({
 						{ label: 'Troubleshooting', slug: 'help/troubleshooting' },
 						{ label: 'Coming from pgcli, mycli or litecli', slug: 'help/migrating' },
 						{ label: 'Contributing', slug: 'help/contributing' },
+						{ label: 'Releasing', slug: 'help/releasing' },
 					],
 				},
 			],

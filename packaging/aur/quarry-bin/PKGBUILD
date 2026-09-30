@@ -1,0 +1,27 @@
+# Maintainer: Mahfuz Shaikh <mah3uz at gmail dot com>
+
+pkgname=quarry-bin
+_pkgname=quarry
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='A fast, beautiful SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite (prebuilt)'
+arch=('x86_64')
+url='https://github.com/mah3uz/quarry'
+license=('MIT')
+depends=('gcc-libs' 'glibc')
+optdepends=(
+  'openssh: SSH tunnels (--ssh)'
+  'less: paging long results'
+)
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+options=('!strip' '!debug')
+source=("$url/releases/download/v$pkgver/$_pkgname-$pkgver-x86_64-unknown-linux-gnu.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$_pkgname-$pkgver-x86_64-unknown-linux-gnu"
+  install -Dm755 quarry -t "$pkgdir/usr/bin"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$_pkgname"
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+}

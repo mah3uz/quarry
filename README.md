@@ -24,6 +24,9 @@ quarry                                   # TUI with the connection manager
 
 ## Install
 
+Download the Linux x86_64 build from the [latest release](https://github.com/mah3uz/quarry/releases/latest),
+or build from source:
+
 ```
 cargo install --path .
 ```

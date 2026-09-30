@@ -2,6 +2,13 @@
 name = "quarry"
 version = "0.1.0"
 edition = "2024"
+description = "A fast, beautiful SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite"
+authors = ["Mahfuz Shaikh <mah3uz@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/mah3uz/quarry"
+readme = "README.md"
+keywords = ["sql", "postgres", "mysql", "sqlite", "tui"]
+categories = ["command-line-utilities", "database"]
 
 [dependencies]
 anyhow = "1.0.104"
@@ -25,7 +32,6 @@ rustls-native-certs = "0.8.4"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 shell-words = "1.1.1"
-thiserror = "2.0.21"
 tokio = { version = "1.53.1", features = ["full"] }
 tokio-postgres = { version = "0.7.18", features = ["with-chrono-0_4", "with-serde_json-1"] }
 tokio-postgres-rustls = "0.14.0"

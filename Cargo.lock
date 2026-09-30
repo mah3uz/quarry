@@ -2235,7 +2235,6 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
- "thiserror 2.0.21",
  "tokio",
  "tokio-postgres",
  "tokio-postgres-rustls",

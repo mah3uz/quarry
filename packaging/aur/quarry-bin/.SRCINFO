@@ -1,0 +1,19 @@
+pkgbase = quarry-bin
+	pkgdesc = A fast, beautiful SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite (prebuilt)
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/mah3uz/quarry
+	arch = x86_64
+	license = MIT
+	depends = gcc-libs
+	depends = glibc
+	optdepends = openssh: SSH tunnels (--ssh)
+	optdepends = less: paging long results
+	provides = quarry
+	conflicts = quarry
+	options = !strip
+	options = !debug
+	source = https://github.com/mah3uz/quarry/releases/download/v0.1.0/quarry-0.1.0-x86_64-unknown-linux-gnu.tar.gz
+	sha256sums = SKIP
+
+pkgname = quarry-bin

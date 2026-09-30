@@ -94,9 +94,11 @@ quarry app.db -e "select * from users" -F csv > users.csv
 
 <Steps>
 
-1. From a checkout of the repository, build and install quarry (you need [Rust](https://rustup.rs)):
+1. Download the [Linux build](https://github.com/mah3uz/quarry/releases/latest), or build and
+   install quarry from source (you need [Rust](https://rustup.rs)):
 
    ```sh
+   git clone https://github.com/mah3uz/quarry && cd quarry
    cargo install --path .
    ```
 

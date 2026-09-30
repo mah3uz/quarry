@@ -1,11 +1,31 @@
 ---
 title: Installation
-description: Build and install quarry from source with Cargo.
+description: Download a prebuilt quarry for Linux, or build it from source with Cargo.
 ---
 
-quarry is built from source with Cargo, Rust's package manager.
+There are two ways to get quarry: download the prebuilt binary for Linux, or build it from source.
 
-## Requirements
+## Prebuilt binary (Linux x86_64)
+
+Each [GitHub Release](https://github.com/mah3uz/quarry/releases) has a
+`quarry-<version>-x86_64-unknown-linux-gnu.tar.gz` with the `quarry` binary, the README and the
+licence:
+
+```sh
+curl -LO https://github.com/mah3uz/quarry/releases/latest/download/quarry-0.1.0-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf quarry-0.1.0-x86_64-unknown-linux-gnu.tar.gz
+install -Dm755 quarry-0.1.0-x86_64-unknown-linux-gnu/quarry ~/.local/bin/quarry
+```
+
+Replace `0.1.0` with the version you're downloading. Each tarball has a `.sha256` file next to it
+to check the download with `sha256sum -c`. The binary is built on a current Linux; if it complains
+about the `GLIBC` version on an older system, build from source instead.
+
+## Build from source
+
+quarry is built with Cargo, Rust's package manager.
+
+### Requirements
 
 - **A recent stable Rust toolchain.** Install it with [rustup](https://rustup.rs) if you don't have
   it. quarry uses the Rust 2024 edition, so update an older toolchain with `rustup update`.
@@ -23,11 +43,11 @@ use programs you probably have already:
 | `less` | Paging long results (or whatever `$PAGER` names) |
 | `$VISUAL` / `$EDITOR` | `\e`, editing a query in your editor (defaults to `vi`) |
 
-## Install
-
-From a checkout of the quarry repository:
+### Build and install
 
 ```sh
+git clone https://github.com/mah3uz/quarry
+cd quarry
 cargo install --path .
 ```
 
