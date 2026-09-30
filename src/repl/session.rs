@@ -290,6 +290,7 @@ impl Session {
             let mut discard = false;
             let mut truncated = None;
             let mut asked = false;
+            let mut waited = Duration::ZERO;
             loop {
                 tokio::select! {
                     r = &mut exec, if result.is_none() => result = Some(r),
@@ -312,7 +313,10 @@ impl Session {
                                     palette.warning(&format!("The result has more than {row_limit} rows.")),
                                     "Fetch and show all of them?"
                                 );
-                                if !ask_blocking(&q, &palette) {
+                                let asked_at = Instant::now();
+                                let fetch_all = ask_blocking(&q, &palette);
+                                waited += asked_at.elapsed();
+                                if !fetch_all {
                                     b.rows.truncate(row_limit);
                                     truncated = Some(row_limit);
                                     discard = true;
@@ -344,7 +348,7 @@ impl Session {
                     && (e.kind == ErrorKind::Cancelled || e.message.to_ascii_lowercase().contains("cancel") || e.message.contains("interrupt")) {
                         result = Ok(());
                     }
-            Outcome { blocks, notices, result, truncated, elapsed: started.elapsed() }
+            Outcome { blocks, notices, result, truncated, elapsed: started.elapsed().saturating_sub(waited) }
         })
     }
 
