@@ -35,8 +35,8 @@ just ship 0.2.0
 Then it:
 
 1. Runs `just check` (clippy and the tests).
-2. Sets the version in `Cargo.toml`, `Cargo.lock`, both PKGBUILDs and the Homebrew formula, moves `## Unreleased` under
-   `## 0.2.0 - <date>` in the changelog, and commits `Version 0.2.0`.
+2. Sets the version in `Cargo.toml`, `Cargo.lock`, both PKGBUILDs, the Homebrew formula and the installation guide's
+   download commands, moves `## Unreleased` under `## 0.2.0 - <date>` in the changelog, and commits `Version 0.2.0`.
 3. **Asks before going further.** Answer anything but `y` and nothing is pushed or published; undo
    the commit with `git reset --hard HEAD~1`.
 4. Tags `v0.2.0` and pushes `main` and the tag.

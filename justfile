@@ -158,6 +158,7 @@ ship v:
       sed -i "s/^pkgver=.*/pkgver=$v/; s/^pkgrel=.*/pkgrel=1/; s/^sha256sums=.*/sha256sums=('SKIP')/" "$p"
     done
     sed -i "s|/v[0-9.]*\.tar\.gz\"|/v$v.tar.gz\"|" packaging/homebrew/quarry.rb
+    sed -i "s|download/v[0-9.]*/|download/v$v/|; s|quarry-[0-9.]*-x86_64|quarry-$v-x86_64|g" docs/start/installation.md
     cargo update --workspace -q
     sed -i "s/^## Unreleased$/## Unreleased\n\n## $v - $(date '+%F %H:%M %:z')/" CHANGELOG.md
     git commit -q -am "Version $v"

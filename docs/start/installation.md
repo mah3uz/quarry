@@ -58,12 +58,12 @@ Each [GitHub Release](https://github.com/mah3uz/quarry/releases) has a
 licence:
 
 ```sh
-curl -LO https://github.com/mah3uz/quarry/releases/latest/download/quarry-0.1.0-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf quarry-0.1.0-x86_64-unknown-linux-gnu.tar.gz
-install -Dm755 quarry-0.1.0-x86_64-unknown-linux-gnu/quarry ~/.local/bin/quarry
+curl -LO https://github.com/mah3uz/quarry/releases/download/v0.1.1/quarry-0.1.1-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf quarry-0.1.1-x86_64-unknown-linux-gnu.tar.gz
+install -Dm755 quarry-0.1.1-x86_64-unknown-linux-gnu/quarry ~/.local/bin/quarry
 ```
 
-Replace `0.1.0` with the version you're downloading. Each tarball has a `.sha256` file next to it
+That's the latest release; for another one, change the version in each line. Each tarball has a `.sha256` file next to it
 to check the download with `sha256sum -c`. The binary is built on a current Linux; if it complains
 about the `GLIBC` version on an older system, build from source instead.
 
