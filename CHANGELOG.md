@@ -4,6 +4,8 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ## Unreleased
 
+## 0.1.1 - 2026-10-05 22:44 +06:00
+
 Homebrew joins the AUR as a way to install quarry, and pasting works wherever you can type in the TUI.
 
 ### Added

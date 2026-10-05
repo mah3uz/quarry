@@ -1,6 +1,6 @@
 [package]
 name = "quarry"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A fast, beautiful SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite"
 authors = ["Mahfuz Shaikh <mah3uz@gmail.com>"]
