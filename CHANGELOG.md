@@ -4,21 +4,26 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ## Unreleased
 
+Homebrew joins the AUR as a way to install quarry, and pasting works wherever you can type in the TUI.
+
 ### Added
 
-- **Homebrew.** `brew install mah3uz/tap/quarry` installs quarry on macOS, and on Linux with Homebrew.
+- **Install with Homebrew.** `brew install mah3uz/tap/quarry`, on macOS and on Linux with Homebrew. It builds quarry
+  from source and sets up completion for bash, zsh and fish; `brew upgrade quarry` updates it.
 
 ### Fixed
 
-- **Paste works in every field of the TUI.** Pasting from the terminal (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>,
-  middle click) was ignored everywhere except the SQL editor and one-line prompts. It now goes into whatever you're
-  typing in: the fields of the New connection form, the command palette, the theme picker, the explorer filter, the
-  history filter and the shortcuts filter.
+- **Paste works in every field of the TUI.** A paste from the terminal (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>
+  in most terminals) was ignored everywhere except the SQL editor and one-line prompts. It now goes into whatever
+  you're typing in: each field of the New connection form, the command palette, the theme picker, and the explorer,
+  history and shortcuts filters. In a one-line field, line breaks inside the pasted text become spaces and one at the
+  end is dropped, so a copied host name or password doesn't pick up stray characters.
+- **The clipboard on Wayland.** <kbd>Ctrl</kbd>+<kbd>V</kbd> and copying (<kbd>y</kbd>, `\clip`) now use the Wayland
+  clipboard directly. Before, <kbd>Ctrl</kbd>+<kbd>V</kbd> could paste nothing, and a copy could land where other
+  programs didn't see it.
 - **A mistyped MySQL user name is reported as a failed login.** MySQL 8 sometimes answers an unknown user by asking
-  for a sign-in method quarry doesn't support, and quarry showed that as a driver error. It now says to check the user
-  name, and asks for the password again as it does for any refused login.
-- **The clipboard on Wayland.** <kbd>Ctrl</kbd>+<kbd>V</kbd> and copying now use the Wayland clipboard directly; before,
-  they could paste nothing or copy to a clipboard other programs didn't see.
+  for a sign-in method quarry doesn't support, which quarry showed as a driver error. It now tells you to check the
+  user name, and asks for the password again as it does for any refused login.
 
 ## 0.1.0 - 2026-10-01 02:40 +06:00
 
