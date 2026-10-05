@@ -8,6 +8,7 @@ const repo = 'https://github.com/mah3uz/quarry'
 
 const installs = [
   { id: 'aur', label: 'Arch (AUR)', command: 'paru -S quarry-sql-bin' },
+  { id: 'brew', label: 'Homebrew', command: 'brew install mah3uz/tap/quarry' },
   { id: 'cargo', label: 'Cargo', command: 'cargo install --git https://github.com/mah3uz/quarry' },
   { id: 'binary', label: 'Prebuilt', command: '' },
 ]
@@ -166,7 +167,7 @@ const features = [
               </div>
             </template>
             <p class="alt">
-              Other ways, and macOS, in the <a :href="withBase('/start/installation')">installation guide</a>.
+              Other ways in the <a :href="withBase('/start/installation')">installation guide</a>.
             </p>
           </div>
         </div>
@@ -425,11 +426,13 @@ h1 {
 }
 .choices {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 8px;
 }
 .choices button {
   padding: 5px 12px;
+  white-space: nowrap;
   border-radius: 7px;
   font-size: 13px;
   font-weight: 650;
@@ -437,6 +440,11 @@ h1 {
   background: none;
   border: 1px solid transparent;
   cursor: pointer;
+}
+@media (max-width: 420px) {
+  .choices button {
+    padding: 5px 8px;
+  }
 }
 .choices button:hover {
   color: var(--vp-c-text-1);

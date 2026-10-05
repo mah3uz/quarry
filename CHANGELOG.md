@@ -4,6 +4,10 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ## Unreleased
 
+### Added
+
+- **Homebrew.** `brew install mah3uz/tap/quarry` installs quarry on macOS, and on Linux with Homebrew.
+
 ### Fixed
 
 - **Paste works in every field of the TUI.** Pasting from the terminal (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>,

@@ -6,6 +6,7 @@ set positional-arguments
 version := `sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1`
 target := `rustc -vV | sed -n 's/^host: //p'`
 pkgver := `sed -n 's/^pkgver=//p' packaging/aur/quarry-sql/PKGBUILD`
+tap := "mah3uz/homebrew-tap"
 
 [private]
 default:
@@ -95,7 +96,7 @@ package:
     rm -rf dist/build
     ls dist/quarry-sql-{{pkgver}}-*-x86_64.pkg.tar.zst
 
-# After pushing tag v<version>: the release tarball, AUR checksums and .SRCINFO
+# After pushing tag v<version>: the release tarball, AUR and Homebrew checksums and .SRCINFO
 [group('release')]
 release:
     packaging/release.sh
@@ -122,7 +123,7 @@ release-notes v:
       }
     ' CHANGELOG.md
 
-# The whole release: checks, version bump, tag, GitHub Release and AUR, e.g. `just ship 0.1.0`
+# The whole release: checks, version bump, tag, GitHub Release, AUR and Homebrew, e.g. `just ship 0.1.0`
 [group('release')]
 ship v:
     #!/usr/bin/env bash
@@ -144,6 +145,7 @@ ship v:
     ! git ls-remote --exit-code --tags origin "v$v" >/dev/null || fail "tag v$v already exists on origin"
     gh auth status >/dev/null 2>&1 || fail "gh is not logged in; run gh auth login"
     ssh -o BatchMode=yes aur@aur.archlinux.org help >/dev/null 2>&1 || fail "can't reach the AUR over SSH; add your key at https://aur.archlinux.org/account"
+    gh repo view {{tap}} >/dev/null 2>&1 || fail "no Homebrew tap; create it once with: gh repo create {{tap}} --public"
 
     echo "==> lint and tests"
     just check
@@ -153,12 +155,13 @@ ship v:
     for p in packaging/aur/quarry-sql/PKGBUILD packaging/aur/quarry-sql-bin/PKGBUILD; do
       sed -i "s/^pkgver=.*/pkgver=$v/; s/^pkgrel=.*/pkgrel=1/; s/^sha256sums=.*/sha256sums=('SKIP')/" "$p"
     done
+    sed -i "s|/v[0-9.]*\.tar\.gz\"|/v$v.tar.gz\"|" packaging/homebrew/quarry.rb
     cargo update --workspace -q
     sed -i "s/^## Unreleased$/## Unreleased\n\n## $v - $(date '+%F %H:%M %:z')/" CHANGELOG.md
     git commit -q -am "Version $v"
 
     # Everything after this is public and can't be taken back.
-    read -rp "Push v$v to origin and publish the GitHub Release and AUR packages? [y/N] " answer
+    read -rp "Push v$v to origin and publish the GitHub Release, AUR packages and Homebrew formula? [y/N] " answer
     if [[ $answer != [yY] ]]; then
       echo "Stopped before pushing. To undo the version commit: git reset --hard HEAD~1"
       exit 1
@@ -183,6 +186,9 @@ ship v:
 
     echo "==> AUR: quarry-sql and quarry-sql-bin"
     just aur
+
+    echo "==> Homebrew: {{tap}}"
+    just brew
     echo "Released $v."
 
 # Regenerate both AUR packages' .SRCINFO
@@ -230,6 +236,41 @@ aur:
       fi
       rm -rf "$dir"
     done
+
+# Publish packaging/homebrew/quarry.rb to the Homebrew tap, through a throwaway clone in dist/tap
+[group('release')]
+brew:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    src=packaging/homebrew/quarry.rb
+    if [ -n "$(git status --porcelain packaging/homebrew)" ]; then
+      echo "commit packaging/homebrew first" >&2
+      exit 1
+    fi
+    url=$(sed -n 's/^  url "\(.*\)"/\1/p' "$src")
+    if [[ $url != */v{{version}}.tar.gz ]]; then
+      echo "quarry.rb points at $url, not v{{version}}" >&2
+      exit 1
+    fi
+    if [[ $(curl -fsSL "$url" | sha256sum | cut -d' ' -f1) != $(sed -n 's/^  sha256 "\(.*\)"/\1/p' "$src") ]]; then
+      echo "quarry.rb: the checksum isn't the v{{version}} source tarball's; run just release first" >&2
+      exit 1
+    fi
+    dir=dist/tap
+    rm -rf "$dir"
+    gh repo clone {{tap}} "$dir" -- -q
+    mkdir -p "$dir/Formula"
+    cp "$src" "$dir/Formula/"
+    git -C "$dir" add Formula/quarry.rb
+    if git -C "$dir" diff --cached --quiet; then
+      echo "quarry.rb: already up to date"
+    else
+      git -C "$dir" commit -q -m "quarry {{version}}"
+      # The tap is shared with other projects, which push to main whatever a clone's branch is named.
+      git -C "$dir" push -q origin HEAD:main
+      echo "quarry.rb: pushed {{version}}"
+    fi
+    rm -rf "$dir"
 
 # Regenerate logo.svg, banner.svg and the docs site's copies
 [group('art')]

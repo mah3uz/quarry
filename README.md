@@ -20,6 +20,7 @@ to review before it runs.
 
 ```sh
 paru -S quarry-sql-bin                                  # Arch Linux (AUR); or quarry-sql to build it
+brew install mah3uz/tap/quarry                          # macOS, or Linux with Homebrew
 cargo install --git https://github.com/mah3uz/quarry    # anywhere with Rust
 ```
 

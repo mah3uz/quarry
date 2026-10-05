@@ -1,0 +1,20 @@
+class Quarry < Formula
+  desc "Fast SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite"
+  homepage "https://quarry.asmechanics.com"
+  url "https://github.com/mah3uz/quarry/archive/refs/tags/v0.1.0.tar.gz"
+  sha256 "aeb8aa5cee60d35a3852e7060a20c5439ef29df056975cc0e18f9e2f9e7c1971"
+  license "MIT"
+  head "https://github.com/mah3uz/quarry.git", branch: "main"
+
+  depends_on "rust" => :build
+
+  def install
+    system "cargo", "install", *std_cargo_args
+    generate_completions_from_executable(bin/"quarry", "--completions", shells: [:bash, :zsh, :fish])
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/quarry --version")
+    assert_equal "n\n1\n", shell_output("#{bin}/quarry :memory: -e 'select 1 as n' --format csv")
+  end
+end

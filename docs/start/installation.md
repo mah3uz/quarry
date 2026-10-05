@@ -1,6 +1,6 @@
 ---
 title: 'Installation'
-description: 'Install quarry from the AUR on Arch Linux, download the prebuilt Linux binary, or build it from source with Cargo.'
+description: 'Install quarry from the AUR on Arch Linux, with Homebrew on macOS, download the prebuilt Linux binary, or build it from source with Cargo.'
 ---
 
 # Installation
@@ -8,8 +8,9 @@ description: 'Install quarry from the AUR on Arch Linux, download the prebuilt L
 | You're on | Easiest way |
 |---|---|
 | Arch Linux or a derivative | [The AUR](#arch-linux-aur) |
+| macOS | [Homebrew](#homebrew) |
 | Another Linux on x86_64 | [The prebuilt binary](#prebuilt-binary-linux-x86-64) |
-| macOS, or anything else | [Cargo](#build-from-source) |
+| Anything else | [Cargo](#build-from-source) |
 
 ## Arch Linux (AUR)
 
@@ -36,6 +37,18 @@ makepkg -si
 
 The packages are called `quarry-sql` because the AUR's `quarry` is an unrelated game. Both provide
 `/usr/bin/quarry`, so pacman won't install them side by side.
+
+## Homebrew
+
+On macOS, or on Linux with [Homebrew](https://brew.sh):
+
+```sh
+brew install mah3uz/tap/quarry
+```
+
+Homebrew builds quarry from source, so the first install takes a few minutes and brings in Rust as
+a build dependency. Shell completion for bash, zsh and fish is installed with it. Update with
+`brew upgrade quarry`.
 
 ## Prebuilt binary (Linux x86_64)
 
