@@ -59,6 +59,14 @@ fn my_err(e: mysql_async::Error) -> DbError {
 }
 
 fn connect_err(e: mysql_async::Error) -> DbError {
+    // MySQL 8 hides whether a user exists by answering an unknown one with a plugin picked at random,
+    // so a mistyped user name lands here about as often as on 1045.
+    if let mysql_async::Error::Driver(mysql_async::DriverError::UnknownAuthPlugin { name }) = &e {
+        return DbError::new(
+            ErrorKind::Auth,
+            format!("the server asked for the `{name}` authentication plugin, which quarry doesn't support; MySQL also answers this way for a user that doesn't exist, so check the user name"),
+        );
+    }
     let mut err = my_err(e);
     if err.kind != ErrorKind::Auth {
         err.kind = ErrorKind::Connection;

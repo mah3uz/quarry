@@ -10,6 +10,9 @@ What changed in each release of quarry, newest first. Each release's section is 
   middle click) was ignored everywhere except the SQL editor and one-line prompts. It now goes into whatever you're
   typing in: the fields of the New connection form, the command palette, the theme picker, the explorer filter, the
   history filter and the shortcuts filter.
+- **A mistyped MySQL user name is reported as a failed login.** MySQL 8 sometimes answers an unknown user by asking
+  for a sign-in method quarry doesn't support, and quarry showed that as a driver error. It now says to check the user
+  name, and asks for the password again as it does for any refused login.
 - **The clipboard on Wayland.** <kbd>Ctrl</kbd>+<kbd>V</kbd> and copying now use the Wayland clipboard directly; before,
   they could paste nothing or copy to a clipboard other programs didn't see.
 

@@ -616,10 +616,18 @@ async fn my_errors_and_auth_are_classified() {
     let Some((db, mut c)) = TestDb::create(admin.clone(), "my_errors").await else { return };
     let e = c.query("SELECT * FROM missing").await.unwrap_err();
     assert_eq!((e.kind, e.code.as_deref()), (ErrorKind::Query, Some("1146")));
-    // a non-existent account: exercises 1045 without risking any lockout on real accounts
-    let spec = ConnSpec { user: Some("quarry_no_such_user".into()), password: Some("x".into()), ..admin };
-    let e = Connection::connect(&spec).await.err().expect("bad credentials must fail");
-    assert_eq!((e.kind, e.code.as_deref()), (ErrorKind::Auth, Some("1045")));
+    // non-existent accounts: exercise a failed login without risking any lockout on real accounts.
+    // The server picks each one's plugin at random, so several names reach both answers it gives:
+    // 1045, or a plugin the driver doesn't speak. Either way it's the credentials, not the network.
+    let mut codes = Vec::new();
+    for i in 0..8 {
+        let spec = ConnSpec { user: Some(format!("quarry_no_such_user_{i}")), password: Some("x".into()), ..admin.clone() };
+        let e = Connection::connect(&spec).await.err().expect("bad credentials must fail");
+        assert_eq!(e.kind, ErrorKind::Auth, "{}", e.message);
+        assert!(e.code.as_deref() == Some("1045") || e.message.contains("check the user name"), "{}", e.message);
+        codes.push(e.code);
+    }
+    assert!(codes.contains(&Some("1045".into())), "no login was refused with 1045: {codes:?}");
     db.drop(c).await;
 }
 
