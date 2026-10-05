@@ -12,7 +12,7 @@ categories = ["command-line-utilities", "database"]
 
 [dependencies]
 anyhow = "1.0.104"
-arboard = "3.6.1"
+arboard = { version = "3.6.1", features = ["wayland-data-control"] }
 chrono = "0.4.45"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 clap_complete = { version = "~4.6.11", features = ["unstable-dynamic"] }

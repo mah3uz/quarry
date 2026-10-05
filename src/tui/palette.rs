@@ -134,6 +134,12 @@ impl<T: Clone> Palette<T> {
         self.filtered.get(self.selected).map(|(i, _)| &self.items[*i])
     }
 
+    pub fn handle_paste(&mut self, text: &str) -> PaletteEvent<T> {
+        self.input.handle_paste(text);
+        self.refilter();
+        self.current().map_or(PaletteEvent::None, |i| PaletteEvent::Preview(i.value.clone()))
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> PaletteEvent<T> {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let before = self.selected;
@@ -279,5 +285,17 @@ mod tests {
             PaletteEvent::Execute(v) => assert_eq!(v, 2),
             _ => panic!("expected execute"),
         }
+    }
+
+    /// The theme picker previews whatever the event names, so a paste has to report the new top match.
+    #[test]
+    fn a_paste_refilters_and_previews_the_top_match() {
+        let items = vec![
+            Item { label: "New query tab".into(), category: String::new(), hint: String::new(), value: 1 },
+            Item { label: "Toggle sidebar".into(), category: String::new(), hint: String::new(), value: 2 },
+        ];
+        let mut p = Palette::new("Commands", "type", items);
+        assert!(matches!(p.handle_paste("side\n"), PaletteEvent::Preview(2)));
+        assert!(matches!(p.handle_paste("zzz"), PaletteEvent::None));
     }
 }

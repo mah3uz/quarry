@@ -60,6 +60,13 @@ impl Input {
         }
     }
 
+    /// Inserts pasted text on the one line: a trailing line break is dropped, inner ones become spaces.
+    pub fn handle_paste(&mut self, text: &str) -> InputEvent {
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        self.insert_str(&text.trim_end_matches('\n').replace('\n', " "));
+        InputEvent::Changed
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> InputEvent {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
@@ -92,10 +99,10 @@ impl Input {
                 InputEvent::Changed
             }
             KeyCode::Char('v') if ctrl => {
-                if let Ok(text) = arboard::Clipboard::new().and_then(|mut c| c.get_text()) {
-                    self.insert_str(&text.replace(['\n', '\r'], " "));
+                match arboard::Clipboard::new().and_then(|mut c| c.get_text()) {
+                    Ok(text) => self.handle_paste(&text),
+                    Err(_) => InputEvent::Moved,
                 }
-                InputEvent::Changed
             }
             KeyCode::Char(c) if !ctrl => {
                 self.chars.insert(self.cursor, c);
@@ -239,6 +246,18 @@ mod tests {
         i.handle_key(key(KeyCode::Home));
         i.handle_key(key(KeyCode::Delete));
         assert_eq!(i.value(), "elect é");
+    }
+
+    /// A copied line usually ends in a line break, and terminals send breaks as `\r`; neither may
+    /// end up in a host name or a password.
+    #[test]
+    fn paste_lands_at_the_cursor_on_one_line() {
+        let mut i = Input::new("ab");
+        i.handle_key(key(KeyCode::Left));
+        assert_eq!(i.handle_paste("x\r\ny\rz\n"), InputEvent::Changed);
+        assert_eq!(i.value(), "ax y zb");
+        i.handle_key(key(KeyCode::Char('!')));
+        assert_eq!(i.value(), "ax y z!b");
     }
 
     #[test]

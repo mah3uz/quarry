@@ -4,6 +4,15 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ## Unreleased
 
+### Fixed
+
+- **Paste works in every field of the TUI.** Pasting from the terminal (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>,
+  middle click) was ignored everywhere except the SQL editor and one-line prompts. It now goes into whatever you're
+  typing in: the fields of the New connection form, the command palette, the theme picker, the explorer filter, the
+  history filter and the shortcuts filter.
+- **The clipboard on Wayland.** <kbd>Ctrl</kbd>+<kbd>V</kbd> and copying now use the Wayland clipboard directly; before,
+  they could paste nothing or copy to a clipboard other programs didn't see.
+
 ## 0.1.0 - 2026-10-01 02:40 +06:00
 
 The first release of quarry: a SQL client for the terminal, for **PostgreSQL**, **MySQL / MariaDB** and **SQLite**,

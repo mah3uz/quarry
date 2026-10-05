@@ -400,6 +400,11 @@ impl HelpView {
             .collect()
     }
 
+    pub fn handle_paste(&mut self, text: &str) {
+        self.filter.handle_paste(text);
+        self.scroll = 0;
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> DialogResult<()> {
         match key.code {
             KeyCode::Down => self.scroll += 1,
@@ -663,6 +668,18 @@ impl ConnectForm {
         let n = SSL_MODES.len();
         let i = SSL_MODES.iter().position(|(m, _)| *m == self.ssl).unwrap_or(1);
         self.ssl = SSL_MODES[if forward { (i + 1) % n } else { (i + n - 1) % n }].0;
+    }
+
+    pub fn handle_paste(&mut self, text: &str) {
+        if self.in_list {
+            return;
+        }
+        let fields = self.visible_fields();
+        let f = fields[self.field.min(fields.len() - 1)];
+        if let Some(input) = self.input_mut(f) {
+            input.handle_paste(text);
+            self.error = None;
+        }
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> ConnectEvent {
@@ -977,6 +994,29 @@ mod tests {
             }
             _ => panic!("expected connect"),
         }
+    }
+
+    /// Terminals deliver a paste as one event, not as keys, so the form has to take it itself.
+    #[test]
+    fn a_paste_goes_into_the_focused_field_only() {
+        let mut f = ConnectForm::new(Vec::new());
+        f.handle_paste("sqlite::memory:\n");
+        assert_eq!(f.url.value(), "sqlite::memory:");
+        f.field = 0;
+        f.handle_paste("ignored by the type switch");
+        f.field = FIELDS.iter().position(|x| *x == Field::Password).unwrap();
+        f.handle_paste("s3cret\r");
+        assert_eq!(f.password.value(), "s3cret");
+        assert_eq!(f.url.value(), "sqlite::memory:");
+        assert!(f.host.is_empty() && f.name.is_empty());
+    }
+
+    /// In the saved list, letters are commands (`d` deletes); pasted text must not reach anything.
+    #[test]
+    fn a_paste_over_the_saved_list_changes_nothing() {
+        let mut f = ConnectForm::new(vec![("local".into(), SavedConnection { url: "sqlite::memory:".into(), ..Default::default() })]);
+        f.handle_paste("dn");
+        assert!(f.in_list && f.url.is_empty() && f.saved.len() == 1);
     }
 
     /// There is no separate "save" switch any more: a name is what saves a connection.

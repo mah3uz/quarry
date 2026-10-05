@@ -401,15 +401,24 @@ impl Sidebar {
         self.filter.is_some()
     }
 
+    fn filter_changed(&mut self) {
+        self.filter_text = self.filter.as_ref().map(Input::value).unwrap_or_default();
+        self.selected = 0;
+        self.rebuild_rows();
+        self.select_first_match();
+    }
+
+    pub fn handle_paste(&mut self, text: &str) {
+        if let Some(input) = &mut self.filter {
+            input.handle_paste(text);
+            self.filter_changed();
+        }
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> Option<Action> {
         if let Some(input) = &mut self.filter {
             match input.handle_key(key) {
-                InputEvent::Changed => {
-                    self.filter_text = input.value();
-                    self.selected = 0;
-                    self.rebuild_rows();
-                    self.select_first_match();
-                }
+                InputEvent::Changed => self.filter_changed(),
                 InputEvent::Submit => {
                     self.filter = None;
                     return self.activate();
@@ -866,6 +875,20 @@ mod tests {
         }
         assert!(labels(&s).contains(&"v".to_string()));
         assert!(!labels(&s).contains(&"orders".to_string()));
+    }
+
+    #[test]
+    fn a_paste_filters_like_typing_and_is_ignored_outside_the_filter() {
+        let mut s = Sidebar::default();
+        s.set_connection(0, "local", "pg", Backend::Postgres, false);
+        s.set_catalog(0, &catalog(), false);
+        let before = labels(&s);
+        s.handle_paste("orders");
+        assert_eq!(labels(&s), before);
+        s.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        s.handle_paste("orders\n");
+        assert!(labels(&s).contains(&"orders".to_string()));
+        assert!(!labels(&s).contains(&"users".to_string()));
     }
 
     #[test]

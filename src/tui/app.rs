@@ -799,15 +799,35 @@ impl App {
 
     fn on_paste(&mut self, text: &str) {
         match &mut self.overlay {
-            Some(Overlay::Prompt(p)) => p.input.insert_str(text),
-            Some(_) => {}
-            None => {
-                if self.focus == Focus::Main
-                    && let Some(Tab { kind: TabKind::Query(q), .. }) = self.tabs.get_mut(self.active) {
+            Some(Overlay::Commands(p)) => {
+                p.handle_paste(text);
+            }
+            Some(Overlay::Themes(p, _)) => {
+                if let PaletteEvent::Preview(name) = p.handle_paste(text)
+                    && let Ok(t) = crate::theme::load(&name, &self.config.themes_dir()) {
+                        self.theme = t.adapted(self.depth);
+                    }
+            }
+            Some(Overlay::Help(h)) => h.handle_paste(text),
+            Some(Overlay::Prompt(p)) => {
+                p.input.handle_paste(text);
+            }
+            Some(Overlay::Connect(form)) => form.handle_paste(text),
+            Some(Overlay::Confirm(_) | Overlay::Text(_)) => {}
+            None => match self.focus {
+                Focus::Sidebar => self.sidebar.handle_paste(text),
+                Focus::Main => match self.tabs.get_mut(self.active).map(|t| &mut t.kind) {
+                    Some(TabKind::Query(q)) => {
                         q.pane = Pane::Editor;
                         q.editor.handle_paste(text);
                     }
-            }
+                    Some(TabKind::History(h)) => {
+                        h.filter.handle_paste(text);
+                        h.refilter();
+                    }
+                    _ => {}
+                },
+            },
         }
     }
 
