@@ -6,7 +6,8 @@ description: 'How a quarry release is made - the changelog, `just ship`, the Git
 # Releasing
 
 Releases are made from a maintainer's machine with `just`, the GitHub CLI (`gh`), `makepkg`, and an
-SSH key registered with your [AUR account](https://aur.archlinux.org/account). Nothing runs in CI.
+SSH key registered with your [AUR account](https://aur.archlinux.org/account). Only the
+[Homebrew bottle](#homebrew-formula) is built in CI.
 
 ## While you work
 
@@ -46,7 +47,7 @@ Then it:
    notes (`just release-notes 0.2.0`, with a compare link to the previous release).
 7. Commits the checksums as `Release 0.2.0` and pushes.
 8. Publishes `quarry-sql` and `quarry-sql-bin` to the AUR (`just aur`).
-9. Publishes the formula to the Homebrew tap (`just brew`).
+9. Publishes the formula to the Homebrew tap and waits for its bottle to be built (`just brew`).
 10. Builds the docs site and deploys it (`just docs-deploy`), so what it says about installing and
     the new version goes live with the release.
 
@@ -79,9 +80,20 @@ Linux, and installs shell completion. It's published to a tap, the GitHub reposi
 gh repo create mah3uz/homebrew-tap --public
 ```
 
-`just brew` copies the formula to `Formula/quarry.rb` in the tap through a throwaway clone in
-`dist/tap`. It refuses when the formula isn't at the current version or its checksum isn't the
-source tarball's.
+The tap's copy of the formula also has a bottle, a prebuilt binary for macOS 15 and later on Apple
+Silicon, so `brew install` there downloads quarry instead of building it. Intel Macs, older macOS
+and Linux still build from source. A bottle can only be built on macOS, so this is the one release
+step that runs in CI, on GitHub Actions in the tap.
+
+`just brew` works through a throwaway clone in `dist/tap`. It keeps the tap's
+`.github/workflows/quarry-bottle.yml` the same as `packaging/homebrew/bottle.yml`, pushes the
+formula to a `bottle/quarry-0.2.0` branch of the tap, and waits for the workflow that push starts. The workflow builds and
+tests the formula on macOS, uploads the bottle to the tap's `quarry-0.2.0` release, writes the
+`bottle do` block into the formula, pushes that to the tap's `main` and deletes the branch. The
+tap's `main` never has a version without its bottle.
+
+`just brew` refuses when the formula isn't at the current version or its checksum isn't the source
+tarball's, and fails if the workflow does; run it again once the cause is fixed.
 
 ## Other recipes
 

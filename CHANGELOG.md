@@ -4,6 +4,12 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ## Unreleased
 
+### Changed
+
+- **Homebrew installs a prebuilt quarry on Apple Silicon.** On macOS 15 or later, `brew install mah3uz/tap/quarry`
+  downloads quarry instead of building it, so it no longer takes minutes or brings in Rust. Intel Macs, older macOS
+  and Linux still build from source.
+
 ## 0.1.1 - 2026-10-05 22:44 +06:00
 
 Homebrew joins the AUR as a way to install quarry, and pasting works wherever you can type in the TUI.

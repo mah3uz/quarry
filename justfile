@@ -242,7 +242,7 @@ aur:
       rm -rf "$dir"
     done
 
-# Publish packaging/homebrew/quarry.rb to the Homebrew tap, through a throwaway clone in dist/tap
+# Publish packaging/homebrew/quarry.rb to the Homebrew tap with a macOS bottle, which the tap's GitHub Actions build
 [group('release')]
 brew:
     #!/usr/bin/env bash
@@ -264,18 +264,42 @@ brew:
     dir=dist/tap
     rm -rf "$dir"
     gh repo clone {{tap}} "$dir" -- -q
-    mkdir -p "$dir/Formula"
+    live=$dir/Formula/quarry.rb
+    if grep -qs '^  bottle do$' "$live" && diff -q <(sed '/^  bottle do$/,/^  end$/d' "$live" | cat -s) <(cat -s "$src") >/dev/null; then
+      echo "quarry.rb: already up to date"
+      rm -rf "$dir"
+      exit 0
+    fi
+    mkdir -p "$dir/Formula" "$dir/.github/workflows"
+    cp packaging/homebrew/bottle.yml "$dir/.github/workflows/quarry-bottle.yml"
+    git -C "$dir" add .github/workflows/quarry-bottle.yml
+    if ! git -C "$dir" diff --cached --quiet; then
+      git -C "$dir" commit -q -m "quarry: bottle workflow"
+      # The workflow's own token may not push a change to a workflow, so it can't ride the bottle branch to main.
+      git -C "$dir" push -q origin HEAD:main
+    fi
+    branch=bottle/quarry-{{version}}
+    git -C "$dir" checkout -q -b "$branch"
     cp "$src" "$dir/Formula/"
     git -C "$dir" add Formula/quarry.rb
-    if git -C "$dir" diff --cached --quiet; then
-      echo "quarry.rb: already up to date"
-    else
-      git -C "$dir" commit -q -m "quarry {{version}}"
-      # The tap is shared with other projects, which push to main whatever a clone's branch is named.
-      git -C "$dir" push -q origin HEAD:main
-      echo "quarry.rb: pushed {{version}}"
-    fi
+    git -C "$dir" commit -q --allow-empty -m "quarry {{version}}"
+    sha=$(git -C "$dir" rev-parse HEAD)
+    # Pushing this branch starts the tap's bottle workflow, which moves main itself once the bottle is up.
+    git -C "$dir" push -q -f origin "$branch"
     rm -rf "$dir"
+    echo "quarry.rb: building the bottle for {{version}}"
+    run=
+    for _ in {1..30}; do
+      run=$(gh run list --repo {{tap}} --commit "$sha" --json databaseId --jq '.[0].databaseId // empty')
+      [ -n "$run" ] && break
+      sleep 2
+    done
+    if [ -z "$run" ]; then
+      echo "the tap started no bottle run for $branch; are Actions enabled on {{tap}}?" >&2
+      exit 1
+    fi
+    gh run watch "$run" --repo {{tap}} --exit-status
+    echo "quarry.rb: pushed {{version}} with its bottle"
 
 # Regenerate logo.svg, banner.svg and the docs site's copies
 [group('art')]

@@ -1,0 +1,54 @@
+name: quarry bottle
+
+on:
+  push:
+    branches: ["bottle/quarry-*"]
+
+permissions:
+  contents: write
+
+jobs:
+  bottle:
+    runs-on: macos-15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use this checkout as the tap
+        run: |
+          taps="$(brew --repository)/Library/Taps/${GITHUB_REPOSITORY_OWNER}"
+          mkdir -p "$taps"
+          ln -s "$GITHUB_WORKSPACE" "$taps/homebrew-tap"
+
+      - name: Build and test
+        run: |
+          brew install --build-bottle mah3uz/tap/quarry
+          brew test mah3uz/tap/quarry
+
+      - name: Bottle and upload
+        working-directory: ${{ runner.temp }}
+        run: |
+          tag=${GITHUB_REF_NAME#bottle/}
+          brew bottle --json --root-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag" mah3uz/tap/quarry
+          # brew names the file it writes quarry--<version>, and downloads quarry-<version>.
+          jq -r '.[].bottle.tags[] | "\(.local_filename) \(.filename)"' quarry--*.bottle.json | while read -r from to; do
+            mv "$from" "$to"
+          done
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "Homebrew bottles for $tag."
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber quarry-*.bottle*.tar.gz
+          brew bottle --merge --write --no-commit quarry--*.bottle.json
+
+      - name: Publish the formula
+        run: |
+          tag=${GITHUB_REF_NAME#bottle/}
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "quarry ${tag#quarry-}: bottle" Formula/quarry.rb
+          # The tap is shared with other projects, which may have pushed to main during the build.
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main
+          git push -q origin --delete "$GITHUB_REF_NAME"

@@ -46,9 +46,10 @@ On macOS, or on Linux with [Homebrew](https://brew.sh):
 brew install mah3uz/tap/quarry
 ```
 
-Homebrew builds quarry from source, so the first install takes a few minutes and brings in Rust as
-a build dependency. Shell completion for bash, zsh and fish is installed with it. Update with
-`brew upgrade quarry`.
+On macOS 15 or later on Apple Silicon, Homebrew downloads a prebuilt quarry. On Intel Macs, older
+macOS and Linux it builds quarry from source, so the first install takes a few minutes and brings
+in Rust as a build dependency. Shell completion for bash, zsh and fish is installed with it. Update
+with `brew upgrade quarry`.
 
 ## Prebuilt binary (Linux x86_64)
 
