@@ -52,4 +52,5 @@ Next, by hand:
   git commit -am "Release $ver" && git push
   just aur
   just brew
+  just docs-deploy
 NEXT

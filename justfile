@@ -123,7 +123,7 @@ release-notes v:
       }
     ' CHANGELOG.md
 
-# The whole release: checks, version bump, tag, GitHub Release, AUR and Homebrew, e.g. `just ship 0.1.0`
+# The whole release: checks, version bump, tag, GitHub Release, AUR, Homebrew and the docs site, e.g. `just ship 0.1.0`
 [group('release')]
 ship v:
     #!/usr/bin/env bash
@@ -146,6 +146,8 @@ ship v:
     gh auth status >/dev/null 2>&1 || fail "gh is not logged in; run gh auth login"
     ssh -o BatchMode=yes aur@aur.archlinux.org help >/dev/null 2>&1 || fail "can't reach the AUR over SSH; add your key at https://aur.archlinux.org/account"
     gh repo view {{tap}} >/dev/null 2>&1 || fail "no Homebrew tap; create it once with: gh repo create {{tap}} --public"
+    just docs-deps
+    (cd docs && npx wrangler whoami 2>&1 | grep -q "You are logged in") || fail "wrangler is not logged in, and the docs site is deployed at the end; run npx wrangler login in docs"
 
     echo "==> lint and tests"
     just check
@@ -161,7 +163,7 @@ ship v:
     git commit -q -am "Version $v"
 
     # Everything after this is public and can't be taken back.
-    read -rp "Push v$v to origin and publish the GitHub Release, AUR packages and Homebrew formula? [y/N] " answer
+    read -rp "Push v$v to origin and publish the GitHub Release, AUR packages, Homebrew formula and docs site? [y/N] " answer
     if [[ $answer != [yY] ]]; then
       echo "Stopped before pushing. To undo the version commit: git reset --hard HEAD~1"
       exit 1
@@ -189,6 +191,9 @@ ship v:
 
     echo "==> Homebrew: {{tap}}"
     just brew
+
+    echo "==> the docs site"
+    just docs-deploy
     echo "Released $v."
 
 # Regenerate both AUR packages' .SRCINFO

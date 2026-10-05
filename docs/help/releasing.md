@@ -28,7 +28,8 @@ just ship 0.2.0
 - `CHANGELOG.md` has something under `## Unreleased`,
 - you're on an up-to-date, clean `main`, and the tag doesn't exist yet,
 - `gh` is signed in, and the AUR accepts your SSH key,
-- the Homebrew tap (`mah3uz/homebrew-tap` on GitHub) exists.
+- the Homebrew tap (`mah3uz/homebrew-tap` on GitHub) exists,
+- `wrangler` is logged in (`npx wrangler login` in `docs/`), for the docs site.
 
 Then it:
 
@@ -46,10 +47,12 @@ Then it:
 7. Commits the checksums as `Release 0.2.0` and pushes.
 8. Publishes `quarry-sql` and `quarry-sql-bin` to the AUR (`just aur`).
 9. Publishes the formula to the Homebrew tap (`just brew`).
+10. Builds the docs site and deploys it (`just docs-deploy`), so what it says about installing and
+    the new version goes live with the release.
 
 If a step after the tag fails, `ship` says so; finish the remaining steps by hand, in order:
 `just release`, then `gh release create …` as `packaging/release.sh` prints, then commit and push,
-then `just aur`, then `just brew`.
+then `just aur`, then `just brew`, then `just docs-deploy`.
 
 ## AUR packages
 
