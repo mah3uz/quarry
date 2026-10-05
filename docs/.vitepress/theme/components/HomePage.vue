@@ -1,23 +1,57 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useData, withBase } from 'vitepress'
 import Terminal from './Terminal.vue'
 
 const { isDark } = useData()
 const repo = 'https://github.com/mah3uz/quarry'
 
+declare const __QUARRY_VERSION__: string
+const tarball = `quarry-${__QUARRY_VERSION__}-x86_64-unknown-linux-gnu`
 const installs = [
-  { id: 'aur', label: 'Arch (AUR)', command: 'paru -S quarry-sql-bin' },
-  { id: 'brew', label: 'Homebrew', command: 'brew install mah3uz/tap/quarry' },
-  { id: 'cargo', label: 'Cargo', command: 'cargo install --git https://github.com/mah3uz/quarry' },
-  { id: 'binary', label: 'Prebuilt', command: '' },
+  {
+    id: 'macos',
+    label: 'macOS',
+    commands: ['brew install mah3uz/tap/quarry'],
+    note: 'With Homebrew. Prebuilt for Apple Silicon on macOS 15 or later; other Macs build it from source.',
+  },
+  {
+    id: 'arch',
+    label: 'Arch Linux',
+    commands: ['paru -S quarry-sql-bin'],
+    note: 'From the AUR, with yay as well. quarry-sql builds it from source instead.',
+  },
+  {
+    id: 'linux',
+    label: 'Other Linux',
+    commands: [
+      `curl -L ${repo}/releases/download/v${__QUARRY_VERSION__}/${tarball}.tar.gz | tar -xz`,
+      `install -Dm755 ${tarball}/quarry ~/.local/bin/quarry`,
+    ],
+    note: 'The prebuilt binary for x86_64, put in ~/.local/bin.',
+  },
+  {
+    id: 'cargo',
+    label: 'Cargo',
+    commands: ['cargo install --git https://github.com/mah3uz/quarry'],
+    note: 'Builds from source on any Linux or macOS with Rust and a C compiler.',
+  },
 ]
-const chosen = ref('aur')
+const chosen = ref('macos')
+const install = computed(() => installs.find((i) => i.id === chosen.value)!)
+const onWindows = ref(false)
 const copied = ref(false)
-async function copyInstall(command: string) {
-  await navigator.clipboard.writeText(command)
+async function copyInstall() {
+  await navigator.clipboard.writeText(install.value.commands.join('\n'))
   copied.value = true
   setTimeout(() => (copied.value = false), 1600)
+}
+// A browser doesn't say which Linux it's on, so every Linux gets Arch, with the other Linux tab beside it.
+function installFor(ua: string): string {
+  if (/Android|iPhone|iPad/.test(ua)) return 'macos'
+  if (/Windows/.test(ua)) return 'linux'
+  if (/Linux|X11/.test(ua)) return /aarch64|arm/i.test(ua) ? 'cargo' : 'arch'
+  return 'macos'
 }
 
 // Layered rock behind the REPL: each boundary is a gentle, deterministic wave so the strata look
@@ -81,6 +115,8 @@ const mounted = ref(false)
 let stopWatching = () => {}
 onMounted(() => {
   mounted.value = true
+  chosen.value = installFor(navigator.userAgent)
+  onWindows.value = /Windows/.test(navigator.userAgent)
   const el = face.value
   if (!el) return
   const seen = new IntersectionObserver(([entry]) => el.classList.toggle('asleep', !entry.isIntersecting))
@@ -150,29 +186,27 @@ const features = [
             <a class="button primary" :href="withBase('/start/quick-start')">Get started</a>
             <a class="button" :href="withBase('/start/introduction')">Read the docs</a>
           </div>
-          <div class="installer">
-            <div class="choices" role="tablist" aria-label="How to install">
-              <button v-for="i in installs" :key="i.id" type="button" role="tab" :aria-selected="chosen === i.id"
-                @click="chosen = i.id; copied = false">{{ i.label }}</button>
-            </div>
-            <template v-for="i in installs" :key="i.id">
-              <div v-if="chosen === i.id" class="install" role="tabpanel">
-                <template v-if="i.command">
-                  <code>{{ i.command }}</code>
-                  <button type="button" @click="copyInstall(i.command)">{{ copied ? 'Copied' : 'Copy' }}</button>
-                </template>
-                <p v-else class="download">
-                  Linux x86_64: <a :href="`${repo}/releases/latest`">download the latest release</a>
-                </p>
-              </div>
-            </template>
-            <p class="alt">
-              Other ways in the <a :href="withBase('/start/installation')">installation guide</a>.
-            </p>
-          </div>
         </div>
         <img class="mascot" :src="withBase('/logo.svg')" width="340" height="340"
           alt="The quarry mascot: a stone database cylinder with a glowing crystal and a pickaxe" />
+        <div class="installer">
+          <div class="bar">
+            <p class="kicker">Install</p>
+            <div class="choices" role="tablist" aria-label="Your system">
+              <button v-for="i in installs" :key="i.id" type="button" role="tab" :aria-selected="chosen === i.id"
+                @click="chosen = i.id; copied = false">{{ i.label }}</button>
+            </div>
+          </div>
+          <div class="install" role="tabpanel">
+            <pre><code v-for="c in install.commands" :key="c">{{ c }}</code></pre>
+            <button type="button" @click="copyInstall">{{ copied ? 'Copied' : 'Copy' }}</button>
+          </div>
+          <p class="alt">
+            <template v-if="onWindows">quarry doesn't run on Windows yet; this works in WSL. </template>
+            {{ install.note }}
+            <a :href="withBase('/start/installation')">Every way to install</a>
+          </p>
+        </div>
       </section>
 
       <section ref="face" class="face" aria-label="A quarry REPL session">
@@ -354,9 +388,9 @@ a {
 /* Hero: the headline is the voice of the page, set in Recursive's casual cut. */
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   align-items: center;
-  gap: 48px;
+  gap: 32px 48px;
   padding-top: clamp(32px, 6vw, 88px);
   padding-bottom: 48px;
 }
@@ -420,68 +454,83 @@ h1 {
 .button.primary:hover {
   background: var(--vp-button-brand-hover-bg);
 }
+.copy {
+  grid-row: span 2;
+}
 .installer {
-  margin-top: 28px;
-  max-width: 100%;
+  grid-column: 2;
+  align-self: start;
+  border-radius: 12px;
+  background: var(--vp-code-block-bg);
+  border: 1px solid var(--vp-c-divider);
+  overflow: hidden;
+}
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 10px 10px 18px;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+.kicker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
 }
 .choices {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 8px;
 }
 .choices button {
-  padding: 5px 12px;
+  padding: 6px 12px;
   white-space: nowrap;
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
-  color: var(--vp-c-text-3);
+  color: var(--vp-c-text-2);
   background: none;
   border: 1px solid transparent;
   cursor: pointer;
-}
-@media (max-width: 420px) {
-  .choices button {
-    padding: 5px 8px;
-  }
 }
 .choices button:hover {
   color: var(--vp-c-text-1);
 }
 .choices button[aria-selected='true'] {
-  color: var(--vp-c-text-1);
-  background: var(--vp-c-bg-soft);
-  border-color: var(--vp-c-divider);
-}
-.download {
-  margin: 0;
-  padding: 6px 10px 6px 0;
-  font-size: 14px;
-  color: var(--vp-c-text-2);
-}
-.download a {
   color: var(--vp-c-brand-1);
-  text-underline-offset: 3px;
+  background: var(--vp-c-bg);
+  border-color: var(--vp-c-divider);
 }
 .install {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  max-width: 100%;
-  min-height: 46px;
-  padding: 6px 6px 6px 16px;
-  border-radius: 10px;
-  background: var(--vp-code-block-bg);
-  border: 1px solid var(--vp-c-divider);
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 12px 18px 18px;
+}
+.install pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 5px 0;
 }
 .install code {
-  overflow-x: auto;
-  white-space: nowrap;
+  display: block;
+  padding-left: 2ch;
+  text-indent: -2ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-family: var(--vp-font-family-mono);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--vp-c-text-1);
+}
+.install code + code {
+  margin-top: 6px;
 }
 .install code::before {
   content: '$ ';
@@ -489,30 +538,36 @@ h1 {
 }
 .install button {
   flex: none;
-  padding: 6px 12px;
-  border-radius: 7px;
-  font-size: 13px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 650;
-  color: var(--vp-c-text-2);
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
+  color: var(--vp-button-brand-text);
+  background: var(--vp-button-brand-bg);
+  border: 0;
   cursor: pointer;
 }
 .install button:hover {
-  color: var(--vp-c-text-1);
+  background: var(--vp-button-brand-hover-bg);
 }
 .alt {
-  margin: 12px 0 0;
+  margin: 0;
+  padding: 12px 18px;
   font-size: 14px;
-  color: var(--vp-c-text-3);
+  line-height: 1.55;
+  color: var(--vp-c-text-2);
+  border-top: 1px solid var(--vp-c-divider);
 }
 .alt a {
+  white-space: nowrap;
   color: var(--vp-c-brand-1);
   text-underline-offset: 3px;
 }
 .mascot {
+  grid-column: 2;
+  align-self: end;
   justify-self: center;
-  width: min(100%, 340px);
+  width: min(100%, 240px);
   height: auto;
 }
 
@@ -814,10 +869,16 @@ dd {
   .mode.wide .text {
     grid-template-columns: minmax(0, 1fr);
   }
+  .copy {
+    grid-row: 2;
+  }
   .mascot {
-    grid-row: 1;
+    grid-area: 1 / 1;
     justify-self: start;
     width: 160px;
+  }
+  .installer {
+    grid-column: 1;
   }
   dl {
     grid-template-columns: minmax(0, 1fr);

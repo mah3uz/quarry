@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vitepress'
 
 const repo = 'https://github.com/mah3uz/quarry'
@@ -5,7 +6,10 @@ const site = 'https://quarry.asmechanics.com'
 const description =
   'A modern SQL client, smart and fast, that lives in your terminal: a smart REPL and a full-screen TUI for PostgreSQL, MySQL / MariaDB and SQLite.'
 
+const version = readFileSync(new URL('../../Cargo.toml', import.meta.url), 'utf8').match(/^version = "(.*)"/m)![1]
+
 export default defineConfig({
+  vite: { define: { __QUARRY_VERSION__: JSON.stringify(version) } },
   title: 'quarry',
   description,
   lang: 'en-US',
