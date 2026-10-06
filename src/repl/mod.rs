@@ -200,14 +200,14 @@ fn build_editor(session: &Session, toggles: &Toggles) -> Result<Reedline> {
 }
 
 fn add_bindings(kb: &mut Keybindings, complete_while_typing: bool) {
-    // Tab takes the highlighted (best) match or opens the menu; Enter always runs, so a menu
-    // that popped up while typing never swallows the submit.
+    // Tab takes the highlighted (best) match or opens the menu; Enter takes it too, and runs
+    // only when no menu has anything to offer.
     kb.add_binding(
         KeyModifiers::NONE,
         KeyCode::Tab,
         ReedlineEvent::UntilFound(vec![ReedlineEvent::MenuAccept, ReedlineEvent::Menu(MENU.into())]),
     );
-    kb.add_binding(KeyModifiers::NONE, KeyCode::Enter, ReedlineEvent::Multiple(vec![ReedlineEvent::Esc, ReedlineEvent::Enter]));
+    kb.add_binding(KeyModifiers::NONE, KeyCode::Enter, ReedlineEvent::UntilFound(vec![ReedlineEvent::MenuAccept, ReedlineEvent::Enter]));
     kb.add_binding(KeyModifiers::SHIFT, KeyCode::BackTab, ReedlineEvent::MenuPrevious);
     kb.add_binding(KeyModifiers::NONE, KeyCode::Down, ReedlineEvent::UntilFound(vec![ReedlineEvent::MenuDown, ReedlineEvent::Down]));
     kb.add_binding(KeyModifiers::NONE, KeyCode::Up, ReedlineEvent::UntilFound(vec![ReedlineEvent::MenuUp, ReedlineEvent::Up]));

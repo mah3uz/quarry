@@ -40,6 +40,13 @@ impl RlCompleter for ReplCompleter {
         drop(st);
         let result = completer.complete(line, pos);
         let start = result.replace_start.min(pos);
+        // A lone suggestion that is already typed out would only make Enter close the menu
+        // instead of running the line.
+        if let [only] = result.items.as_slice()
+            && line.get(start..pos) == Some(only.text.as_str())
+        {
+            return CompletionResult::Pending;
+        }
         let items: Vec<RlSuggestion> = result
             .items
             .into_iter()
@@ -209,6 +216,25 @@ mod tests {
         assert!(is_complete("select 1", Backend::Postgres, ";", false));
         assert!(is_complete("select 1\\G", Backend::MySql, ";", true));
         assert!(is_complete("quit", Backend::MySql, ";", true));
+    }
+
+    #[test]
+    fn a_suggestion_already_typed_out_does_not_hold_enter_back() {
+        let catalog = Arc::new(crate::db::catalog::Catalog::empty(Backend::Sqlite));
+        let extras = crate::complete::Extras { specials: vec![("\\nopager".into(), "Disable the pager.".into())], ..Default::default() };
+        let completer = Completer::new(Backend::Sqlite, catalog, Default::default(), extras);
+        let state = EditState {
+            backend: Backend::Sqlite,
+            delimiter: ";".into(),
+            multi_line: true,
+            palette: Palette::new(Default::default(), crate::theme::ColorDepth::None),
+            completer: Some(Arc::new(completer)),
+            smart_completion: true,
+        };
+        let mut c = ReplCompleter { state: Arc::new(RwLock::new(state)) };
+        let offered = |r: CompletionResult| matches!(r, CompletionResult::Fresh { .. });
+        assert!(offered(c.complete("\\nopag", 6)), "an unfinished word is offered its completion");
+        assert!(!offered(c.complete("\\nopager", 8)), "Enter takes an open menu's item, so this would cost a second Enter");
     }
 
     #[test]

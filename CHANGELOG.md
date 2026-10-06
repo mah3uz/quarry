@@ -6,6 +6,9 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ### Changed
 
+- **<kbd>Enter</kbd> takes the highlighted suggestion in the REPL.** With the completion menu open, <kbd>Enter</kbd>
+  now completes the marked item, as <kbd>Tab</kbd> does, instead of running the line. With no menu open it runs the
+  line as before, and the menu no longer opens for a word that is already typed out in full.
 - **Homebrew installs a prebuilt quarry on Apple Silicon.** On macOS 15 or later, `brew install mah3uz/tap/quarry`
   downloads quarry instead of building it, so it no longer takes minutes or brings in Rust. Intel Macs, older macOS
   and Linux still build from source.

@@ -45,8 +45,9 @@ changes it, and `delimiter ;` restores it.
 
 ## Completion
 
-A menu of suggestions opens as you type. Take the highlighted one with <kbd>Tab</kbd>, move with
-<kbd>↑</kbd> / <kbd>↓</kbd>. <kbd>Enter</kbd> never picks a suggestion; it always runs the line.
+A menu of suggestions opens as you type. Take the highlighted one with <kbd>Tab</kbd> or
+<kbd>Enter</kbd>, move with <kbd>↑</kbd> / <kbd>↓</kbd>. While the menu is open <kbd>Enter</kbd>
+only completes; press it again to run the line.
 
 What you get depends on where the cursor is:
 

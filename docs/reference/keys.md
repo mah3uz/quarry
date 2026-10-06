@@ -11,7 +11,7 @@ The REPL uses Emacs-style editing by default; set `vi = true` or press <kbd>F4</
 
 | Key | Does |
 |---|---|
-| <kbd>Enter</kbd> | Run the buffer if the statement is finished (ends with `;` or `\G`, or is a special command); otherwise start a new line |
+| <kbd>Enter</kbd> | Take the highlighted suggestion if the completion menu is open. Otherwise run the buffer if the statement is finished (ends with `;` or `\G`, or is a special command), or start a new line |
 | <kbd>Alt</kbd>+<kbd>Enter</kbd> | Run the buffer now, finished or not |
 | <kbd>Tab</kbd> | Take the highlighted suggestion, or open the completion menu |
 | <kbd>Shift</kbd>+<kbd>Tab</kbd> | Previous suggestion |
