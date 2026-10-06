@@ -58,9 +58,9 @@ Each [GitHub Release](https://github.com/mah3uz/quarry/releases) has a
 licence:
 
 ```sh
-curl -LO https://github.com/mah3uz/quarry/releases/download/v0.1.1/quarry-0.1.1-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf quarry-0.1.1-x86_64-unknown-linux-gnu.tar.gz
-install -Dm755 quarry-0.1.1-x86_64-unknown-linux-gnu/quarry ~/.local/bin/quarry
+curl -LO https://github.com/mah3uz/quarry/releases/download/v0.2.0/quarry-0.2.0-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf quarry-0.2.0-x86_64-unknown-linux-gnu.tar.gz
+install -Dm755 quarry-0.2.0-x86_64-unknown-linux-gnu/quarry ~/.local/bin/quarry
 ```
 
 That's the latest release; for another one, change the version in each line. Each tarball has a `.sha256` file next to it

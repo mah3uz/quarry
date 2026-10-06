@@ -4,6 +4,8 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-07 01:59 +06:00
+
 ### Added
 
 - **The TUI brings your tabs back.** Open a connection again and its tabs are there: query tabs with what you had
