@@ -695,7 +695,7 @@ impl GridState {
             let gutter = Rect::new(gutter_x, y, digits.min(right.saturating_sub(gutter_x)), 1);
             draw_text(buf, gutter, &label, num_style, num_style, true);
             for &sx in &seps {
-                buf[(sx, y)].set_symbol("│").set_style(pal.border);
+                buf[(sx, y)].set_symbol(crate::icons::glyph("│")).set_style(pal.border);
             }
 
             let row = &self.rows[r];
@@ -744,9 +744,9 @@ impl GridState {
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(None)
                 .end_symbol(None)
-                .track_symbol(Some("│"))
+                .track_symbol(Some(crate::icons::glyph("│")))
                 .track_style(pal.border)
-                .thumb_symbol("┃")
+                .thumb_symbol(if crate::icons::current() == crate::icons::IconSet::Ascii { "#" } else { "┃" })
                 .thumb_style(pal.thumb)
                 .render(Rect::new(right, body.y, 1, body.height), buf, &mut state);
         }
@@ -769,7 +769,7 @@ impl GridState {
         draw_text(buf, gutter, "#", pal.muted, pal.muted, true);
         for dy in 0..label_rows {
             for &sx in seps {
-                buf[(sx, y + dy)].set_symbol("│").set_style(pal.border);
+                buf[(sx, y + dy)].set_symbol(crate::icons::glyph("│")).set_style(pal.border);
             }
         }
         for &(c, x, span) in &self.layout.cols {
@@ -800,10 +800,10 @@ impl GridState {
         }
         let ry = y + header_h - 1;
         for x in area.x..right {
-            buf[(x, ry)].set_symbol("─").set_style(pal.border);
+            buf[(x, ry)].set_symbol(crate::icons::glyph("─")).set_style(pal.border);
         }
         for &sx in seps {
-            buf[(sx, ry)].set_symbol("┼");
+            buf[(sx, ry)].set_symbol(crate::icons::glyph("┼"));
         }
         let x0 = area.x + digits + 3;
         if hidden_left && x0 < right {
@@ -1009,7 +1009,7 @@ fn cell_text<'a>(v: &'a Value, null_text: &'a str) -> Cow<'a, str> {
                 let _ = write!(s, "{byte:02x}");
             }
             if b.len() > BYTES_PREVIEW {
-                s.push('…');
+                s.push_str(crate::icons::glyph("…"));
             }
             Cow::Owned(s)
         }
@@ -1020,8 +1020,8 @@ fn cell_text<'a>(v: &'a Value, null_text: &'a str) -> Cow<'a, str> {
 /// (symbol, width, is_whitespace_marker) for one grapheme as the grid draws it.
 fn glyph(g: &str) -> (&str, usize, bool) {
     match g {
-        "\n" | "\r\n" | "\r" => ("↵", 1, true),
-        "\t" => ("→", 1, true),
+        "\n" | "\r\n" | "\r" => (crate::icons::glyph("↵"), 1, true),
+        "\t" => (crate::icons::glyph("→"), 1, true),
         _ if g.chars().any(char::is_control) => ("", 0, false),
         _ => (g, g.width(), false),
     }
@@ -1080,7 +1080,7 @@ fn draw_text(buf: &mut Buffer, at: Rect, text: &str, style: Style, special: Styl
         used += w;
     }
     if truncated {
-        buf[(cx, y)].set_symbol("…").set_style(style);
+        buf[(cx, y)].set_symbol(crate::icons::glyph("…")).set_style(style);
     }
 }
 

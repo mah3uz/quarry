@@ -397,6 +397,11 @@ impl Sidebar {
         }
     }
 
+    /// After `g` on a table, the next key picks the statement to write.
+    pub fn awaiting_script_key(&self) -> bool {
+        self.pending_g
+    }
+
     pub fn is_filtering(&self) -> bool {
         self.filter.is_some()
     }
@@ -612,6 +617,7 @@ impl Sidebar {
                 .begin_symbol(None)
                 .end_symbol(None)
                 .track_symbol(Some(" "))
+                .thumb_symbol(crate::icons::glyph("█"))
                 .thumb_style(Style::default().fg(theme.border))
                 .render(list_area, buf, &mut st);
         }

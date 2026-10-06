@@ -1,4 +1,5 @@
-//! App-level key bindings: defaults, overrides from `[keys]` in the config, and lookup.
+//! Key bindings: the app-level actions and the panes' own keys, their defaults, overrides from
+//! `[keys]` in the config, and lookup.
 
 use std::collections::BTreeMap;
 
@@ -35,6 +36,14 @@ impl Key {
 
     pub fn from_event(e: &KeyEvent) -> Key {
         Key::new(e.code, e.modifiers)
+    }
+
+    /// The key press a pane would have received for this key.
+    fn to_event(self) -> KeyEvent {
+        match self.code {
+            KeyCode::Tab if self.mods.contains(KeyModifiers::SHIFT) => KeyEvent::new(KeyCode::BackTab, self.mods),
+            code => KeyEvent::new(code, self.mods),
+        }
     }
 
     /// `ctrl+enter`, `alt+f`, `f5`, `shift+f7`, `?`, `ctrl+pagedown`: modifiers joined with `+`.
@@ -132,13 +141,117 @@ impl Key {
         matches!(self.code, KeyCode::Char(_)) && !self.mods.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
     }
 
-    /// Keys the SQL editor uses itself (clipboard, undo, comment, completion); an app binding on one
-    /// of them is skipped while the editor has focus.
-    pub fn editor_uses(&self) -> bool {
-        self.mods == KeyModifiers::CONTROL
-            && matches!(self.code, KeyCode::Char('a' | 'c' | 'x' | 'v' | 'z' | 'y' | 'd' | 'h' | '/' | '7' | ' '))
+}
+
+/// The pane whose own keys an action belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scope {
+    Editor,
+    Grid,
+    Table,
+    Explorer,
+}
+
+impl Scope {
+    pub fn section(self) -> &'static str {
+        match self {
+            Scope::Editor => "Editor",
+            Scope::Grid => "Results grid",
+            Scope::Table => "Table view",
+            Scope::Explorer => "Explorer",
+        }
+    }
+
+    /// A table view is a grid too, so the two can't give one key two meanings.
+    fn overlaps(self, other: Scope) -> bool {
+        self == other || matches!((self, other), (Scope::Grid, Scope::Table) | (Scope::Table, Scope::Grid))
     }
 }
+
+/// Something a pane does on a key of its own. The pane knows it by its first default key, so
+/// another key bound to it is handed to the pane as that one.
+pub struct PaneAction {
+    /// The name used in `[keys]`.
+    pub name: &'static str,
+    pub scope: Scope,
+    pub description: &'static str,
+    defaults: &'static [&'static str],
+}
+
+const fn pane(name: &'static str, scope: Scope, description: &'static str, defaults: &'static [&'static str]) -> PaneAction {
+    PaneAction { name, scope, description, defaults }
+}
+
+pub const PANE_ACTIONS: &[PaneAction] = &[
+    pane("editor_complete", Scope::Editor, "Completion (it also opens as you type)", &["ctrl+space"]),
+    pane("editor_select_all", Scope::Editor, "Select all", &["ctrl+a"]),
+    pane("editor_copy", Scope::Editor, "Copy the selection", &["ctrl+c"]),
+    pane("editor_cut", Scope::Editor, "Cut the selection", &["ctrl+x"]),
+    pane("editor_paste", Scope::Editor, "Paste", &["ctrl+v"]),
+    pane("editor_undo", Scope::Editor, "Undo", &["ctrl+z"]),
+    pane("editor_redo", Scope::Editor, "Redo", &["ctrl+y", "ctrl+shift+z"]),
+    pane("editor_duplicate", Scope::Editor, "Duplicate the line or selection", &["ctrl+d"]),
+    pane("editor_comment", Scope::Editor, "Comment or uncomment", &["ctrl+/", "ctrl+7"]),
+    pane("editor_line_up", Scope::Editor, "Move the line up", &["alt+up"]),
+    pane("editor_line_down", Scope::Editor, "Move the line down", &["alt+down"]),
+    pane("editor_delete_word_left", Scope::Editor, "Delete the word before the cursor", &["ctrl+backspace", "ctrl+h"]),
+    pane("editor_delete_word_right", Scope::Editor, "Delete the word after the cursor", &["ctrl+delete"]),
+    pane("grid_up", Scope::Grid, "Up", &["k", "up"]),
+    pane("grid_down", Scope::Grid, "Down", &["j", "down"]),
+    pane("grid_left", Scope::Grid, "Left", &["h", "left"]),
+    pane("grid_right", Scope::Grid, "Right", &["l", "right"]),
+    pane("grid_page_up", Scope::Grid, "Page up", &["pageup"]),
+    pane("grid_page_down", Scope::Grid, "Page down", &["pagedown"]),
+    pane("grid_half_page_up", Scope::Grid, "Half a page up", &["ctrl+u"]),
+    pane("grid_half_page_down", Scope::Grid, "Half a page down", &["ctrl+d"]),
+    pane("grid_first_row", Scope::Grid, "First row", &["g"]),
+    pane("grid_last_row", Scope::Grid, "Last row", &["G"]),
+    pane("grid_first_column", Scope::Grid, "First column", &["0", "home"]),
+    pane("grid_last_column", Scope::Grid, "Last column", &["$", "end"]),
+    pane("grid_columns_right", Scope::Grid, "A screen of columns right", &["w"]),
+    pane("grid_columns_left", Scope::Grid, "A screen of columns left", &["b"]),
+    pane("grid_next_cell", Scope::Grid, "Next cell", &["tab"]),
+    pane("grid_prev_cell", Scope::Grid, "Previous cell", &["shift+tab"]),
+    pane("grid_select", Scope::Grid, "Select a block of cells", &["v"]),
+    pane("grid_select_rows", Scope::Grid, "Select whole rows", &["V"]),
+    pane("grid_view_cell", Scope::Grid, "View the cell and its row", &["enter"]),
+    pane("grid_copy", Scope::Grid, "Copy cells as TSV", &["y"]),
+    pane("grid_copy_rows", Scope::Grid, "Copy rows with a header", &["Y"]),
+    pane("grid_search", Scope::Grid, "Search in the results", &["/"]),
+    pane("grid_search_next", Scope::Grid, "Next match", &["n"]),
+    pane("grid_search_prev", Scope::Grid, "Previous match", &["N"]),
+    pane("grid_narrow_column", Scope::Grid, "Narrow the column", &["<"]),
+    pane("grid_widen_column", Scope::Grid, "Widen the column", &[">"]),
+    pane("grid_fit_column", Scope::Grid, "Fit the column to its content", &["="]),
+    pane("grid_prev_result", Scope::Grid, "Previous result set", &["["]),
+    pane("grid_next_result", Scope::Grid, "Next result set", &["]"]),
+    pane("grid_messages", Scope::Grid, "Messages", &["m"]),
+    pane("grid_to_editor", Scope::Grid, "Back to the editor", &["i"]),
+    pane("table_filter", Scope::Table, "Filter with a WHERE condition", &["f"]),
+    pane("table_filter_by_value", Scope::Table, "Filter by the current cell's value", &["F"]),
+    pane("table_sort", Scope::Table, "Sort by the column", &["s"]),
+    pane("table_edit_cell", Scope::Table, "Edit the cell", &["e", "f2"]),
+    pane("table_add_row", Scope::Table, "Add a row", &["o"]),
+    pane("table_delete_rows", Scope::Table, "Mark rows for deletion", &["D", "delete"]),
+    pane("table_apply", Scope::Table, "Review and apply staged changes", &["ctrl+s"]),
+    pane("table_discard", Scope::Table, "Discard staged changes", &["u"]),
+    pane("table_reload", Scope::Table, "Reload", &["r", "f5"]),
+    pane("explorer_up", Scope::Explorer, "Up", &["k", "up"]),
+    pane("explorer_down", Scope::Explorer, "Down", &["j", "down"]),
+    pane("explorer_expand", Scope::Explorer, "Expand", &["l", "right"]),
+    pane("explorer_collapse", Scope::Explorer, "Collapse, or go to the parent", &["h", "left"]),
+    pane("explorer_toggle", Scope::Explorer, "Expand or collapse", &["space"]),
+    pane("explorer_last", Scope::Explorer, "Last row", &["G", "end"]),
+    pane("explorer_open", Scope::Explorer, "Open a table, show a function, insert a column, switch database", &["enter"]),
+    pane("explorer_console", Scope::Explorer, "New query tab for this database or schema", &["c"]),
+    pane("explorer_structure", Scope::Explorer, "Table structure", &["s"]),
+    pane("explorer_insert_name", Scope::Explorer, "Insert the name into the editor", &["i"]),
+    pane("explorer_script", Scope::Explorer, "Write a statement for the table, with s i u d c x n next", &["g"]),
+    pane("explorer_filter", Scope::Explorer, "Filter the tree", &["/"]),
+    pane("explorer_reload", Scope::Explorer, "Reload the schema", &["r", "f5"]),
+    pane("explorer_new_connection", Scope::Explorer, "New connection", &["n"]),
+    pane("explorer_disconnect", Scope::Explorer, "Disconnect", &["ctrl+x"]),
+];
 
 macro_rules! actions {
     ($($variant:ident, $name:literal, $section:literal, $desc:literal, [$($key:literal),*];)*) => {
@@ -198,8 +311,14 @@ actions! {
     EditorLarger, "editor_larger", "Query", "Make the editor larger", ["ctrl+down"];
 }
 
+/// Keys of the panes' own actions, by index into `PANE_ACTIONS`.
+type PaneKeys = Vec<(Key, usize)>;
+
 pub struct Keymap {
     bindings: Vec<(Key, Action)>,
+    pane: PaneKeys,
+    /// Default pane keys whose action was given other keys, so they do nothing now.
+    freed: Vec<(Key, Scope)>,
 }
 
 impl Default for Keymap {
@@ -215,10 +334,12 @@ impl Keymap {
     pub fn new(overrides: &BTreeMap<String, KeyBinding>) -> (Keymap, Vec<String>) {
         let mut warnings = Vec::new();
         for name in overrides.keys() {
-            if !Action::ALL.iter().any(|a| a.name() == name) {
+            if !Action::ALL.iter().any(|a| a.name() == name) && !PANE_ACTIONS.iter().any(|a| a.name == name) {
                 warnings.push(format!("[keys] {name}: no such action (F1 lists them)"));
             }
         }
+        let (pane, freed) = pane_bindings(overrides, &mut warnings);
+        let editor_uses = |key: &Key| pane.iter().any(|(k, i)| k == key && PANE_ACTIONS[*i].scope == Scope::Editor);
         let mut bindings: Vec<(Key, Action)> = Vec::new();
         for &action in Action::ALL {
             let Some(b) = overrides.get(action.name()) else { continue };
@@ -240,7 +361,7 @@ impl Keymap {
                     }
                     continue;
                 }
-                if key.editor_uses() {
+                if editor_uses(&key) {
                     warnings.push(format!("[keys] {}: {} is the editor's own shortcut there, so it works outside the editor only", action.name(), key.label()));
                 } else if key.is_plain_char() {
                     warnings.push(format!("[keys] {}: {} works only when no text field has focus", action.name(), key.label()));
@@ -273,17 +394,50 @@ impl Keymap {
                 ));
             }
         }
-        (Keymap { bindings }, warnings)
+        for (key, i) in pane.iter().filter(|(_, i)| overrides.contains_key(PANE_ACTIONS[*i].name)) {
+            let a = &PANE_ACTIONS[*i];
+            let global = bindings.iter().find(|(k, action)| k == key && action.section() == "Global");
+            if let Some((_, taker)) = global.filter(|_| a.scope != Scope::Editor) {
+                warnings.push(format!("[keys] {}: {} runs {} everywhere, so it never reaches the pane", a.name, key.label(), taker.name()));
+            }
+        }
+        (Keymap { bindings, pane, freed }, warnings)
     }
 
     /// The action bound to `key`. While typing (`typing`), plain characters are text, and in the
     /// SQL editor (`in_editor`) the editor's own shortcuts win.
     pub fn action(&self, key: &KeyEvent, typing: bool, in_editor: bool) -> Option<Action> {
         let k = Key::from_event(key);
-        if typing && k.is_plain_char() || in_editor && k.editor_uses() {
+        if typing && k.is_plain_char() || in_editor && self.pane_action(&[Scope::Editor], k).is_some() {
             return None;
         }
         self.bindings.iter().find(|(b, _)| *b == k).map(|(_, a)| *a)
+    }
+
+    fn pane_action(&self, scopes: &[Scope], key: Key) -> Option<&'static PaneAction> {
+        self.pane.iter().find(|(k, i)| *k == key && scopes.contains(&PANE_ACTIONS[*i].scope)).map(|(_, i)| &PANE_ACTIONS[*i])
+    }
+
+    /// The key press to hand to a pane for `key`: the pane's own key for the action `key` is bound
+    /// to, `key` itself when nothing is bound, or `None` for a default key that was given up.
+    /// While typing, plain characters are text.
+    pub fn pane_key(&self, scopes: &[Scope], key: KeyEvent, typing: bool) -> Option<KeyEvent> {
+        let k = Key::from_event(&key);
+        if typing && k.is_plain_char() {
+            return Some(key);
+        }
+        match self.pane_action(scopes, k) {
+            Some(a) if a.defaults.iter().any(|d| Key::parse(d) == Ok(k)) => Some(key),
+            Some(a) => Key::parse(a.defaults[0]).ok().map(Key::to_event),
+            None if self.freed.iter().any(|(f, s)| *f == k && scopes.contains(s)) => None,
+            None => Some(key),
+        }
+    }
+
+    /// A pane action's keys for display, e.g. `J · Down`; empty when unbound.
+    pub fn pane_label(&self, action: &PaneAction) -> String {
+        let keys = self.pane.iter().filter(|(_, i)| PANE_ACTIONS[*i].name == action.name).map(|(k, _)| k.label());
+        keys.collect::<Vec<_>>().join(" · ")
     }
 
     pub fn keys(&self, action: Action) -> Vec<Key> {
@@ -301,12 +455,138 @@ impl Keymap {
     }
 }
 
+/// The panes' keys with `[keys]` overrides applied, and the default keys those overrides gave up.
+/// As with app actions, an override replaces all of an action's keys and takes a key away from the
+/// action in the same pane that had it by default.
+fn pane_bindings(overrides: &BTreeMap<String, KeyBinding>, warnings: &mut Vec<String>) -> (PaneKeys, Vec<(Key, Scope)>) {
+    let mut pane = PaneKeys::new();
+    let holder = |pane: &[(Key, usize)], key: Key, scope: Scope| {
+        pane.iter().find(|(k, i)| *k == key && PANE_ACTIONS[*i].scope.overlaps(scope)).map(|(_, i)| PANE_ACTIONS[*i].name)
+    };
+    for (i, a) in PANE_ACTIONS.iter().enumerate() {
+        let Some(b) = overrides.get(a.name) else { continue };
+        for spec in b.keys().iter().filter(|s| !s.trim().is_empty()) {
+            match Key::parse(spec) {
+                Err(e) => warnings.push(format!("[keys] {}: {e}", a.name)),
+                Ok(key) if key.is_tab_jump() => warnings.push(format!("[keys] {}: {} always jumps to a tab", a.name, key.label())),
+                Ok(key) => match holder(&pane, key, a.scope) {
+                    Some(other) if other != a.name => {
+                        warnings.push(format!("[keys] {} is bound to both {other} and {}; {other} keeps it", key.label(), a.name));
+                    }
+                    Some(_) => {}
+                    None => {
+                        if a.scope == Scope::Editor && key.is_plain_char() {
+                            warnings.push(format!("[keys] {}: {} is a character you type in the editor, so it can't be a shortcut there", a.name, key.label()));
+                            continue;
+                        }
+                        pane.push((key, i));
+                    }
+                },
+            }
+        }
+    }
+    let mut freed = Vec::new();
+    for (i, a) in PANE_ACTIONS.iter().enumerate() {
+        let overridden = overrides.contains_key(a.name);
+        for spec in a.defaults {
+            let key = Key::parse(spec).expect("default keys parse");
+            if overridden {
+                if holder(&pane, key, a.scope).is_none() {
+                    freed.push((key, a.scope));
+                }
+            } else if holder(&pane, key, a.scope).is_none() {
+                pane.push((key, i));
+            }
+        }
+    }
+    freed.retain(|(key, scope)| holder(&pane, *key, *scope).is_none());
+    for (i, a) in PANE_ACTIONS.iter().enumerate() {
+        if !overrides.contains_key(a.name) && !pane.iter().any(|(_, held)| *held == i) {
+            warnings.push(format!("[keys] {} now has no key: another action took it; give it one under [keys]", a.name));
+        }
+    }
+    (pane, freed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn ev(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
         KeyEvent::new(code, mods)
+    }
+
+    fn ch(c: char) -> KeyEvent {
+        ev(KeyCode::Char(c), KeyModifiers::NONE)
+    }
+
+    fn with(overrides: &[(&str, &str)]) -> (Keymap, Vec<String>) {
+        Keymap::new(&overrides.iter().map(|(a, k)| (a.to_string(), KeyBinding::One(k.to_string()))).collect())
+    }
+
+    /// A pane is told which action to run by being handed that action's first default key, so
+    /// two actions of one pane can never share a default.
+    #[test]
+    fn pane_defaults_are_unambiguous_and_reach_the_pane_untouched() {
+        let (map, warnings) = with(&[]);
+        assert_eq!(warnings, Vec::<String>::new());
+        for (i, a) in PANE_ACTIONS.iter().enumerate() {
+            for spec in a.defaults {
+                let key = Key::parse(spec).unwrap_or_else(|e| panic!("{}: {e}", a.name));
+                let clash = PANE_ACTIONS.iter().enumerate().find(|(j, b)| {
+                    *j != i && b.scope.overlaps(a.scope) && b.defaults.iter().any(|d| Key::parse(d) == Ok(key))
+                });
+                assert!(clash.is_none(), "{} and {} both default to {spec}", a.name, clash.unwrap().1.name);
+                assert_eq!(map.pane_key(&[a.scope], key.to_event(), false), Some(key.to_event()), "{}", a.name);
+            }
+        }
+        let shift_down = ev(KeyCode::Down, KeyModifiers::SHIFT);
+        assert_eq!(map.pane_key(&[Scope::Grid], shift_down, false), Some(shift_down), "keys no action names pass through");
+    }
+
+    #[test]
+    fn a_rebound_pane_action_runs_on_its_new_key_only() {
+        let (map, warnings) = with(&[("grid_copy", "c"), ("grid_prev_cell", "ctrl+k")]);
+        assert_eq!(warnings, Vec::<String>::new());
+        assert_eq!(map.pane_key(&[Scope::Grid], ch('c'), false), Some(ch('y')), "the grid knows copy as y");
+        assert_eq!(map.pane_key(&[Scope::Grid], ch('y'), false), None, "the old key no longer copies");
+        assert_eq!(map.pane_key(&[Scope::Table, Scope::Grid], ch('c'), false), Some(ch('y')), "a table view is a grid too");
+        assert_eq!(map.pane_key(&[Scope::Explorer], ch('c'), false), Some(ch('c')), "the explorer's own c is another pane's business");
+        let back = map.pane_key(&[Scope::Grid], ev(KeyCode::Char('k'), KeyModifiers::CONTROL), false);
+        assert_eq!(back.map(|k| k.code), Some(KeyCode::BackTab), "Shift+Tab reaches a pane as BackTab");
+        assert_eq!(map.pane_label(PANE_ACTIONS.iter().find(|a| a.name == "grid_copy").unwrap()), "c");
+
+        let (_, warnings) = with(&[("grid_copy", "ctrl+b")]);
+        assert!(warnings.iter().any(|w| w.contains("toggle_explorer everywhere")), "an app-wide key never reaches a pane: {warnings:?}");
+    }
+
+    #[test]
+    fn a_pane_key_given_to_another_action_is_taken_from_its_old_one() {
+        let (map, warnings) = with(&[("grid_down", "n")]);
+        assert_eq!(map.pane_key(&[Scope::Grid], ch('n'), false), Some(ch('j')));
+        assert_eq!(map.pane_key(&[Scope::Grid], ch('j'), false), None);
+        assert!(warnings.iter().any(|w| w.contains("grid_search_next now has no key")), "{warnings:?}");
+        assert_eq!(map.pane_key(&[Scope::Explorer], ch('n'), false), Some(ch('n')), "other panes keep their n");
+    }
+
+    #[test]
+    fn text_being_typed_is_never_a_pane_shortcut() {
+        let (map, warnings) = with(&[("explorer_filter", "f"), ("editor_copy", "c")]);
+        assert_eq!(map.pane_key(&[Scope::Explorer], ch('f'), true), Some(ch('f')), "typing into the tree filter");
+        assert_eq!(map.pane_key(&[Scope::Explorer], ch('f'), false), Some(ch('/')));
+        assert!(warnings.iter().any(|w| w.contains("editor_copy") && w.contains("character you type")), "{warnings:?}");
+        let ctrl_c = ev(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        assert_eq!(map.pane_key(&[Scope::Editor], ctrl_c, true), None, "an override that names no usable key still unbinds");
+    }
+
+    #[test]
+    fn the_editors_keys_win_over_app_actions_while_it_has_focus() {
+        let ctrl = |c| ev(KeyCode::Char(c), KeyModifiers::CONTROL);
+        let (map, _) = with(&[]);
+        assert_eq!(map.action(&ctrl('y'), true, true), None, "Ctrl+Y is redo in the editor");
+        assert_eq!(map.action(&ctrl('y'), false, false), Some(Action::Themes));
+        let (map, _) = with(&[("editor_redo", "ctrl+shift+z")]);
+        assert_eq!(map.action(&ctrl('y'), true, true), Some(Action::Themes), "once redo lets go of it, the app action has it");
     }
 
     #[test]

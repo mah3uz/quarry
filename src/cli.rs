@@ -113,7 +113,7 @@ pub struct Args {
     /// Print the tab-completion script for SHELL (bash, zsh, fish, elvish, powershell)
     #[arg(long, value_name = "SHELL", add = ArgValueCandidates::new(crate::completions::shells))]
     pub completions: Option<String>,
-    /// Icons for this run: nerd (needs a Nerd Font), unicode or ascii
+    /// Icons for this run: auto, nerd (needs a Nerd Font), unicode or ascii
     #[arg(long, value_name = "SET")]
     pub icons: Option<crate::icons::IconSet>,
     /// Turn colour off

@@ -1,6 +1,6 @@
 use super::{RelFilter, Special, Titled};
 use crate::db::{
-    Backend, Column, Connection, DbResult, ForeignKey, RelKind, ResultSet, TableDetails, Value, quote_literal,
+    Backend, Column, Connection, DbError, DbResult, ForeignKey, RelKind, ResultSet, TableDetails, Value, quote_literal,
 };
 
 /// Runs an introspection command (`\dt`, `\d t`, `.schema`, `\l`, …) against `conn`.
@@ -818,7 +818,7 @@ async fn describe(conn: &mut Connection, pattern: &str, verbose: bool) -> DbResu
         if b == Backend::MySql && NamePattern::parse(pattern, b).schema.is_none() && mysql_current_db(conn).await?.is_none() {
             return Ok(vec![message(NO_DATABASE)]);
         }
-        return Ok(vec![message(format!("Did not find any relation named \"{pattern}\"."))]);
+        return Err(DbError::other(format!("Did not find any relation named \"{pattern}\".")));
     }
     let mut out = Vec::with_capacity(found.len());
     for m in found {

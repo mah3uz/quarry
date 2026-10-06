@@ -434,6 +434,10 @@ impl Editor {
 
     /// Terminal cell of the cursor inside `area`, or `None` when scrolled out of view.
     pub fn cursor_screen_position(&self, area: Rect) -> Option<(u16, u16)> {
+        if let Some(pattern) = self.vim_search() {
+            let x = area.x + (1 + pattern.width() as u16).min(area.width.saturating_sub(1));
+            return (area.height > 0).then(|| (x, area.bottom() - 1));
+        }
         let gutter = self.gutter_width(area.width);
         let (w, h) = ((area.width - gutter) as usize, area.height as usize);
         if w == 0 || h == 0 {
@@ -503,7 +507,7 @@ impl Editor {
             }
             if row == 0 && self.is_empty() {
                 let style = base.fg(theme.muted).add_modifier(Modifier::ITALIC);
-                buf.set_stringn(text_x, y, PLACEHOLDER, text_w, style);
+                buf.set_stringn(text_x, y, crate::icons::plain(PLACEHOLDER), text_w, style);
             }
 
             let line = &self.lines[row];
@@ -529,7 +533,7 @@ impl Editor {
                     let clipped = dcol < sc || dcol + w > sc + text_w;
                     let x = text_x + x0 as u16;
                     if g == "\t" || clipped || needs_placeholder(g) {
-                        let sym = if needs_placeholder(g) { "·" } else { " " };
+                        let sym = if needs_placeholder(g) { crate::icons::glyph("·") } else { " " };
                         let visible = (dcol + w).min(sc + text_w) - dcol.max(sc);
                         for k in 0..visible as u16 {
                             buf[(x + k, y)].set_symbol(if k == 0 { sym } else { " " }).set_style(style);
@@ -551,6 +555,11 @@ impl Editor {
                     buf[(text_x + (dcol - sc) as u16, y)].set_style(style);
                 }
             }
+        }
+        if let Some(pattern) = self.vim_search() {
+            let row = Rect::new(area.x, area.bottom() - 1, area.width, 1);
+            buf.set_style(row, Style::default().fg(theme.fg).bg(theme.surface));
+            buf.set_stringn(row.x, row.y, format!("/{pattern:<w$}", w = row.width as usize), row.width as usize, Style::default());
         }
     }
 
@@ -1365,6 +1374,33 @@ mod tests {
         assert_eq!(e.cursor_pos(), (0, 0));
         vk(&mut e, "2G");
         assert_eq!(e.cursor_pos().0, 1);
+    }
+
+    #[test]
+    fn vim_slash_searches_forward_and_n_repeats_it() {
+        let text = "select id from users\nwhere ID > 1\n  and name = 'Id'";
+        let mut e = vim(text, 0);
+        vk(&mut e, "/id");
+        assert_eq!(e.vim_search(), Some("id"));
+        assert_eq!(e.cursor_byte(), 0, "nothing moves until Enter");
+        key(&mut e, KeyCode::Enter, NONE);
+        assert_eq!((e.vim_search(), e.cursor_byte()), (None, 7));
+        vk(&mut e, "n");
+        assert_eq!(e.cursor_byte(), text.find("ID").unwrap(), "a lowercase pattern finds any case");
+        vk(&mut e, "nn");
+        assert_eq!(e.cursor_byte(), 7, "past the last match the search starts again from the top");
+        vk(&mut e, "N");
+        assert_eq!(e.cursor_byte(), text.find("Id").unwrap(), "N goes back, round the top to the last match");
+        vk(&mut e, "/Id");
+        key(&mut e, KeyCode::Enter, NONE);
+        assert_eq!(e.cursor_byte(), text.find("Id").unwrap(), "an uppercase letter makes the pattern exact");
+
+        vk(&mut e, "/zzz");
+        key(&mut e, KeyCode::Enter, NONE);
+        assert_eq!(e.cursor_byte(), text.find("Id").unwrap(), "no match leaves the cursor where it was");
+        vk(&mut e, "/x\x1b");
+        assert_eq!(e.vim_search(), None);
+        assert_eq!(e.text(), text, "typing a pattern never edits the text");
     }
 
     #[test]

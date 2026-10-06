@@ -31,8 +31,9 @@ The REPL uses Emacs-style editing by default; set `vi = true` or press <kbd>F4</
 <kbd>F1</kbd> shows these inside quarry (type to filter), and the command palette
 (<kbd>Ctrl</kbd>+<kbd>P</kbd>) lists every action by name.
 
-The keys under **Everywhere** and **Query tab** are the defaults: you can rebind them in the config,
-see [Key bindings and vim mode](/advanced/keybindings). The keys inside each pane are fixed.
+These are the defaults. You can rebind the keys under **Everywhere** and **Query tab**, and most
+of the keys of the editor, the grids, the table view and the explorer: see
+[Key bindings and vim mode](/advanced/keybindings) for the action names.
 
 ### Everywhere
 

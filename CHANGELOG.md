@@ -4,14 +4,43 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ## Unreleased
 
+### Added
+
+- **The TUI brings your query tabs back.** Open a connection again and its query tabs are there with what you had
+  typed, including the one that was in front. They are saved per connection as you work, so closing the terminal
+  doesn't lose them. Results, and table and structure tabs, aren't kept.
+
+- **The panes' keys can be rebound.** The keys of the editor, the results grid, the table view and the explorer were
+  fixed. Each now has a name you can set under `[keys]`, such as `grid_copy = "c"` or `explorer_down = ["n", "down"]`;
+  <kbd>F1</kbd> lists all of them with their current keys.
+- **Vim mode searches with <kbd>/</kbd>.** In the TUI's editor with `vi = true`, type <kbd>/</kbd>, the text and
+  <kbd>Enter</kbd> to jump to the next match; <kbd>n</kbd> and <kbd>N</kbd> go to the next and previous one. A
+  lowercase search matches any case.
+- **`icons = "ascii"` is ASCII all the way.** The TUI's borders, tree lines, scrollbars and spinners, and the REPL's
+  prompt, menus and plan trees, were still drawn with box-drawing characters. They are plain ASCII now; your SQL and
+  data are shown unchanged.
+
 ### Changed
 
+- **Icons are chosen for the terminal.** The new default, `icons = "auto"`, uses Nerd Font icons unless they can't be
+  there: on the Linux console it draws ASCII, and on a machine with no Nerd Font installed it draws ordinary Unicode
+  symbols (kitty, Ghostty and WezTerm draw the icons themselves, so they keep them). Over SSH it can't check and
+  stays with Nerd icons. `icons = "nerd"` forces them as before.
+- **Scripts print large results as they arrive.** With `csv`, `tsv`, `jsonl`, `sql-insert` and `sql-update`, `-e`, `-f`
+  and piped input now write rows as the server sends them instead of collecting the result first: a million rows take
+  about 11 MB of memory instead of 275 MB, the first row appears at once, and `quarry … | head` stops the query.
 - **<kbd>Enter</kbd> takes the highlighted suggestion in the REPL.** With the completion menu open, <kbd>Enter</kbd>
   now completes the marked item, as <kbd>Tab</kbd> does, instead of running the line. With no menu open it runs the
   line as before, and the menu no longer opens for a word that is already typed out in full.
 - **Homebrew installs a prebuilt quarry on Apple Silicon.** On macOS 15 or later, `brew install mah3uz/tap/quarry`
   downloads quarry instead of building it, so it no longer takes minutes or brings in Rust. Intel Macs, older macOS
   and Linux still build from source.
+
+### Fixed
+
+- **A failing special command fails the script.** `quarry db -e '\d nosuchtable'` exited with status 0. An unknown
+  command, `\d` on something that doesn't exist, or any other command that reports an error now exits with status 1
+  and stops the script, as a failing statement does; `--continue-on-error` keeps going.
 
 ## 0.1.1 - 2026-10-05 22:44 +06:00
 

@@ -26,7 +26,7 @@ optional: delete a line to get the default back.
 | `theme` | `"tokyo-night"` | A [theme](/advanced/themes) name | Colour theme for the REPL, and for the TUI until you pick one there |
 | `table_format` | `"rounded"` | An [output format](/reference/output-formats) | How results are printed in the REPL |
 | `row_lines` | `true` | `true`, `false` | A line between rows in the boxed formats (rounded, unicode, double, ascii) |
-| `icons` | `"nerd"` | `nerd`, `unicode`, `ascii` | [Icons](/advanced/customising#icons) in the prompt, the TUI and messages. `nerd` needs a Nerd Font. |
+| `icons` | `"auto"` | `auto`, `nerd`, `unicode`, `ascii` | [Icons](/advanced/customising#icons) in the prompt, the TUI and messages. `nerd` needs a Nerd Font; `auto` uses it unless the glyphs can't be there. |
 | `expanded` | `"auto"` | `on`, `off`, `auto` | Vertical output. `auto`: when a table is wider than the terminal. |
 | `null_string` | `"NULL"` | Any text | How NULL is shown |
 | `max_field_width` | `500` | Number, `0` = no limit | Cut longer values and add `…`. Machine formats are never cut. |

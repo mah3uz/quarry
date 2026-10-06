@@ -166,6 +166,127 @@ fn server(env: &str, default: &str) -> Option<String> {
     }
 }
 
+/// A throwaway sshd on a loopback port, and an `ssh` on PATH that trusts only its host key.
+#[cfg(unix)]
+struct TestSshd {
+    child: std::process::Child,
+    dir: std::path::PathBuf,
+    port: u16,
+}
+
+#[cfg(unix)]
+impl TestSshd {
+    fn start(name: &str) -> Option<TestSshd> {
+        let tool = |t: &str| which::which(t).map_err(|_| eprintln!("SKIP: {t} not installed")).ok();
+        let (sshd, ssh, keygen) = (tool("sshd")?, tool("ssh")?, tool("ssh-keygen")?);
+        let dir = test_dir(name);
+        let path = |f: &str| dir.join(f).display().to_string();
+        for key in ["host_key", "client_key"] {
+            let made = Command::new(&keygen).args(["-q", "-t", "ed25519", "-N", "", "-f", &path(key)]).status().unwrap();
+            assert!(made.success());
+        }
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let host_key = std::fs::read_to_string(dir.join("host_key.pub")).unwrap();
+        let host_key: Vec<&str> = host_key.split_whitespace().take(2).collect();
+        std::fs::write(dir.join("known_hosts"), format!("[127.0.0.1]:{port} {}\n", host_key.join(" "))).unwrap();
+        std::fs::write(
+            dir.join("sshd_config"),
+            format!(
+                "Port {port}\nListenAddress 127.0.0.1\nHostKey {}\nAuthorizedKeysFile {}\nPidFile none\n\
+                 StrictModes no\nUsePAM no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n",
+                path("host_key"),
+                path("client_key.pub")
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("ssh_config"),
+            format!(
+                "Host *\n  UserKnownHostsFile {}\n  GlobalKnownHostsFile /dev/null\n  StrictHostKeyChecking yes\n  \
+                 IdentitiesOnly yes\n  IdentityAgent none\n",
+                path("known_hosts")
+            ),
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.join("bin")).unwrap();
+        let shim = format!("#!/bin/sh\nexec {} -F {} \"$@\"\n", ssh.display(), path("ssh_config"));
+        std::fs::write(dir.join("bin/ssh"), shim).unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(dir.join("bin/ssh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let child = Command::new(sshd)
+            .args(["-D", "-e", "-f", &path("sshd_config")])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut server = TestSshd { child, dir, port };
+        for _ in 0..50 {
+            if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                return Some(server);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        server.stop();
+        eprintln!("SKIP: sshd did not start");
+        None
+    }
+
+    fn stop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+
+    fn quarry(&self, url: &str, sql: &str) -> Output {
+        let user = String::from_utf8(Command::new("id").arg("-un").output().unwrap().stdout).unwrap();
+        let path = format!("{}:{}", self.dir.join("bin").display(), std::env::var("PATH").unwrap_or_default());
+        Command::new(env!("CARGO_BIN_EXE_quarry"))
+            .args([url, "--ssh", &format!("{}@127.0.0.1:{}", user.trim(), self.port)])
+            .arg("--ssh-key")
+            .arg(self.dir.join("client_key"))
+            .args(["-e", sql])
+            .env("PATH", path)
+            .env("QUARRY_CONFIG_DIR", self.dir.join("config"))
+            .env("QUARRY_DATA_DIR", self.dir.join("data"))
+            .env("NO_COLOR", "1")
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    }
+}
+
+#[cfg(unix)]
+impl Drop for TestSshd {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn queries_travel_through_an_ssh_tunnel() {
+    let servers = [
+        server("QUARRY_TEST_PG", "postgres://postgres@127.0.0.1:5432/postgres"),
+        server("QUARRY_TEST_MYSQL", "mysql://root@127.0.0.1:3306"),
+    ];
+    if servers.iter().all(Option::is_none) {
+        return;
+    }
+    let Some(mut sshd) = TestSshd::start("ssh-tunnel") else { return };
+    for url in servers.iter().flatten() {
+        let o = sshd.quarry(url, "select 42 as answer");
+        assert!(o.status.success(), "{url}: {}", String::from_utf8_lossy(&o.stderr));
+        assert_eq!(stdout(&o), "answer\n42\n");
+    }
+    sshd.stop();
+    for url in servers.iter().flatten() {
+        let o = sshd.quarry(url, "select 42 as answer");
+        let err = String::from_utf8_lossy(&o.stderr).into_owned();
+        assert!(!o.status.success() && err.contains("SSH tunnel"), "without the SSH server there is no other way in: {err}");
+    }
+}
+
 #[test]
 fn postgres_batch_roundtrip() {
     let Some(url) = server("QUARRY_TEST_PG", "postgres://postgres@127.0.0.1:5432/postgres") else { return };
@@ -202,6 +323,38 @@ fn include_runs_special_commands_like_a_script_file() {
     let o = quarry_in(&dir, &[dir.join("a.db").to_str().unwrap(), "-e", &include], "");
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     assert!(stdout(&o).contains("included"), "\\dt inside the file should list the new table: {}", stdout(&o));
+}
+
+#[test]
+fn a_failing_command_fails_the_run_like_failing_sql_does() {
+    let dir = test_dir("cmd-exit");
+    let o = quarry_in(&dir, &[":memory:", "-e", "\\d nosuchtable"], "");
+    assert!(!o.status.success(), "a script must be able to tell that the table is missing");
+    let o = quarry_in(&dir, &[":memory:", "-e", "\\nosuchcommand"], "");
+    assert!(!o.status.success());
+    let o = quarry_in(&dir, &[":memory:", "-e", "\\echo fine"], "");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+
+    let script = "\\d nosuchtable\nselect 'later' as v;\n";
+    let o = quarry_in(&dir, &[":memory:"], script);
+    assert!(!o.status.success());
+    assert!(!stdout(&o).contains("later"), "a failing command stops the script: {}", stdout(&o));
+    let o = quarry_in(&dir, &[":memory:", "--continue-on-error"], script);
+    assert!(!o.status.success(), "a failure is still reported in the exit status");
+    assert!(stdout(&o).contains("later"), "{}", stdout(&o));
+}
+
+#[test]
+fn a_large_result_is_written_whole_as_it_arrives() {
+    let dir = test_dir("stream");
+    let sql = "with recursive n(i) as (select 1 union all select i + 1 from n where i < 50000) select i, 'r' || i as label from n";
+    for (format, lines) in [("tsv", 50001), ("csv", 50001), ("jsonl", 50000)] {
+        let o = quarry_in(&dir, &[":memory:", "-F", format, "-e", sql], "");
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let out = stdout(&o);
+        assert_eq!(out.lines().count(), lines, "{format}: one header at most, and no row lost between batches");
+        assert!(out.lines().last().unwrap().contains("r50000"), "{format}: {:?}", out.lines().last());
+    }
 }
 
 #[test]

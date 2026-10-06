@@ -93,6 +93,14 @@ impl TableFormat {
                 | TableFormat::SqlInsert | TableFormat::SqlUpdate
         )
     }
+
+    /// Formats that write each row on its own, so a result can be printed as its rows arrive.
+    pub fn is_streamable(self) -> bool {
+        matches!(
+            self,
+            TableFormat::Csv | TableFormat::Tsv | TableFormat::JsonLines | TableFormat::SqlInsert | TableFormat::SqlUpdate
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -153,6 +161,12 @@ pub fn render(columns: &[Column], rows: &[Row], opts: &OutputOptions) -> String 
     table::render(columns, rows, opts)
 }
 
+/// The rows alone in a streamable format: what `render` writes after its header.
+pub fn render_rows(columns: &[Column], rows: &[Row], opts: &OutputOptions) -> String {
+    let header = render(columns, &[], opts).len();
+    render(columns, rows, opts).split_off(header)
+}
+
 /// Display text of one value, with NULL replaced by `null`. Shared with the TUI grid.
 pub fn cell_text<'a>(v: &'a Value, null: &'a str) -> Cow<'a, str> {
     match v {
@@ -188,7 +202,7 @@ pub fn render_status_for(
         text.push_str(&format!(", {}", plural(summary.warnings as u64, "warning")));
     }
     if let Some(d) = elapsed {
-        text.push_str(" · ");
+        text.push_str(&crate::icons::plain(" · "));
         text.push_str(&format_duration(d));
     }
     if opts.color == ColorDepth::None {

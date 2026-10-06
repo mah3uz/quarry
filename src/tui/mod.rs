@@ -3,6 +3,7 @@ pub mod dialogs;
 pub mod keymap;
 pub mod palette;
 pub mod sidebar;
+pub mod state;
 pub mod tabs;
 pub mod ui;
 pub mod widgets;

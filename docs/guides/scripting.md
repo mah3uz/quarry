@@ -52,6 +52,10 @@ The machine formats, `csv`, `tsv`, `json`, `jsonl`, `html`, `sql-insert` and `sq
 only the data. The table formats also print a status line such as `3 rows`. See
 [Output formats](/reference/output-formats) for all of them.
 
+`csv`, `tsv`, `jsonl`, `sql-insert` and `sql-update` are written row by row as the server sends
+them, so a result of any size uses little memory and `quarry … | head` stops the query early. The
+other formats need the whole result before they can print it.
+
 In a script, quarry doesn't page, truncate long values, switch to vertical layout, ask before large
 results, or ask for confirmation before destructive statements. Colour is off when stdout isn't a
 terminal; `--no-color` or `NO_COLOR=1` turns it off everywhere.
@@ -59,6 +63,8 @@ terminal; `--no-color` or `NO_COLOR=1` turns it off everywhere.
 ## Errors and exit codes
 
 - A failing statement stops the script and quarry **exits with status 1**. Errors go to stderr.
+- A failing special command counts the same: an unknown command, `\d` on a table that doesn't
+  exist, `\i` on a file that can't be read.
 - `--continue-on-error` keeps going after a failure. The exit status is still 1 if anything failed.
 - A connection failure also exits with status 1.
 - On success the exit status is 0.

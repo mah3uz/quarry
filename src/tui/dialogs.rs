@@ -111,7 +111,7 @@ impl<T: Clone> Confirm<T> {
         } else {
             Style::default().bg(theme.accent).fg(theme.bg).add_modifier(Modifier::BOLD)
         };
-        let x = button(buf, inner.x + 1, y, &self.yes, "⏎/y", yes_style, theme);
+        let x = button(buf, inner.x + 1, y, &self.yes, &format!("{}/y", crate::icons::enter()), yes_style, theme);
         let end = button(buf, x, y, "Cancel", "esc", Style::default().bg(theme.highlight).fg(theme.fg), theme);
         ModalLayout {
             area,
@@ -299,19 +299,13 @@ pub struct HelpView {
     scroll: usize,
 }
 
-/// Keys handled inside the panes themselves; not configurable.
+/// Keys that can't be rebound: the ones a pane handles beyond its `[keys]` actions.
 pub const FIXED_KEYS: &[(&str, &[(&str, &str)])] = &[
     ("Global", &[
         ("Alt+1…9", "Jump to tab"),
     ]),
     ("Editor", &[
-        ("Ctrl+Space", "Completion (it also opens as you type)"),
         ("Tab / Shift+Tab", "Indent / dedent lines"),
-        ("Ctrl+/", "Toggle comment"),
-        ("Ctrl+Z / Ctrl+Y", "Undo / redo"),
-        ("Ctrl+D", "Duplicate line"),
-        ("Alt+↑/↓", "Move line up / down"),
-        ("Ctrl+A · Ctrl+C · Ctrl+X · Ctrl+V", "Select all, copy, cut, paste"),
         ("Esc", "Go to the results"),
     ]),
     ("Vim (vi = true)", &[
@@ -326,38 +320,17 @@ pub const FIXED_KEYS: &[(&str, &[(&str, &str)])] = &[
         ("u · Ctrl+R", "Undo / redo"),
         ("v · V", "Visual / visual-line selection, then d c y > <"),
         ("Ctrl+D / Ctrl+U", "Half a page down / up"),
+        ("/ · n · N", "Search for text, then next / previous match"),
     ]),
     ("Results grid", &[
-        ("hjkl · arrows", "Move"),
-        ("Shift+move · v · V", "Select cells / rows"),
-        ("Enter", "View cell / row"),
-        ("y / Y", "Copy cells / rows"),
-        ("/ · n · N", "Search in results"),
-        ("< > =", "Narrow / widen / auto-fit column"),
-        ("[ ]", "Previous / next result set"),
-        ("m", "Messages log"),
-        ("i · Esc", "Back to the editor"),
+        ("Shift+arrows", "Select cells"),
+        ("Esc", "Clear the selection, then back to the editor"),
     ]),
     ("Table view", &[
-        ("f", "Filter (WHERE clause)"),
-        ("F", "Filter by current cell value"),
-        ("s", "Sort by column"),
-        ("e / F2", "Edit cell"),
-        ("o", "Insert row"),
-        ("D / Delete", "Mark rows for deletion"),
-        ("Ctrl+S", "Review & apply pending changes"),
-        ("u", "Discard pending changes"),
-        ("r / F5", "Reload"),
+        ("Esc", "Clear the filter"),
     ]),
     ("Explorer", &[
-        ("Enter · Space · ←/→", "Open / expand / collapse"),
-        ("/", "Filter tree"),
-        ("c", "New query tab for this database"),
-        ("s", "Structure of table"),
-        ("i", "Insert name into editor"),
-        ("g s|i|u|d|c|x|n", "Generate SELECT/INSERT/UPDATE/DELETE/CREATE/DROP/COUNT"),
-        ("r", "Refresh"),
-        ("n", "New connection"),
+        ("s i u d c x n, after the script key", "Write a SELECT / INSERT / UPDATE / DELETE / CREATE / DROP / COUNT"),
     ]),
     ("Mouse", &[
         ("Click", "Focus a pane, pick a tab, a row, a button or a list item"),
@@ -875,7 +848,7 @@ impl ConnectForm {
         let label = format!("{} New connection", ic.add);
         buf.set_string(x + 1, ny, &label, Style::default().fg(theme.accent));
         self.hits.push((Rect { x, y: ny, width: label.width() as u16 + 2, height: 1 }, Hit::NewConnection));
-        self.footer(buf, inner, theme, "⏎ connect   n new   d delete   esc close");
+        self.footer(buf, inner, theme, &format!("{} connect   n new   d delete   esc close", crate::icons::enter()));
         area
     }
 
@@ -967,7 +940,7 @@ impl ConnectForm {
         buf.set_string(bx, by, back, Style::default().bg(theme.highlight).fg(theme.fg));
         self.hits.push((Rect { x: cx, y: by, width: connect.width() as u16, height: 1 }, Hit::Connect));
         self.hits.push((Rect { x: bx, y: by, width: back.width() as u16, height: 1 }, Hit::Back));
-        self.footer(buf, Rect { width: inner.width.saturating_sub(connect.width() as u16 + back.width() as u16 + 3), ..inner }, theme, "⏎ connect  tab next  esc back");
+        self.footer(buf, Rect { width: inner.width.saturating_sub(connect.width() as u16 + back.width() as u16 + 3), ..inner }, theme, &format!("{} connect  tab next  esc back", crate::icons::enter()));
         (area, cursor)
     }
 }

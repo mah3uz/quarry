@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use super::prompt::human_duration;
 use super::style::Palette;
-use crate::theme::{SPINNER, shimmer};
+use crate::theme::shimmer;
 
 /// An animated `⠋ text… 1.2 s` line on stderr while something slow runs; erased when stopped.
 /// Does nothing when stderr isn't a terminal, so scripts and logs stay clean.
@@ -25,9 +25,10 @@ impl Spinner {
                 let started = Instant::now();
                 let mut err = std::io::stderr();
                 let mut tick = 0usize;
+                let frames = crate::icons::spinner();
                 while !stop.load(Ordering::Relaxed) {
                     let mut line = String::from("\r\x1b[2K");
-                    line.push_str(&palette.paint(palette.fg(th.accent2).bold(), SPINNER[tick % SPINNER.len()]));
+                    line.push_str(&palette.paint(palette.fg(th.accent2).bold(), frames[tick % frames.len()]));
                     line.push(' ');
                     for (c, color) in text.chars().zip(shimmer(text.chars().count(), tick, th.muted, th.fg)) {
                         line.push_str(&palette.paint(palette.fg(color), &c.to_string()));

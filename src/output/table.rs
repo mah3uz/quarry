@@ -257,7 +257,7 @@ fn truncate_line(line: &str, max: usize, out: &mut String) {
         w += cw;
         out.push(c);
     }
-    out.push('…');
+    out.push_str(crate::icons::glyph("…"));
 }
 
 fn truncate(s: &str, max: usize) -> Option<String> {

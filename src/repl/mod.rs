@@ -122,12 +122,12 @@ fn print_banner(s: &Session) {
         "{} {} {} {}",
         p.accent("quarry"),
         p.muted(env!("CARGO_PKG_VERSION")),
-        p.muted("·"),
+        p.muted(crate::icons::glyph("·")),
         p.paint(p.fg(p.theme.accent2), &info.version),
     );
     println!(
         "{}",
-        p.muted("Type \\? for help · \\tui for the full-screen interface · Tab to complete · Ctrl-D to quit")
+        p.muted(&crate::icons::plain("Type \\? for help · \\tui for the full-screen interface · Tab to complete · Ctrl-D to quit"))
     );
 }
 
@@ -151,7 +151,9 @@ fn build_editor(session: &Session, toggles: &Toggles) -> Result<Reedline> {
         .with_name(MENU)
         .with_marker(&p.paint(p.fg(th.accent).bold(), &format!("{} ", crate::icons::get().prompt)))
         .with_word_chars("_$")
-        .with_default_border()
+        .with_default_border();
+    let menu = if crate::icons::current() == crate::icons::IconSet::Ascii { menu.with_border('+', '+', '+', '+', '-', '|') } else { menu };
+    let menu = menu
         .with_description_mode(DescriptionMode::PreferRight)
         .with_min_completion_width(18)
         .with_max_completion_height(12)

@@ -32,7 +32,7 @@ impl QPrompt {
     pub fn new(format: &str, continuation: &str, info: &PromptInfo, p: &Palette) -> Self {
         if format.trim().is_empty() || format == "auto" {
             let (left, indicator) = fancy(info, p);
-            QPrompt { left, indicator, multiline: p.muted("  · ") }
+            QPrompt { left, indicator, multiline: p.muted(&crate::icons::plain("  · ")) }
         } else {
             let expanded = expand(format, info);
             QPrompt { left: p.accent(&expanded), indicator: String::new(), multiline: p.muted(continuation) }
@@ -44,7 +44,7 @@ fn fancy(info: &PromptInfo, p: &Palette) -> (String, String) {
     let th = &p.theme;
     let ic = icons::get();
     let mut s = String::new();
-    s.push_str(&p.muted("╭─ "));
+    s.push_str(&p.muted(&crate::icons::plain("╭─ ")));
     let backend = if info.backend_icon.is_empty() { info.backend.clone() } else { format!("{} {}", info.backend_icon, info.backend) };
     s.push_str(&p.paint(p.fg(th.accent).bold(), &backend));
     s.push(' ');
@@ -79,7 +79,7 @@ fn fancy(info: &PromptInfo, p: &Palette) -> (String, String) {
         _ => {}
     }
     s.push('\n');
-    s.push_str(&p.muted("╰─"));
+    s.push_str(&p.muted(&crate::icons::plain("╰─")));
     let indicator = p.paint(p.fg(if info.in_transaction { th.warning } else { th.accent }).bold(), &format!("{} ", ic.prompt));
     (s, indicator)
 }
@@ -87,7 +87,7 @@ fn fancy(info: &PromptInfo, p: &Palette) -> (String, String) {
 pub fn human_duration(d: Duration) -> String {
     let ms = d.as_secs_f64() * 1000.0;
     if ms < 1.0 {
-        format!("{:.0} µs", ms * 1000.0)
+        format!("{:.0} {}s", ms * 1000.0, crate::icons::glyph("µ"))
     } else if ms < 1000.0 {
         format!("{ms:.1} ms")
     } else if ms < 60_000.0 {

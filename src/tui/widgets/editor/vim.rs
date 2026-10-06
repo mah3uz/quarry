@@ -1,5 +1,5 @@
 //! Vim-style modal editing for [`Editor`]: normal, insert, visual and visual-line modes with the
-//! common motions, operators (`d`, `c`, `y`, `>`, `<`) and counts. Insert mode is the ordinary editor.
+//! common motions, operators (`d`, `c`, `y`, `>`, `<`), counts and `/` search. Insert mode is the ordinary editor.
 
 use super::*;
 
@@ -33,6 +33,10 @@ pub struct Vim {
     prefix: Option<char>,
     /// The row visual-line mode started on.
     line_anchor: usize,
+    /// The pattern being typed after `/`.
+    search: Option<String>,
+    /// The last pattern searched for, which `n` and `N` repeat.
+    last_search: String,
 }
 
 impl Vim {
@@ -65,10 +69,45 @@ impl Editor {
         self.vim.as_ref().map(|v| v.mode)
     }
 
+    /// The pattern being typed after `/`, for the editor to show.
+    pub fn vim_search(&self) -> Option<&str> {
+        self.vim.as_ref()?.search.as_deref()
+    }
+
+    fn search_key(&mut self, v: &mut Vim, key: KeyEvent) -> EditorEvent {
+        let Some(pattern) = v.search.as_mut() else { return EditorEvent::Unhandled };
+        match key.code {
+            KeyCode::Esc => v.search = None,
+            KeyCode::Backspace if pattern.pop().is_none() => v.search = None,
+            KeyCode::Enter => {
+                let pattern = v.search.take().unwrap_or_default();
+                if !pattern.is_empty() {
+                    v.last_search = pattern;
+                }
+                self.search_jump(v, true, 1);
+            }
+            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => pattern.push(c),
+            _ => {}
+        }
+        EditorEvent::Moved
+    }
+
+    /// Moves to the `count`th match of the last pattern after (or before) the cursor, wrapping round.
+    fn search_jump(&mut self, v: &Vim, forward: bool, count: usize) {
+        let visual = matches!(v.mode, VimMode::Visual | VimMode::VisualLine);
+        for _ in 0..count {
+            let Some(at) = find_match(&self.text(), &v.last_search, self.pos_to_byte(self.cursor), forward) else { return };
+            self.move_to(self.byte_to_pos(at), visual);
+        }
+        self.clamp_normal();
+    }
+
     /// Runs `key` through vim; `None` means insert mode, where the ordinary editor handles it.
     pub(super) fn vim_key(&mut self, key: KeyEvent) -> Option<EditorEvent> {
         let mut v = self.vim.take()?;
-        let ev = if v.mode == VimMode::Insert {
+        let ev = if v.search.is_some() {
+            Some(self.search_key(&mut v, key))
+        } else if v.mode == VimMode::Insert {
             if key.code == KeyCode::Esc {
                 v.mode = VimMode::Normal;
                 self.cursor = self.left_in_line(self.cursor);
@@ -350,6 +389,15 @@ impl Editor {
         }
         if c.is_ascii_digit() && (c != '0' || v.count.is_some()) {
             v.count = Some(v.count.unwrap_or(0) * 10 + c.to_digit(10).unwrap_or(0) as usize);
+            return Moved;
+        }
+        if v.op.is_none() && matches!(c, '/' | 'n' | 'N') {
+            let count = v.count.take().unwrap_or(1).max(1);
+            if c == '/' {
+                v.search = Some(String::new());
+            } else {
+                self.search_jump(v, c == 'n', count);
+            }
             return Moved;
         }
         if visual {
@@ -641,5 +689,28 @@ impl Editor {
                 Moved
             }
         }
+    }
+}
+
+/// Byte offset of the nearest match of `pattern` after (or before) `from`, wrapping round the text.
+/// As with vim's smartcase, an all-lowercase pattern matches any case.
+fn find_match(text: &str, pattern: &str, from: usize, forward: bool) -> Option<usize> {
+    if pattern.is_empty() {
+        return None;
+    }
+    let folded;
+    let haystack = if pattern.chars().any(char::is_uppercase) {
+        text
+    } else {
+        folded = text.to_ascii_lowercase();
+        &folded
+    };
+    let mut matches = haystack.match_indices(pattern).map(|(i, _)| i);
+    if forward {
+        let first = matches.next()?;
+        std::iter::once(first).chain(matches).find(|i| *i > from).or(Some(first))
+    } else {
+        let all: Vec<usize> = matches.collect();
+        all.iter().rev().find(|i| **i < from).or(all.last()).copied()
     }
 }

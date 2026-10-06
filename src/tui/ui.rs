@@ -1,6 +1,6 @@
 use ratatui::Frame;
-use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::buffer::{Buffer, Cell};
+use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget, Wrap};
@@ -18,6 +18,20 @@ use super::widgets::editor::VimMode;
 use crate::icons::{self, Icons};
 use crate::repl::prompt::human_duration;
 use crate::theme::Theme;
+
+/// Swaps the glyphs quarry draws for their ASCII stand-ins, in the cells `chrome` accepts.
+fn to_ascii(buf: &mut Buffer, area: Rect, chrome: impl Fn(Position, &Cell) -> bool) {
+    for pos in area.positions() {
+        let cell = &mut buf[pos];
+        let mut chars = cell.symbol().chars();
+        if let (Some(c), None) = (chars.next(), chars.next())
+            && let Some(plain) = crate::icons::ascii_for(c)
+            && chrome(pos, cell)
+        {
+            cell.set_symbol(plain);
+        }
+    }
+}
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
@@ -45,6 +59,14 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     app.areas.main = main;
     let mut cursor = draw_main(buf, main, app, &theme);
     draw_status(buf, status, app, &theme);
+    // The editor and the grid hold the user's text and data, which stay as they are; the popups
+    // drawn over them from here on are found again by what they changed.
+    let ascii = crate::icons::current() == crate::icons::IconSet::Ascii;
+    let under = ascii.then(|| {
+        let (editor, grid) = (app.areas.editor, app.areas.grid);
+        to_ascii(buf, area, |pos, _| !editor.contains(pos) && !grid.contains(pos));
+        buf.clone()
+    });
     if let Some(pos) = draw_completion(buf, area, app, &theme) {
         cursor = Some(pos);
     }
@@ -53,6 +75,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         cursor = Some(c);
     } else if app.overlay.is_some() {
         cursor = None;
+    }
+    if let Some(under) = under {
+        to_ascii(f.buffer_mut(), area, |pos, cell| *cell != under[pos]);
     }
     if transparent {
         clear_theme_background(f.buffer_mut(), area, &theme);
@@ -320,7 +345,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
         }
         TabKind::History(h) => {
             let block = pane_block(vec![Span::styled(format!(" {} History ", icons::get().history), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))], focused, theme)
-                .title_bottom(Line::from(Span::styled(" type to filter · ⏎ open in new query tab ", Style::default().fg(theme.muted))).right_aligned());
+                .title_bottom(Line::from(Span::styled(format!(" type to filter · {} open in new query tab ", crate::icons::enter()), Style::default().fg(theme.muted))).right_aligned());
             let inner = block.inner(area);
             block.render(area, buf);
             buf.set_string(inner.x + 1, inner.y, format!("{} ", icons::get().search), Style::default().fg(theme.accent));
@@ -625,11 +650,11 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
 
     let k = |a: Action| app.keymap.short(a);
     let hints = match (app.focus, app.active_tab().map(|t| &t.kind)) {
-        (Focus::Sidebar, _) => "⏎ open  c console  s structure  g script  / filter".to_string(),
+        (Focus::Sidebar, _) => format!("{} open  c console  s structure  g script  / filter", crate::icons::enter()),
         (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => {
             format!("{} run  {} all  {} explain  {} help", k(Action::RunStatement), k(Action::RunAll), k(Action::Explain), k(Action::Help))
         }
-        (_, Some(TabKind::Query(_))) => "⏎ view  y copy  / search  [ ] results  m messages".to_string(),
+        (_, Some(TabKind::Query(_))) => format!("{} view  y copy  / search  [ ] results  m messages", crate::icons::enter()),
         (_, Some(TabKind::Table(_))) => "f filter  s sort  e edit  o insert  D delete  ^S apply".to_string(),
         _ => format!("{} help", k(Action::Help)),
     };
@@ -859,5 +884,18 @@ mod tests {
         assert_eq!(buf[(1, 0)].bg, Color::Reset);
         assert_eq!(buf[(2, 0)].bg, theme.selection);
         assert_eq!(buf[(2, 0)].fg, theme.bg, "text drawn in the background colour keeps it");
+    }
+
+    #[test]
+    fn the_ascii_set_redraws_quarrys_glyphs_but_not_the_users_data() {
+        let area = Rect::new(0, 0, 12, 2);
+        let mut buf = Buffer::empty(area);
+        buf.set_string(0, 0, "╭─ Query ──╮", Style::default());
+        buf.set_string(0, 1, "│ a — b… é │", Style::default());
+        let data = Rect::new(1, 1, 10, 1);
+        to_ascii(&mut buf, area, |pos, _| !data.contains(pos));
+        let row = |y: u16| (0..12).map(|x| buf[(x, y)].symbol()).collect::<String>();
+        assert_eq!(row(0), "+- Query --+");
+        assert_eq!(row(1), "| a — b… é |", "a dash in a value must not be shown as a different character");
     }
 }

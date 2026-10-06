@@ -91,14 +91,17 @@ When stdout isn't a terminal quarry prints TSV without colour. Pass `-F` to choo
 
 **I see boxes or question marks where icons should be**
 
-quarry uses Nerd Font icons by default. Set your terminal to a [Nerd Font](https://www.nerdfonts.com),
-or set `icons = "unicode"` in the config (or `"ascii"` if symbols are missing too). `--icons unicode`
+quarry uses Nerd Font icons unless it can tell they aren't there, which it can't always: a Nerd Font
+may be installed but not the one your terminal uses, or you may be connected over SSH. Set your
+terminal to a [Nerd Font](https://www.nerdfonts.com), or set `icons = "unicode"` in the config (or
+`"ascii"` if symbols are missing too). `--icons unicode`
 tries it for one run.
 
 **Characters look broken or boxes don't line up**
 
-Use a terminal font with box-drawing characters (most monospace fonts have them), or pick an ASCII
-format with `\T ascii` or `table_format = "ascii"`.
+Use a terminal font with box-drawing characters (most monospace fonts have them), or do without
+them: `icons = "ascii"` for everything quarry draws, and `table_format = "ascii"` (or `\T ascii`)
+for result tables.
 
 **Colours look wrong**
 

@@ -81,7 +81,7 @@ fn substitute(fav: &str, query: &str, positional: &[&str], named: &HashMap<&str,
                 let key = &after[1..end];
                 match named.get(key) {
                     Some(v) => out.push_str(v),
-                    None => missing_names.push(format!("--{key}=…")),
+                    None => missing_names.push(format!("--{key}=...")),
                 }
                 rest = &after[end + 1..];
             }
@@ -94,7 +94,7 @@ fn substitute(fav: &str, query: &str, positional: &[&str], named: &HashMap<&str,
     out.push_str(rest);
     if positional.len() < highest {
         return Err(format!(
-            "favorite '{fav}' needs {highest} positional argument{} ($1…${highest}), got {}",
+            "favorite '{fav}' needs {highest} positional argument{} ($1..${highest}), got {}",
             if highest == 1 { "" } else { "s" },
             positional.len()
         ));

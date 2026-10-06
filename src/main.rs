@@ -216,6 +216,7 @@ fn make_session(
         continue_on_error: false,
         history_snapshot: Vec::new(),
         saved_name: None,
+        errors: Default::default(),
         config,
     }
 }
@@ -226,12 +227,14 @@ fn run_batch(session: &mut Session, args: &Args) -> ExitCode {
     for sql in &args.execute {
         let backend = session.conn.backend();
         if quarry::special::parse(sql.trim(), backend).is_some() {
-            if let Flow::Quit = session.handle_input(sql) {
+            let (cmd_ok, flow) = session.handle_input_checked(sql);
+            ok &= cmd_ok;
+            if let Flow::Quit = flow {
                 return status(ok);
             }
-            continue;
+        } else {
+            ok &= session.run_sql(sql, None);
         }
-        ok &= session.run_sql(sql, None);
         if !ok && !session.continue_on_error {
             return ExitCode::FAILURE;
         }

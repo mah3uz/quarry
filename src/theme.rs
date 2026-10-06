@@ -117,7 +117,6 @@ pub fn to_ansi16(r: u8, g: u8, b: u8) -> u8 {
         .unwrap_or(7)
 }
 
-pub const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 /// Per-character colours for `len` characters with a band of `peak` sweeping over `base`;
 /// each `tick` moves the band one character. Colours that aren't RGB switch instead of blending.

@@ -71,7 +71,8 @@ example *JetBrainsMono Nerd Font*.
 
 | `icons` | Looks like | For |
 |---|---|---|
-| `"nerd"` (default) | Database and object icons | Terminals using a Nerd Font |
+| `"auto"` (default) | One of the three below | Letting quarry choose |
+| `"nerd"` | Database and object icons | Terminals using a Nerd Font |
 | `"unicode"` | `▦ ◫ ƒ ✓ ✗` | Any font with ordinary Unicode symbols |
 | `"ascii"` | `T V f + x` | Fonts or consoles with no symbols at all |
 
@@ -79,8 +80,22 @@ example *JetBrainsMono Nerd Font*.
 icons = "unicode"
 ```
 
-`--icons unicode` sets it for one run. Borders and table lines are box-drawing characters in every
-set; for results without them use `\T ascii`.
+`--icons unicode` sets it for one run.
+
+A terminal doesn't tell programs which font it uses, so `"auto"` can only rule Nerd icons out, not
+confirm them. It picks `nerd` unless one of these holds:
+
+- You're on the Linux console (`TERM=linux`): it picks `ascii`.
+- No Nerd Font is installed on this machine, the terminal isn't one that draws the symbols itself
+  (kitty, Ghostty and WezTerm do), and you aren't connected over SSH: it picks `unicode`.
+
+Over SSH the fonts are on your own machine, where quarry can't look, so it stays with `nerd`. If
+`auto` guesses wrong, set `icons` yourself.
+
+With `"ascii"`, everything quarry draws itself is plain ASCII: the TUI's borders, tree lines,
+scrollbars and spinners, and the REPL's prompt and menus. Your own SQL and data are shown as they
+are. Result tables in the REPL follow `table_format`, so set `table_format = "ascii"` as well (or
+`\T ascii`) for results without box-drawing characters.
 
 ## Vi or Emacs keys
 

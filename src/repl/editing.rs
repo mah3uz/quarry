@@ -65,7 +65,7 @@ impl RlCompleter for ReplCompleter {
                 };
                 let label = kind_label(s.kind);
                 let description = match &s.detail {
-                    Some(d) if !d.is_empty() && d != label => format!("{label} · {d}"),
+                    Some(d) if !d.is_empty() && d != label => format!("{label} {} {d}", crate::icons::glyph("·")),
                     _ => label.to_string(),
                 };
                 // Only nerd icons add something: the other sets' markers are letters that repeat the label.

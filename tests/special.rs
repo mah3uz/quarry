@@ -60,6 +60,14 @@ async fn one(conn: &mut Connection, cmd: Special) -> Titled {
     v.remove(0)
 }
 
+/// Describing something that isn't there is an error, so a script that names a missing table fails.
+async fn missing(conn: &mut Connection, pattern: &str) -> String {
+    match introspect::run(conn, &describe(pattern, false)).await {
+        Err(e) => e.message,
+        Ok(found) => panic!("describing {pattern} should fail, got {} result(s)", found.map_or(0, |v| v.len())),
+    }
+}
+
 fn column(t: &Titled, name: &str) -> Vec<String> {
     let idx = t
         .result
@@ -141,7 +149,7 @@ async fn postgres_introspection() {
         assert!(footer.contains("\"total_pos\" CHECK"), "{footer}");
         assert!(has(&d, "Storage", "main") || has(&d, "Storage", "plain"));
         assert_eq!(one(&mut c, describe("\"Weird'Name\"", false)).await.title.as_deref(), Some("Table \"public.Weird'Name\""));
-        assert_eq!(text(&one(&mut c, describe("nosuch", false)).await), "Did not find any relation named \"nosuch\".");
+        assert_eq!(missing(&mut c, "nosuch").await, "Did not find any relation named \"nosuch\".");
         let titles: Vec<String> =
             run(&mut c, describe("*orders*", false)).await.into_iter().filter_map(|t| t.title).collect();
         assert_eq!(
@@ -228,7 +236,7 @@ async fn mysql_introspection() {
         assert!(footer.contains("\"total_pos\" CHECK"), "{footer}");
         assert!(has(&d, "Default", "auto_increment"));
         assert!(one(&mut c, describe("users", false)).await.footer.unwrap_or_default().contains("Referenced by:"));
-        assert_eq!(text(&one(&mut c, describe("nosuch", false)).await), "Did not find any relation named \"nosuch\".");
+        assert_eq!(missing(&mut c, "nosuch").await, "Did not find any relation named \"nosuch\".");
 
         let di = one(&mut c, Special::ListIndexes { pattern: Some("orders".into()), verbose: false }).await;
         assert!(has(&di, "Name", "PRIMARY") && has(&di, "Name", "orders_total_idx"));
@@ -287,7 +295,7 @@ async fn sqlite_introspection() {
         let footer = d.footer.clone().unwrap_or_default();
         assert!(footer.contains("Foreign-key constraints:") && footer.contains("REFERENCES users(id)"), "{footer}");
         assert!(footer.contains("\"orders_user_idx\""), "{footer}");
-        assert!(text(&one(&mut c, describe("zzz", false)).await).starts_with("Did not find"));
+        assert!(missing(&mut c, "zzz").await.starts_with("Did not find"));
 
         let idx = one(&mut c, Special::ListIndexes { pattern: Some("orders".into()), verbose: false }).await;
         assert_eq!(column(&idx, "Name"), ["orders_user_idx"]);

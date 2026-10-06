@@ -30,7 +30,7 @@ pub struct MainConfig {
     pub table_format: String,
     /// A line between result rows in the boxed table formats.
     pub row_lines: bool,
-    /// Glyphs in the prompt, the TUI and messages: nerd (needs a Nerd Font), unicode or ascii.
+    /// Glyphs in the prompt, the TUI and messages: auto, nerd (needs a Nerd Font), unicode or ascii.
     pub icons: crate::icons::IconSet,
     /// The TUI leaves the terminal's own background (e.g. a translucent one) instead of the theme's.
     pub transparent: bool,
@@ -73,7 +73,7 @@ impl Default for MainConfig {
             theme: "tokyo-night".into(),
             table_format: "rounded".into(),
             row_lines: true,
-            icons: crate::icons::IconSet::Nerd,
+            icons: crate::icons::IconSet::Auto,
             transparent: false,
             expanded: "auto".into(),
             null_string: "NULL".into(),
@@ -325,10 +325,11 @@ table_format = "rounded"
 # Draw a line between result rows in the boxed formats (rounded, unicode, double, ascii).
 row_lines = true
 
-# Icons in the prompt, the TUI and messages: nerd | unicode | ascii.
-# nerd needs a Nerd Font (https://www.nerdfonts.com) in the terminal; if you see boxes or
-# question marks instead of icons, use unicode.
-icons = "nerd"
+# Icons in the prompt, the TUI and messages: auto | nerd | unicode | ascii.
+# nerd needs a Nerd Font (https://www.nerdfonts.com) in the terminal. auto uses nerd unless
+# quarry can tell the glyphs aren't there; if you still see boxes or question marks instead of
+# icons, use unicode.
+icons = "auto"
 
 # Keep the terminal's own background in the TUI instead of the theme's, e.g. to let a
 # translucent terminal show through. Panels and bars go transparent too; selections keep
@@ -431,6 +432,7 @@ model = "claude-opus-5-5"
 # run_statement = ["ctrl+enter", "ctrl+e"]
 # run_all = "f5"
 # themes = "alt+t"
+# grid_copy = "c"
 
 # Saved connections: `quarry <name>`, `\c <name>`, and the TUI connection manager.
 #

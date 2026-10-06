@@ -192,6 +192,17 @@ fn jsonl_is_one_object_per_line() {
 }
 
 #[test]
+fn a_streamable_format_printed_in_parts_is_the_whole_result() {
+    let (c, r) = sample();
+    for (_, format) in TableFormat::ALL.iter().filter(|(_, f)| f.is_streamable()) {
+        let o = opts(*format);
+        let parts = render(&c, &[], &o) + &render_rows(&c, &r[..1], &o) + &render_rows(&c, &r[1..], &o);
+        assert_eq!(parts, render(&c, &r, &o), "{format:?}");
+    }
+    assert!(!TableFormat::Json.is_streamable(), "a JSON array needs its closing bracket after the last row");
+}
+
+#[test]
 fn html_escapes_markup() {
     let cols = vec![Column::new("<c>", "text")];
     let rows = vec![vec![text("<b>&\"'")], vec![Value::Null]];

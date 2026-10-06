@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use serde::{Deserialize, Serialize};
@@ -9,16 +10,18 @@ use crate::db::Backend;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum IconSet {
-    #[default]
     Nerd,
     Unicode,
     Ascii,
+    /// Nerd, unless this terminal can't have its glyphs.
+    #[default]
+    Auto,
 }
 
 impl IconSet {
     pub fn icons(self) -> &'static Icons {
         match self {
-            IconSet::Nerd => &NERD,
+            IconSet::Nerd | IconSet::Auto => &NERD,
             IconSet::Unicode => &UNICODE,
             IconSet::Ascii => &ASCII,
         }
@@ -27,8 +30,57 @@ impl IconSet {
 
 static CURRENT: AtomicU8 = AtomicU8::new(IconSet::Nerd as u8);
 
+/// Chooses the set to draw; `auto` is settled here, once.
 pub fn set(set: IconSet) {
+    let set = if set == IconSet::Auto { detect() } else { set };
     CURRENT.store(set as u8, Ordering::Relaxed);
+}
+
+/// The set for `auto`. A terminal doesn't say which font it draws with, so this stays with Nerd
+/// and steps down only where its glyphs can't be: the Linux console, or a local terminal that
+/// doesn't bring the symbols itself on a machine with no Nerd Font installed.
+fn detect() -> IconSet {
+    use std::io::IsTerminal;
+    if !std::io::stdout().is_terminal() && !std::io::stderr().is_terminal() {
+        return IconSet::Nerd;
+    }
+    let env = |name: &str| std::env::var(name).unwrap_or_default();
+    let remote = !env("SSH_CONNECTION").is_empty() || !env("SSH_TTY").is_empty();
+    decide(&env("TERM"), &env("TERM_PROGRAM"), remote, nerd_font_installed)
+}
+
+fn decide(term: &str, term_program: &str, remote: bool, installed: impl FnOnce() -> Option<bool>) -> IconSet {
+    if term == "linux" {
+        return IconSet::Ascii;
+    }
+    // kitty, Ghostty and WezTerm draw the Nerd Font symbols themselves, whatever the font
+    let brings_symbols = matches!(term, "xterm-kitty" | "xterm-ghostty") || matches!(term_program, "WezTerm" | "ghostty");
+    // over SSH the fonts are on the other machine, where they can't be looked for
+    if brings_symbols || remote || installed() != Some(false) {
+        IconSet::Nerd
+    } else {
+        IconSet::Unicode
+    }
+}
+
+/// Whether a Nerd Font is installed on this machine; `None` when that can't be told.
+fn nerd_font_installed() -> Option<bool> {
+    if cfg!(target_os = "macos") {
+        let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+        let dirs = [home.map(|h| h.join("Library/Fonts")), Some("/Library/Fonts".into())];
+        let names = dirs.into_iter().flatten().filter_map(|d| std::fs::read_dir(d).ok()).flatten().flatten();
+        return Some(names.map(|e| e.file_name().to_string_lossy().into_owned()).any(|n| is_nerd_font(&n)));
+    }
+    let out = std::process::Command::new("fc-list").args([":", "family"]).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).lines().any(is_nerd_font))
+}
+
+/// A font family or file name of a Nerd Font: `JetBrainsMono Nerd Font`, `Hack NF`, `HackNerdFont-Regular.ttf`.
+fn is_nerd_font(name: &str) -> bool {
+    name.split(',').any(|n| {
+        let n = n.trim();
+        n.contains("Nerd Font") || n.contains("NerdFont") || n.ends_with(" NF") || n.contains(" NF ")
+    })
 }
 
 pub fn current() -> IconSet {
@@ -41,6 +93,60 @@ pub fn current() -> IconSet {
 
 pub fn get() -> &'static Icons {
     current().icons()
+}
+
+/// The ASCII stand-in for a glyph quarry draws around the data. Each is one cell wide, as its glyph is.
+pub fn ascii_for(glyph: char) -> Option<&'static str> {
+    Some(match glyph {
+        '─' | '═' | '—' | '·' => "-",
+        '│' | '║' | '┃' | '▌' | '▍' => "|",
+        '╭' | '╮' | '╰' | '╯' | '┌' | '┐' | '└' | '┘' | '├' | '┤' | '┬' | '┴' | '┼' => "+",
+        '╔' | '╗' | '╚' | '╝' | '╠' | '╣' | '╦' | '╩' | '╬' => "+",
+        '…' | '░' => ".",
+        '•' | '▪' => "*",
+        '█' | '▄' | '▀' => "#",
+        '↑' => "^",
+        '↓' => "v",
+        '←' => "<",
+        '→' | '▸' => ">",
+        '↵' => "$",
+        '✓' => "y",
+        '“' | '”' => "\"",
+        'µ' => "u",
+        _ => return None,
+    })
+}
+
+/// A glyph of quarry's own, as the current icon set draws it.
+pub fn glyph(glyph: &'static str) -> &'static str {
+    match (current(), glyph.chars().next()) {
+        (IconSet::Ascii, Some(c)) => ascii_for(c).unwrap_or(glyph),
+        _ => glyph,
+    }
+}
+
+/// Text of quarry's own, as the current icon set draws it: in ASCII, without its glyphs.
+pub fn plain(text: &str) -> Cow<'_, str> {
+    if current() != IconSet::Ascii || text.is_ascii() {
+        return Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match ascii_for(c) {
+            Some(a) => out.push_str(a),
+            None => out.push(c),
+        }
+    }
+    Cow::Owned(out)
+}
+
+/// The Enter key in a hint.
+pub fn enter() -> &'static str {
+    if current() == IconSet::Ascii { "Enter" } else { "⏎" }
+}
+
+pub fn spinner() -> &'static [&'static str] {
+    if current() == IconSet::Ascii { &["|", "/", "-", "\\"] } else { &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] }
 }
 
 /// Every icon is one terminal cell wide (or empty), so callers put a space after it.
@@ -515,6 +621,55 @@ mod tests {
     fn badge_drops_the_gap_when_there_is_no_icon() {
         assert_eq!(Icons::badge("", "TX"), " TX ");
         assert_eq!(Icons::badge(NERD.tx, "TX"), format!(" {} TX ", NERD.tx));
+    }
+
+    /// The TUI turns its own glyphs into ASCII by looking each one up, so one without a stand-in
+    /// would stay on screen in the ASCII set.
+    #[test]
+    fn every_glyph_the_tui_draws_has_an_ascii_stand_in() {
+        let sources = [
+            include_str!("tui/app.rs"),
+            include_str!("tui/dialogs.rs"),
+            include_str!("tui/keymap.rs"),
+            include_str!("tui/palette.rs"),
+            include_str!("tui/sidebar.rs"),
+            include_str!("tui/tabs.rs"),
+            include_str!("tui/ui.rs"),
+            include_str!("tui/widgets/bar.rs"),
+            include_str!("tui/widgets/editor.rs"),
+            include_str!("tui/widgets/grid.rs"),
+            include_str!("tui/widgets/input.rs"),
+        ];
+        for source in sources {
+            let code = source.split("#[cfg(test)]").next().unwrap();
+            for line in code.lines().filter(|l| !l.trim_start().starts_with("//")) {
+                for c in line.chars().filter(|c| !c.is_ascii() && *c != '⏎') {
+                    assert!(ascii_for(c).is_some(), "no ASCII stand-in for {c:?} in: {}", line.trim());
+                }
+            }
+        }
+        assert!(spinner().iter().all(|f| !f.is_ascii()), "this test runs with the default set");
+    }
+
+    #[test]
+    fn auto_keeps_nerd_unless_its_glyphs_cannot_be_there() {
+        let (none, some) = (|| Some(false), || Some(true));
+        assert_eq!(decide("xterm-256color", "", false, some), IconSet::Nerd);
+        assert_eq!(decide("xterm-256color", "", false, none), IconSet::Unicode, "no Nerd Font on this machine");
+        assert_eq!(decide("xterm-256color", "", false, || None), IconSet::Nerd, "not knowing is no reason to step down");
+        assert_eq!(decide("xterm-256color", "", true, none), IconSet::Nerd, "over SSH the font is on the other machine");
+        assert_eq!(decide("xterm-kitty", "", false, none), IconSet::Nerd, "kitty draws the symbols itself");
+        assert_eq!(decide("xterm-256color", "WezTerm", false, none), IconSet::Nerd);
+        assert_eq!(decide("linux", "", false, some), IconSet::Ascii, "the console font has no symbols at all");
+    }
+
+    #[test]
+    fn nerd_fonts_are_known_by_their_names() {
+        assert!(is_nerd_font("JetBrainsMono Nerd Font,JetBrainsMono NF,JetBrainsMono NF ExtraBold"));
+        assert!(is_nerd_font("Symbols Nerd Font Mono"));
+        assert!(is_nerd_font("HackNerdFont-Regular.ttf"));
+        assert!(!is_nerd_font("DejaVu Sans Mono,DejaVu Sans Mono Book"));
+        assert!(!is_nerd_font("Noto Sans NFKD"));
     }
 
     #[test]

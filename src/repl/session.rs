@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -42,6 +43,8 @@ struct Outcome {
     notices: Vec<Notice>,
     result: Result<(), DbError>,
     truncated: Option<usize>,
+    /// The rows went to stdout as they arrived, so the blocks hold none.
+    streamed: bool,
     elapsed: Duration,
 }
 
@@ -71,6 +74,8 @@ pub struct Session {
     pub history_snapshot: Vec<String>,
     /// The saved connection this session is on, if it was opened by name.
     pub saved_name: Option<String>,
+    /// How many statements and commands have failed, so a script can tell that one just did.
+    pub errors: Cell<usize>,
 }
 
 impl Session {
@@ -92,9 +97,21 @@ impl Session {
         eprintln!("{}", self.palette.error(text));
     }
 
-    /// `err` with the error icon in front.
+    /// `err` with the error icon in front, counted as a failure.
     fn fail(&self, text: &str) {
         self.err(&format!("{} {text}", crate::icons::get().error));
+        self.count_error();
+    }
+
+    fn count_error(&self) {
+        self.errors.set(self.errors.get() + 1);
+    }
+
+    /// `handle_input`, also telling whether everything in it succeeded.
+    pub fn handle_input_checked(&mut self, input: &str) -> (bool, Flow) {
+        let before = self.errors.get();
+        let flow = self.handle_input(input);
+        (self.errors.get() == before, flow)
     }
 
     pub fn prompt_info(&self) -> PromptInfo {
@@ -182,6 +199,7 @@ impl Session {
             Some(Ok(cmd)) => return self.run_special(cmd),
             Some(Err(msg)) => {
                 self.err(&msg);
+                self.count_error();
                 return Flow::Continue;
             }
             None => {}
@@ -251,9 +269,14 @@ impl Session {
                 }
             }
 
-        let outcome = self.execute_streaming(sql);
+        let live = (!self.interactive && self.opts.format.is_streamable() && !self.sinks.is_active())
+            .then(|| self.plain_opts());
+        let outcome = self.execute_streaming(sql, live);
         self.after_execute(sql, &outcome);
         self.present(sql, &outcome, vertical);
+        if outcome.result.is_err() {
+            self.count_error();
+        }
         outcome.result.is_ok()
     }
 
@@ -275,7 +298,8 @@ impl Session {
         }
     }
 
-    fn execute_streaming(&mut self, sql: &str) -> Outcome {
+    /// With `live`, rows are written to stdout in that format as they arrive instead of being kept.
+    fn execute_streaming(&mut self, sql: &str, live: Option<OutputOptions>) -> Outcome {
         let row_limit = if self.interactive && std::io::stdin().is_terminal() { self.config.main.row_limit } else { 0 };
         let cancel = self.conn.cancel_handle();
         let palette = self.palette.clone();
@@ -297,6 +321,7 @@ impl Session {
             let mut cancelled = false;
             let mut discard = false;
             let mut truncated = None;
+            let mut stdout_closed = false;
             let mut asked = false;
             let mut waited = Duration::ZERO;
             loop {
@@ -304,7 +329,12 @@ impl Session {
                     r = &mut exec, if result.is_none() => result = Some(r),
                     ev = rx.recv(), if rx_open => match ev {
                         None => rx_open = false,
-                        Some(ExecEvent::Columns(columns)) => blocks.push(Block { columns, rows: Vec::new(), summary: Summary::default() }),
+                        Some(ExecEvent::Columns(columns)) => {
+                            if let Some(opts) = &live {
+                                stdout_closed |= write_stdout(&output::render(&columns, &[], opts)).is_err();
+                            }
+                            blocks.push(Block { columns, rows: Vec::new(), summary: Summary::default() });
+                        }
                         Some(ExecEvent::Rows(mut rows)) => {
                             if discard {
                                 continue;
@@ -313,6 +343,16 @@ impl Session {
                                 blocks.push(Block { columns: Vec::new(), rows: Vec::new(), summary: Summary::default() });
                             }
                             let b = blocks.last_mut().unwrap();
+                            if let Some(opts) = &live {
+                                stdout_closed |= write_stdout(&output::render_rows(&b.columns, &rows, opts)).is_err();
+                                // Nobody is reading any more (`| head`), so the rest isn't worth fetching.
+                                if stdout_closed {
+                                    discard = true;
+                                    let _ = cancel.cancel().await;
+                                    rx.close();
+                                }
+                                continue;
+                            }
                             b.rows.append(&mut rows);
                             if row_limit > 0 && !asked && b.rows.len() > row_limit {
                                 asked = true;
@@ -351,12 +391,12 @@ impl Session {
                 }
             }
             let mut result = result.unwrap_or(Ok(()));
-            if truncated.is_some()
+            if (truncated.is_some() || stdout_closed)
                 && let Err(e) = &result
                     && (e.kind == ErrorKind::Cancelled || e.message.to_ascii_lowercase().contains("cancel") || e.message.contains("interrupt")) {
                         result = Ok(());
                     }
-            Outcome { blocks, notices, result, truncated, elapsed: started.elapsed().saturating_sub(waited) }
+            Outcome { blocks, notices, result, truncated, streamed: live.is_some(), elapsed: started.elapsed().saturating_sub(waited) }
         })
     }
 
@@ -382,7 +422,7 @@ impl Session {
                 continue;
             }
             let elapsed = (self.timing && i + 1 == n_blocks).then_some(o.elapsed);
-            if !b.columns.is_empty() {
+            if !b.columns.is_empty() && !o.streamed {
                 screen.push_str(&output::render(&b.columns, &b.rows, &color));
                 if self.sinks.is_active() {
                     file.push_str(&output::render(&b.columns, &b.rows, &plain));
@@ -405,7 +445,7 @@ impl Session {
         if let Err(e) = &o.result {
             screen.push_str(&format_error(e, sql, backend, &self.palette));
         } else if o.blocks.is_empty() && self.interactive && !self.opts.format.is_machine() {
-            let t = if self.timing { format!(" · {}", human_duration(o.elapsed)) } else { String::new() };
+            let t = if self.timing { format!(" {} {}", crate::icons::glyph("·"), human_duration(o.elapsed)) } else { String::new() };
             screen.push_str(&self.palette.muted(&format!("OK{t}\n")));
         }
 
@@ -586,7 +626,7 @@ impl Session {
             }
             Special::Refresh => {
                 self.refresh_catalog();
-                self.msg(&p.muted("Refreshing completions in the background…"));
+                self.msg(&p.muted(&crate::icons::plain("Refreshing completions in the background…")));
             }
             Special::System { command } => {
                 let status = std::process::Command::new("sh").arg("-c").arg(&command).status();
@@ -630,7 +670,10 @@ impl Session {
                         }
                         self.out(&s);
                     }
-                    Err(e) => eprint!("{}", format_error(&e, &query, self.conn.backend(), &p)),
+                    Err(e) => {
+                        eprint!("{}", format_error(&e, &query, self.conn.backend(), &p));
+                        self.count_error();
+                    }
                 }
             }
             Special::ReadOnly(v) => self.set_readonly(v.unwrap_or(!self.readonly)),
@@ -665,7 +708,7 @@ impl Session {
             self.fail(&e.to_string());
             return;
         }
-        let spinner = super::spinner::Spinner::start(format!("Asking {}…", crate::llm::describe(&llm)), p.clone());
+        let spinner = super::spinner::Spinner::start(crate::icons::plain(&format!("Asking {}…", crate::llm::describe(&llm))).into_owned(), p.clone());
         let req = crate::llm::Request { question, backend: self.conn.backend(), server_version: &version, catalog: catalog.as_deref() };
         let answer = crate::llm::ask(&llm, &req);
         spinner.stop();
@@ -769,7 +812,7 @@ impl Session {
                 "\nKeys: Tab complete · Ctrl-R history search · Alt-Enter run now · F2 smart completion · F3 multi-line · F4 vi/emacs · Ctrl-D quit\n",
             ));
         }
-        self.out(&s);
+        self.out(&crate::icons::plain(&s));
     }
 
     fn connect_to(&mut self, target: Option<String>) {
@@ -911,8 +954,13 @@ impl Session {
                     return (false, Flow::Continue);
                 }
             }
-            if let Flow::Quit = self.handle_input(t) {
+            let (cmd_ok, flow) = self.handle_input_checked(t);
+            ok &= cmd_ok;
+            if let Flow::Quit = flow {
                 return (ok, Flow::Quit);
+            }
+            if !cmd_ok && !self.continue_on_error {
+                return (false, Flow::Continue);
             }
         }
         ok &= self.run_script_sql(&mut sql);
@@ -934,7 +982,7 @@ impl Session {
             }
             println!(
                 "{}",
-                p.muted(&format!("Every {seconds}s · {} · Ctrl-C to stop", chrono::Local::now().format("%H:%M:%S")))
+                p.muted(&crate::icons::plain(&format!("Every {seconds}s · {} · Ctrl-C to stop", chrono::Local::now().format("%H:%M:%S"))))
             );
             let saved = std::mem::replace(&mut self.pager_enabled, false);
             let ok = self.run_sql(query, None);
@@ -956,9 +1004,10 @@ impl Session {
 
     fn export(&mut self, format: TableFormat, path: &str, query: &str) {
         let started = Instant::now();
-        let outcome = self.execute_streaming(query);
+        let outcome = self.execute_streaming(query, None);
         if let Err(e) = &outcome.result {
             eprint!("{}", format_error(e, query, self.conn.backend(), &self.palette));
+            self.count_error();
             return;
         }
         let mut opts = self.plain_opts();
@@ -982,6 +1031,12 @@ impl Session {
             Err(e) => self.fail(&format!("{}: {e}", dest.display())),
         }
     }
+}
+
+fn write_stdout(text: &str) -> std::io::Result<()> {
+    let mut so = std::io::stdout().lock();
+    so.write_all(text.as_bytes())?;
+    so.flush()
 }
 
 fn log_query(path: &std::path::Path, sql: &str, o: &Outcome) {
@@ -1068,7 +1123,7 @@ fn truncate_sql(sql: &str, max: usize) -> String {
     while !sql.is_char_boundary(end) {
         end -= 1;
     }
-    format!("{}…", &sql[..end])
+    format!("{}{}", &sql[..end], crate::icons::glyph("…"))
 }
 
 pub fn render_sql(sql: &str, backend: Backend, p: &Palette) -> String {
@@ -1099,7 +1154,7 @@ pub fn format_error(e: &DbError, sql: &str, backend: Backend, p: &Palette) -> St
         let line_start = sql[..byte_idx].rfind('\n').map(|i| i + 1).unwrap_or(0);
         let line_end = sql[byte_idx..].find('\n').map(|i| byte_idx + i).unwrap_or(sql.len());
         let line_no = sql[..line_start].matches('\n').count() + 1;
-        let gutter = format!("{line_no:>4} │ ");
+        let gutter = format!("{line_no:>4} {} ", crate::icons::glyph("│"));
         s.push_str(&p.muted(&gutter));
         s.push_str(&render_sql(&sql[line_start..line_end], backend, p));
         s.push('\n');
@@ -1122,9 +1177,9 @@ pub fn format_error(e: &DbError, sql: &str, backend: Backend, p: &Palette) -> St
 }
 
 pub fn render_plan(node: &PlanNode, prefix: &str, last: bool, root: bool, p: &Palette, out: &mut String) {
-    let branch = if root { "" } else if last { "└─ " } else { "├─ " };
+    let branch = crate::icons::plain(if root { "" } else if last { "└─ " } else { "├─ " });
     out.push_str(&p.muted(prefix));
-    out.push_str(&p.muted(branch));
+    out.push_str(&p.muted(&branch));
     out.push_str(&p.paint(p.fg(p.theme.accent).bold(), &node.label));
     let mut facts = Vec::new();
     if let Some(c) = node.total_cost {
@@ -1143,13 +1198,13 @@ pub fn render_plan(node: &PlanNode, prefix: &str, last: bool, root: bool, p: &Pa
         facts.push(format!("loops {l:.0}"));
     }
     if !facts.is_empty() {
-        out.push_str(&p.muted(&format!("  ({})", facts.join(" · "))));
+        out.push_str(&p.muted(&format!("  ({})", facts.join(&crate::icons::plain(" · ")))));
     }
     out.push('\n');
-    let child_prefix = if root { prefix.to_string() } else { format!("{prefix}{}", if last { "   " } else { "│  " }) };
+    let child_prefix = if root { prefix.to_string() } else { format!("{prefix}{}", if last { "   ".into() } else { crate::icons::plain("│  ") }) };
     for (k, v) in &node.details {
         out.push_str(&p.muted(&child_prefix));
-        out.push_str(&p.muted(if node.children.is_empty() { "   " } else { "│  " }));
+        out.push_str(&p.muted(&if node.children.is_empty() { "   ".into() } else { crate::icons::plain("│  ") }));
         out.push_str(&p.paint(p.fg(p.theme.muted), &format!("{k}: ")));
         out.push_str(v);
         out.push('\n');

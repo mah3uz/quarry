@@ -185,7 +185,7 @@ The mouse works everywhere unless you set `mouse = false`:
 
 ## Keys and customising
 
-- [Key bindings and vim mode](/advanced/keybindings): rebind the app-wide keys under `[keys]`, and
+- [Key bindings and vim mode](/advanced/keybindings): rebind the app-wide and pane keys under `[keys]`, and
   edit SQL with vim keys.
 - [Keyboard shortcuts](/reference/keys#tui): every key, including the ones inside each pane.
 - [Themes](/advanced/themes): <kbd>Ctrl</kbd>+<kbd>Y</kbd> previews themes live. `transparent =
@@ -205,7 +205,10 @@ transaction asks first, and the transaction is rolled back.
 
 ## Things to know
 
-- The TUI doesn't restore your tabs or editor text between runs. Only the theme is remembered.
+- Your query tabs and what you typed in them come back the next time you open the same connection.
+  They are kept per connection, saved as you work, so a closed terminal doesn't lose them. Empty
+  tabs, results, and table and structure tabs aren't kept. The text is stored in `ui-state.toml`
+  (see [Files](/reference/files)), readable only by you.
 - Quitting asks for confirmation if a query is running, a transaction is open, or a table view has
   unapplied edits.
 - `--theme`, `--icons` and `--no-color` apply to the TUI too. After `\tui`, the TUI keeps the

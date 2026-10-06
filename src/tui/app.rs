@@ -9,9 +9,10 @@ use ratatui::text::{Line, Span};
 use tokio::runtime::Handle;
 
 use super::dialogs::{Confirm, ConnectEvent, ConnectForm, DialogResult, HelpRow, HelpView, Prompt, TextView};
-use super::keymap::{Action, Keymap};
+use super::keymap::{Action, Keymap, PANE_ACTIONS, Scope as KeyScope};
 use super::palette::{Item, Palette, PaletteEvent};
 use super::sidebar::{self, Script, Sidebar};
+use super::state::{self, SavedTabs};
 use super::tabs::*;
 use super::widgets::editor::{EditorEvent, VimMode};
 use super::widgets::grid::{CopyKind, GridEvent, GridState};
@@ -222,14 +223,15 @@ pub struct App {
     /// Connections opened for a query console on another PostgreSQL database; they get a tab when ready.
     pending_consoles: std::collections::HashSet<String>,
     pub max_rows: usize,
+    /// The open connections' query tabs as last written to the state file, and when.
+    remembered: Vec<(String, SavedTabs)>,
+    remembered_at: Instant,
 }
-
-use crate::theme::SPINNER;
 
 impl App {
     pub fn new(rt: Handle, config: Config, tx: AppSender, overrides: super::Overrides) -> App {
         let depth = if overrides.no_color { ColorDepth::None } else { ColorDepth::detect() };
-        let theme_name = overrides.theme.or_else(|| load_ui_state().theme).unwrap_or_else(|| config.main.theme.clone());
+        let theme_name = overrides.theme.or_else(|| state::load().theme).unwrap_or_else(|| config.main.theme.clone());
         let theme = crate::theme::load(&theme_name, &config.themes_dir()).unwrap_or_default();
         let favorites = special::favorites::Favorites::load(config.favorites_path()).unwrap_or_default();
         let mut warnings = config.warnings.clone();
@@ -260,6 +262,8 @@ impl App {
             pending_connects: HashMap::new(),
             pending_consoles: Default::default(),
             max_rows: 200_000,
+            remembered: Vec::new(),
+            remembered_at: Instant::now(),
             config,
         };
         for w in warnings {
@@ -277,7 +281,8 @@ impl App {
     }
 
     pub fn spinner(&self) -> &'static str {
-        SPINNER[self.spinner % SPINNER.len()]
+        let frames = crate::icons::spinner();
+        frames[self.spinner % frames.len()]
     }
 
     pub fn should_quit(&self) -> bool {
@@ -292,7 +297,57 @@ impl App {
             || self.tabs.iter().any(|t| matches!(&t.kind, TabKind::Activity(a) if !a.paused))
     }
 
+    /// What a connection's tabs are remembered under: its saved name, or else where it points.
+    fn tabs_key(&self, c: &ConnEntry) -> String {
+        if self.config.connections.contains_key(&c.name) {
+            return c.name.clone();
+        }
+        match (c.spec.backend, &c.spec.path) {
+            (Backend::Sqlite, Some(p)) => format!("sqlite:{}", std::path::absolute(p).unwrap_or_else(|_| p.clone()).display()),
+            _ => c.spec.display_url(),
+        }
+    }
+
+    /// Writes the open connections' query tabs to the state file, if they changed.
+    fn remember_tabs(&mut self) {
+        self.remembered_at = Instant::now();
+        let open: Vec<(String, SavedTabs)> =
+            self.conns.iter().flatten().map(|c| (self.tabs_key(c), SavedTabs::of(&self.tabs, self.active, c.id))).collect();
+        if open == self.remembered {
+            return;
+        }
+        let mut st = state::load();
+        for (name, tabs) in &open {
+            if tabs.tabs.is_empty() {
+                st.tabs.remove(name);
+            } else {
+                st.tabs.insert(name.clone(), tabs.clone());
+            }
+        }
+        state::save(&st);
+        self.remembered = open;
+    }
+
+    /// Reopens the query tabs this connection had when it was last used. False when there were none.
+    fn restore_tabs(&mut self, conn: ConnId) -> bool {
+        let Some(key) = self.conn(conn).map(|c| self.tabs_key(c)) else { return false };
+        let Some(saved) = state::load().tabs.remove(&key).filter(|s| !s.tabs.is_empty()) else { return false };
+        let first = self.tabs.len();
+        for t in &saved.tabs {
+            let idx = self.new_query_tab(Some(conn), Some(t.text.clone()));
+            let tab = &mut self.tabs[idx];
+            tab.title = t.title.clone();
+            if let TabKind::Query(q) = &mut tab.kind {
+                q.scope = t.scope();
+                q.file = t.file.clone();
+            }
+        }
+        self.active = first + saved.active.min(saved.tabs.len() - 1);
+        true
+    }
+
     pub fn shutdown(&mut self) {
+        self.remember_tabs();
         for c in self.conns.iter().flatten() {
             if c.main.is_busy() {
                 c.main.cancel();
@@ -392,7 +447,7 @@ impl App {
             });
         }
         self.load_catalog(id);
-        let has_query = self.tabs.iter().any(|t| matches!(t.kind, TabKind::Query(_)));
+        let has_query = self.restore_tabs(id) || self.tabs.iter().any(|t| matches!(t.kind, TabKind::Query(_)));
         if !has_query {
             self.new_query_tab(Some(id), None);
         } else if let Some(t) = self.tabs.get_mut(self.active)
@@ -770,6 +825,10 @@ impl App {
     pub fn tick(&mut self) {
         self.spinner = self.spinner.wrapping_add(1);
         self.toasts.retain(|t| t.at.elapsed() < Duration::from_secs(4));
+        // not only on quit, so a closed terminal or a crash loses a few seconds of typing at most
+        if self.remembered_at.elapsed() >= Duration::from_secs(5) {
+            self.remember_tabs();
+        }
         let mut refresh = Vec::new();
         for t in &mut self.tabs {
             if let (TabKind::Activity(a), Some(conn)) = (&mut t.kind, t.conn) {
@@ -1491,6 +1550,9 @@ impl App {
         }
         match self.focus {
             Focus::Sidebar => {
+                let own = self.sidebar.is_filtering() || self.sidebar.awaiting_script_key();
+                let key = if own { Some(key) } else { self.keymap.pane_key(&[KeyScope::Explorer], key, false) };
+                let Some(key) = key else { return };
                 if let Some(action) = self.sidebar.handle_key(key) {
                     self.on_sidebar_action(action);
                 }
@@ -1633,6 +1695,13 @@ impl App {
             }
             _ => {}
         }
+        // vim's normal and visual modes have their own keys for everything the editor does
+        let scopes: &[KeyScope] = match &self.tabs[self.active].kind {
+            TabKind::Query(q) if q.pane == Pane::Results => &[KeyScope::Grid],
+            TabKind::Query(q) if matches!(q.editor.vim_mode(), None | Some(VimMode::Insert)) => &[KeyScope::Editor],
+            _ => &[],
+        };
+        let Some(key) = self.keymap.pane_key(scopes, key, in_editor) else { return };
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let tab_id = self.tabs[self.active].id;
         let conn = self.tabs[self.active].conn;
@@ -1862,7 +1931,7 @@ impl App {
         let title = format!("Edit {}.{} ({})", t.name, colinfo.name, colinfo.type_name);
         self.overlay = Some(Overlay::Prompt(Prompt {
             title,
-            hint: "⏎ stage change · \\N for NULL · Esc cancel — nothing is written until Ctrl+S".into(),
+            hint: format!("{} stage change · \\N for NULL · Esc cancel — nothing is written until Ctrl+S", crate::icons::enter()),
             input: Input::new(&text),
             purpose: PromptPurpose::EditCell { tab: id, row, col },
         }));
@@ -1996,6 +2065,8 @@ impl App {
     }
 
     fn on_table_key(&mut self, key: KeyEvent) {
+        let typing = self.table_filter_active();
+        let Some(key) = self.keymap.pane_key(&[KeyScope::Table, KeyScope::Grid], key, typing) else { return };
         let idx = self.active;
         let tab_id = self.tabs[idx].id;
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
@@ -2293,9 +2364,9 @@ impl App {
                 PaletteEvent::Execute(name) => {
                     if let Ok(t) = crate::theme::load(&name, &self.config.themes_dir()) {
                         self.theme = t.adapted(self.depth);
-                        let mut st = load_ui_state();
+                        let mut st = state::load();
                         st.theme = Some(name.clone());
-                        save_ui_state(&st);
+                        state::save(&st);
                         self.toast(Level::Success, format!("Theme: {name}"));
                     }
                     self.overlay = None;
@@ -2764,15 +2835,19 @@ impl App {
                 self.overlay = Some(Overlay::Prompt(Prompt { title: "Open SQL file".into(), hint: String::new(), input: Input::new("~/"), purpose: PromptPurpose::OpenFile }));
             }
             Command::Help => {
-                let rows = Action::ALL
-                    .iter()
-                    .map(|&a| HelpRow {
-                        section: a.section().to_string(),
-                        keys: self.keymap.label(a),
-                        what: a.description().to_string(),
-                        action: a.name().to_string(),
-                    })
-                    .collect();
+                let app = Action::ALL.iter().map(|&a| HelpRow {
+                    section: a.section().to_string(),
+                    keys: self.keymap.label(a),
+                    what: a.description().to_string(),
+                    action: a.name().to_string(),
+                });
+                let panes = PANE_ACTIONS.iter().map(|a| HelpRow {
+                    section: a.scope.section().to_string(),
+                    keys: self.keymap.pane_label(a),
+                    what: a.description.to_string(),
+                    action: a.name.to_string(),
+                });
+                let rows = app.chain(panes).collect();
                 self.overlay = Some(Overlay::Help(HelpView::new(rows)));
             }
             Command::Quit => {
@@ -2911,6 +2986,7 @@ impl App {
             Action::NewConnection => self.open_connection_manager(),
             Action::NewConsole { conn, scope, database } => self.open_console(conn, scope, database),
             Action::Disconnect(conn) => {
+                self.remember_tabs();
                 self.sidebar.remove_connection(conn);
                 self.tabs.retain(|t| t.conn != Some(conn));
                 self.active = self.active.min(self.tabs.len().saturating_sub(1));
@@ -3337,24 +3413,5 @@ fn append_history(path: &std::path::Path, entries: &[String]) {
             }
             let _ = writeln!(f, "{}", e.replace('\n', "<\\n>"));
         }
-    }
-}
-
-#[derive(Default, serde::Serialize, serde::Deserialize)]
-struct UiState {
-    theme: Option<String>,
-}
-
-fn ui_state_path() -> std::path::PathBuf {
-    crate::config::data_dir().join("ui-state.toml")
-}
-
-fn load_ui_state() -> UiState {
-    std::fs::read_to_string(ui_state_path()).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default()
-}
-
-fn save_ui_state(st: &UiState) {
-    if let Ok(s) = toml::to_string(st) {
-        let _ = crate::config::write_private(&ui_state_path(), &s);
     }
 }
