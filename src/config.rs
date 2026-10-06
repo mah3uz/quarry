@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
+use toml_edit::{DocumentMut, Item, Table, TableLike};
 
 /// `~/.config/quarry/config.toml`. Every field has a default so partial files work.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -197,6 +198,56 @@ pub fn config_path() -> PathBuf {
 }
 
 /// Writes `contents` atomically (temp file + rename) with 0600 permissions, creating parent dirs.
+/// `current` with only the settings that differ from `wanted` changed. `None` when `current` isn't
+/// a config quarry can read.
+fn edit_in_place(current: &str, wanted: &str) -> Option<String> {
+    let mut doc: DocumentMut = current.parse().ok()?;
+    let was: DocumentMut = toml::to_string_pretty(&Config::parse(current).ok()?).ok()?.parse().ok()?;
+    let wanted: DocumentMut = wanted.parse().ok()?;
+    apply_changes(doc.as_table_mut(), was.as_table(), wanted.as_table());
+    Some(doc.to_string())
+}
+
+/// Makes in `doc` the changes that turn `was` into `wanted`, touching nothing else.
+fn apply_changes(doc: &mut dyn TableLike, was: &Table, wanted: &Table) {
+    for (key, new) in wanted.iter() {
+        match (was.get(key), new) {
+            (Some(Item::Table(old)), Item::Table(new)) => {
+                if doc.get(key).is_none() {
+                    let mut table = Table::new();
+                    table.set_implicit(true);
+                    doc.insert(key, Item::Table(table));
+                }
+                if let Some(table) = doc.get_mut(key).and_then(Item::as_table_like_mut) {
+                    apply_changes(table, old, new);
+                }
+            }
+            (Some(old), _) if old.to_string() == new.to_string() => {}
+            _ => {
+                let mut item = new.clone();
+                if let Item::Table(table) = &mut item {
+                    table.set_position(None);
+                }
+                match doc.get_mut(key) {
+                    // assigning keeps the comments above the key, and this the one after the value
+                    Some(existing) => {
+                        if let (Item::Value(old), Item::Value(value)) = (&*existing, &mut item) {
+                            *value.decor_mut() = old.decor().clone();
+                        }
+                        *existing = item;
+                    }
+                    None => {
+                        doc.insert(key, item);
+                    }
+                }
+            }
+        }
+    }
+    for (key, _) in was.iter().filter(|(key, _)| !wanted.contains_key(key)) {
+        doc.remove(key);
+    }
+}
+
 pub(crate) fn write_private(path: &Path, contents: &str) -> anyhow::Result<()> {
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
@@ -241,14 +292,18 @@ impl Config {
         toml::from_str(text).map_err(|e| e.to_string().trim_end().to_string())
     }
 
-    /// Rewrites the whole file from the in-memory config, so comments in a hand-edited file are
-    /// lost; the previous file is kept next to it as `config.toml.bak`.
+    /// Writes the settings that changed into the existing file, leaving its comments and layout
+    /// alone; a file that can't be edited that way is rewritten whole. The previous file is kept
+    /// next to it as `config.toml.bak`.
     pub fn save(&self) -> anyhow::Result<()> {
         let path = self.path.clone().unwrap_or_else(config_path);
-        let text = toml::to_string_pretty(self).context("cannot serialize config")?;
-        if path.exists() {
+        let mut text = toml::to_string_pretty(self).context("cannot serialize config")?;
+        if let Ok(current) = std::fs::read_to_string(&path) {
             let backup = path.with_extension("toml.bak");
             std::fs::copy(&path, &backup).with_context(|| format!("cannot back up to {}", backup.display()))?;
+            if let Some(edited) = edit_in_place(&current, &text) {
+                text = edited;
+            }
         }
         write_private(&path, &text)
     }
@@ -523,6 +578,32 @@ mod tests {
         let again = Config::load(Some(path.clone())).unwrap();
         assert_eq!(again.connections, cfg.connections);
         assert_eq!(again.main, cfg.main);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn saving_changes_only_what_changed_and_keeps_the_users_comments() {
+        let dir = tmp_dir("comments");
+        let path = dir.join("config.toml");
+        let mine = "# my settings\n[main]\n# dark at night\ntheme = \"nord\"  # for now\ntiming = false\n\n\
+                    # work\n[connections.prod]\nurl = \"postgres://deploy@db/app\" # careful\nreadonly = true\n\n\
+                    [connections.old]\nurl = \"sqlite:old.db\"\n";
+        write_private(&path, mine).unwrap();
+        let mut cfg = Config::load(Some(path.clone())).unwrap();
+        cfg.save().unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), mine, "saving with nothing changed leaves the file as it was");
+
+        cfg.main.theme = "dracula".into();
+        cfg.connections.remove("old");
+        cfg.connections.insert("new".into(), SavedConnection { url: "sqlite:new.db".into(), ..Default::default() });
+        cfg.save().unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        for kept in ["# my settings", "# dark at night", "theme = \"dracula\"  # for now", "timing = false", "# work", "# careful"] {
+            assert!(text.contains(kept), "{kept:?} is gone from:\n{text}");
+        }
+        assert!(!text.contains("old.db") && !text.contains("row_limit"), "nothing but the changes is written:\n{text}");
+        let again = Config::load(Some(path)).unwrap();
+        assert_eq!((again.main, again.connections), (cfg.main, cfg.connections));
         let _ = std::fs::remove_dir_all(dir);
     }
 

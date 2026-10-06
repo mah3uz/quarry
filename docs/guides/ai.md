@@ -115,8 +115,8 @@ model = "claude-opus-5-5"   # empty = the CLI's default (claude-code, codex)
 # base_url = "http://localhost:11434/v1"   # openai provider only
 ```
 
-Running `--setup-llm` rewrites `config.toml`, so comments you added there are lost. The previous
-file is kept as `config.toml.bak`.
+Running `--setup-llm` changes only the `[llm]` settings in `config.toml`; your comments and other
+settings stay. The previous file is kept as `config.toml.bak`.
 
 ## Troubleshooting
 

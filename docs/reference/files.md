@@ -20,7 +20,7 @@ but no API keys.
 | File | Contents |
 |---|---|
 | `config.toml` | Settings and saved connections. Created with comments on first run. See [Configuration file](/reference/config). |
-| `config.toml.bak` | The previous `config.toml`, kept whenever quarry rewrites it |
+| `config.toml.bak` | The previous `config.toml`, kept whenever quarry changes it |
 | `favorites.toml` | [Favourite queries](/advanced/favorites) |
 | `themes/` | Your [custom themes](/advanced/themes#your-own-theme): `*.toml`, `*.yaml`, `*.yml` |
 

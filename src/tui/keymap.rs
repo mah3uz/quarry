@@ -434,6 +434,17 @@ impl Keymap {
         }
     }
 
+    /// The first key of the pane action called `name`, for hints; empty when it has none.
+    pub fn pane_short(&self, name: &str) -> String {
+        self.pane.iter().find(|(_, i)| PANE_ACTIONS[*i].name == name).map(|(k, _)| k.label()).unwrap_or_default()
+    }
+
+    /// `key what` for each action that has a key, e.g. `y copy  / search`.
+    pub fn hints(&self, actions: &[(&str, &str)]) -> String {
+        let hint = |(name, what): &(&str, &str)| Some(self.pane_short(name)).filter(|k| !k.is_empty()).map(|k| format!("{k} {what}"));
+        actions.iter().filter_map(hint).collect::<Vec<_>>().join("  ")
+    }
+
     /// A pane action's keys for display, e.g. `J · Down`; empty when unbound.
     pub fn pane_label(&self, action: &PaneAction) -> String {
         let keys = self.pane.iter().filter(|(_, i)| PANE_ACTIONS[*i].name == action.name).map(|(k, _)| k.label());
@@ -558,6 +569,15 @@ mod tests {
 
         let (_, warnings) = with(&[("grid_copy", "ctrl+b")]);
         assert!(warnings.iter().any(|w| w.contains("toggle_explorer everywhere")), "an app-wide key never reaches a pane: {warnings:?}");
+    }
+
+    #[test]
+    fn hints_name_the_keys_that_work_now() {
+        let shown = [("grid_copy", "copy"), ("grid_search", "search"), ("grid_messages", "messages")];
+        assert_eq!(with(&[]).0.hints(&shown), "y copy  / search  m messages");
+        let mut overrides: BTreeMap<String, KeyBinding> = [("grid_copy".to_string(), KeyBinding::One("c".into()))].into();
+        overrides.insert("grid_search".into(), KeyBinding::Many(Vec::new()));
+        assert_eq!(Keymap::new(&overrides).0.hints(&shown), "c copy  m messages", "an action with no key has no hint");
     }
 
     #[test]

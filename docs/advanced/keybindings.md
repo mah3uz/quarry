@@ -199,8 +199,8 @@ After the `explorer_script` key, the next key (<kbd>s</kbd> <kbd>i</kbd> <kbd>u<
 
 A few keys stay fixed: arrows and the other typing keys in the editor, <kbd>Shift</kbd>+arrows
 to select in a grid, <kbd>Esc</kbd>, vim's keys, and the keys of dialogs and the other tabs.
-They're listed in [Keyboard shortcuts](/reference/keys). The hints quarry shows in the status bar
-and on borders name the default keys, whatever you bind.
+They're listed in [Keyboard shortcuts](/reference/keys). The hints in the status bar, in notices
+and in the empty editor follow your bindings.
 
 ## Vim mode
 

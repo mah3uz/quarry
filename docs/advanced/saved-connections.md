@@ -68,8 +68,8 @@ doesn't store `--ssh-key`, TLS flags or `--init-command`. Add those by hand if y
 If you write a password into a `url` by hand, keep the file private (`chmod 600`); quarry warns at
 start-up when it isn't.
 
-Saving rewrites `config.toml`, so comments you added are lost. The previous file is kept as
-`config.toml.bak`.
+Saving changes only what it has to in `config.toml`: your comments, and the settings you didn't
+touch, stay as you wrote them. The previous file is kept as `config.toml.bak`.
 
 ## Deleting
 

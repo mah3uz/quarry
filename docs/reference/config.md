@@ -14,8 +14,9 @@ optional: delete a line to get the default back.
 - `--config FILE` uses a different file for one run.
 - `QUARRY_CONFIG_DIR` changes the whole config directory.
 - A syntax error stops quarry with the file, line and column. Unknown keys are ignored.
-- quarry rewrites the file when you use `--save`, `--setup-llm` or the TUI's connection manager. It
-  keeps the previous version as `config.toml.bak`, but comments are not kept.
+- quarry edits the file when you use `--save`, `--setup-llm` or the TUI's connection manager. It
+  changes only the settings involved, so your comments stay, and keeps the previous version as
+  `config.toml.bak`.
 
 ## `[main]`
 

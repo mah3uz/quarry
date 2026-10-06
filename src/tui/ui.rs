@@ -170,7 +170,7 @@ fn draw_sidebar(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
             Line::from(""),
             Line::from(Span::styled(" No connections", Style::default().fg(theme.muted))),
             Line::from(""),
-            Line::from(vec![Span::styled(" Ctrl+O", Style::default().fg(theme.accent)), Span::styled(" connect", Style::default().fg(theme.muted))]),
+            Line::from(vec![Span::styled(format!(" {}", app.keymap.short(Action::Connections)), Style::default().fg(theme.accent)), Span::styled(" connect", Style::default().fg(theme.muted))]),
         ]);
         p.render(list, buf);
         return;
@@ -194,8 +194,9 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
     let conn_label = app.active_tab().map(|t| app.tab_conn_label(t)).unwrap_or_default();
     let backend = app.active_tab().and_then(|t| t.conn).and_then(|c| app.conn(c)).map(|c| c.backend());
     let max_rows = app.max_rows;
+    let pending_keys = app.keymap.hints(&[("table_apply", "review"), ("table_discard", "discard")]).replace("  ", " · ");
     let Some(tab) = app.tabs.get_mut(app.active) else {
-        draw_welcome(buf, area, theme);
+        draw_welcome(buf, area, theme, &app.keymap);
         return None;
     };
     let mut cursor = None;
@@ -242,7 +243,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
         }
         TabKind::Table(t) => {
             let [tool, rest] = Layout::vertical([Constraint::Length(1), Constraint::Min(2)]).areas(area);
-            draw_table_toolbar(buf, tool, t, theme, spinner, backend);
+            draw_table_toolbar(buf, tool, t, theme, spinner, backend, &pending_keys);
             let block = pane_block(vec![], focused, theme);
             let inner = block.inner(rest);
             block.render(rest, buf);
@@ -487,7 +488,7 @@ fn draw_messages(buf: &mut Buffer, area: Rect, q: &mut QueryTab, theme: &Theme) 
     Paragraph::new(lines).scroll((q.messages_scroll as u16, 0)).render(Rect { x: area.x + 1, width: area.width.saturating_sub(1), ..area }, buf);
 }
 
-fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme, spinner: &str, backend: Option<Backend>) {
+fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme, spinner: &str, backend: Option<Backend>, pending_keys: &str) {
     let ic = icons::get();
     let mut spans = vec![Span::styled(format!(" {} {}.{} ", ic.table, t.schema, t.name), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))];
     if t.filter.is_empty() {
@@ -515,14 +516,14 @@ fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme,
     }
     if t.dirty() {
         spans.push(Span::styled(
-            format!("  {} {} pending · Ctrl+S review · u discard ", ic.dirty, t.pending_count()),
+            format!("  {} {} pending · {} ", ic.dirty, t.pending_count(), pending_keys),
             Style::default().fg(theme.warning).add_modifier(Modifier::BOLD),
         ));
     }
     Line::from(spans).render(area, buf);
 }
 
-fn draw_welcome(buf: &mut Buffer, area: Rect, theme: &Theme) {
+fn draw_welcome(buf: &mut Buffer, area: Rect, theme: &Theme, keymap: &super::keymap::Keymap) {
     let art = [
         "  ██████  ██    ██  █████  ██████  ██████  ██    ██ ",
         " ██    ██ ██    ██ ██   ██ ██   ██ ██   ██  ██  ██  ",
@@ -542,7 +543,8 @@ fn draw_welcome(buf: &mut Buffer, area: Rect, theme: &Theme) {
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled("PostgreSQL · MySQL/MariaDB · SQLite", Style::default().fg(theme.muted))).centered());
     lines.push(Line::from(""));
-    for (k, d) in [("Ctrl+O", "connect"), ("Ctrl+P", "commands"), ("Ctrl+Y", "themes"), ("F1", "help"), ("Ctrl+Q", "quit")] {
+    let actions = [(Action::Connections, "connect"), (Action::Commands, "commands"), (Action::Themes, "themes"), (Action::Help, "help"), (Action::Quit, "quit")];
+    for (k, d) in actions.map(|(a, d)| (keymap.short(a), d)) {
         lines.push(
             Line::from(vec![
                 Span::styled(format!("{k:>8}  "), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
@@ -650,14 +652,35 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
 
     let k = |a: Action| app.keymap.short(a);
     let hints = match (app.focus, app.active_tab().map(|t| &t.kind)) {
-        (Focus::Sidebar, _) => format!("{} open  c console  s structure  g script  / filter", crate::icons::enter()),
+        (Focus::Sidebar, _) => app.keymap.hints(&[
+            ("explorer_open", "open"),
+            ("explorer_console", "console"),
+            ("explorer_structure", "structure"),
+            ("explorer_script", "script"),
+            ("explorer_filter", "filter"),
+        ]),
         (_, Some(TabKind::Query(q))) if q.pane == Pane::Editor => {
             format!("{} run  {} all  {} explain  {} help", k(Action::RunStatement), k(Action::RunAll), k(Action::Explain), k(Action::Help))
         }
-        (_, Some(TabKind::Query(_))) => format!("{} view  y copy  / search  [ ] results  m messages", crate::icons::enter()),
-        (_, Some(TabKind::Table(_))) => "f filter  s sort  e edit  o insert  D delete  ^S apply".to_string(),
+        (_, Some(TabKind::Query(_))) => app.keymap.hints(&[
+            ("grid_view_cell", "view"),
+            ("grid_copy", "copy"),
+            ("grid_search", "search"),
+            ("grid_prev_result", "previous"),
+            ("grid_next_result", "next result"),
+            ("grid_messages", "messages"),
+        ]),
+        (_, Some(TabKind::Table(_))) => app.keymap.hints(&[
+            ("table_filter", "filter"),
+            ("table_sort", "sort"),
+            ("table_edit_cell", "edit"),
+            ("table_add_row", "insert"),
+            ("table_delete_rows", "delete"),
+            ("table_apply", "apply"),
+        ]),
         _ => format!("{} help", k(Action::Help)),
     };
+    let hints = hints.replace("Enter ", &format!("{} ", crate::icons::enter()));
     let hints = hints.as_str();
     let hw = hints.width() as u16;
     if rx > x + hw + 2 {

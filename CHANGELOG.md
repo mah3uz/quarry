@@ -12,7 +12,7 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 - **The panes' keys can be rebound.** The keys of the editor, the results grid, the table view and the explorer were
   fixed. Each now has a name you can set under `[keys]`, such as `grid_copy = "c"` or `explorer_down = ["n", "down"]`;
-  <kbd>F1</kbd> lists all of them with their current keys.
+  <kbd>F1</kbd> lists all of them with their current keys, and the hints on screen follow your bindings.
 - **Vim mode searches with <kbd>/</kbd>.** In the TUI's editor with `vi = true`, type <kbd>/</kbd>, the text and
   <kbd>Enter</kbd> to jump to the next match; <kbd>n</kbd> and <kbd>N</kbd> go to the next and previous one. A
   lowercase search matches any case.
@@ -38,6 +38,9 @@ What changed in each release of quarry, newest first. Each release's section is 
 
 ### Fixed
 
+- **Saving keeps your comments in `config.toml`.** Saving a connection (`--save`, the TUI's connection manager) or
+  running `--setup-llm` rewrote the whole file: comments were lost and every setting was written out. Now only what
+  changed is touched.
 - **A failing special command fails the script.** `quarry db -e '\d nosuchtable'` exited with status 0. An unknown
   command, `\d` on something that doesn't exist, or any other command that reports an error now exits with status 1
   and stops the script, as a failing statement does; `--continue-on-error` keeps going.

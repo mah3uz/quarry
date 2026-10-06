@@ -19,7 +19,6 @@ const UNDO_LIMIT: usize = 500;
 mod vim;
 pub use vim::VimMode;
 const WHEEL_LINES: usize = 3;
-const PLACEHOLDER: &str = "-- Write SQL here · Ctrl+Enter run statement · F5 run all · Ctrl+Space complete";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditorEvent {
@@ -88,6 +87,8 @@ pub struct Editor {
     backend: Backend,
     /// Blocks edits from keys and paste; the programmatic setters still work.
     pub read_only: bool,
+    /// Shown while the editor is empty.
+    pub placeholder: String,
     error_marker: Option<usize>,
     generation: u64,
     highlight: Option<Highlight>,
@@ -114,6 +115,7 @@ impl Editor {
             redo: Vec::new(),
             backend,
             read_only: false,
+            placeholder: "-- Write SQL here".into(),
             error_marker: None,
             generation: 0,
             highlight: None,
@@ -507,7 +509,7 @@ impl Editor {
             }
             if row == 0 && self.is_empty() {
                 let style = base.fg(theme.muted).add_modifier(Modifier::ITALIC);
-                buf.set_stringn(text_x, y, crate::icons::plain(PLACEHOLDER), text_w, style);
+                buf.set_stringn(text_x, y, crate::icons::plain(&self.placeholder), text_w, style);
             }
 
             let line = &self.lines[row];

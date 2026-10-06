@@ -660,6 +660,14 @@ impl App {
         let mut q = QueryTab::new(backend);
         q.scope = scope;
         q.editor.set_vim(self.config.main.vi);
+        let keys = [
+            (self.keymap.short(Action::RunStatement), "run statement"),
+            (self.keymap.short(Action::RunAll), "run all"),
+            (self.keymap.pane_short("editor_complete"), "complete"),
+        ];
+        for (key, what) in keys.iter().filter(|(k, _)| !k.is_empty()) {
+            q.editor.placeholder.push_str(&format!(" · {key} {what}"));
+        }
         if let Some(t) = text {
             q.editor.set_text(&t);
         }
@@ -1311,7 +1319,8 @@ impl App {
         let Some(tab) = self.tabs.get_mut(self.active) else { return };
         let tab_id = tab.id;
         let Some(conn_id) = tab.conn else {
-            self.toast(Level::Warning, "Not connected — press Ctrl+O to connect");
+            let connect = self.keymap.short(Action::Connections);
+            self.toast(Level::Warning, format!("Not connected — press {connect} to connect"));
             return;
         };
         let TabKind::Query(q) = &mut tab.kind else { return };
@@ -1473,7 +1482,8 @@ impl App {
                     q.editor.replace_range(end..end, &format!("{sep}{}", a.sql));
                 }
                 q.pane = Pane::Editor;
-                self.toast(Level::Success, "SQL ready — review it, then Ctrl+Enter to run");
+                let run = self.keymap.short(Action::RunStatement);
+                self.toast(Level::Success, format!("SQL ready — review it, then {run} to run"));
             }
             Err(e) => {
                 q.log(MessageKind::Error, format!("{} {e}", crate::icons::get().error));
@@ -1931,7 +1941,7 @@ impl App {
         let title = format!("Edit {}.{} ({})", t.name, colinfo.name, colinfo.type_name);
         self.overlay = Some(Overlay::Prompt(Prompt {
             title,
-            hint: format!("{} stage change · \\N for NULL · Esc cancel — nothing is written until Ctrl+S", crate::icons::enter()),
+            hint: format!("{} stage change · \\N for NULL · Esc cancel — nothing is written until {}", crate::icons::enter(), self.keymap.pane_short("table_apply")),
             input: Input::new(&text),
             purpose: PromptPurpose::EditCell { tab: id, row, col },
         }));
@@ -1951,7 +1961,8 @@ impl App {
         t.inserted.insert(row);
         t.grid.mark_new_row(row);
         t.grid.set_cursor(row, 0);
-        self.toast(Level::Info, "New row added — edit cells with e, then Ctrl+S to review");
+        let (edit, apply) = (self.keymap.pane_short("table_edit_cell"), self.keymap.pane_short("table_apply"));
+        self.toast(Level::Info, format!("New row added — edit cells with {edit}, then {apply} to review"));
     }
 
     fn table_delete_rows(&mut self, idx: usize, range: std::ops::Range<usize>) {
@@ -2076,7 +2087,8 @@ impl App {
             KeyCode::Char('r') | KeyCode::F(5) if !ctrl => {
                 let dirty = matches!(&self.tabs[idx].kind, TabKind::Table(t) if t.dirty());
                 if dirty {
-                    self.toast(Level::Warning, "Apply (Ctrl+S) or discard (u) pending changes first");
+                    let (apply, discard) = (self.keymap.pane_short("table_apply"), self.keymap.pane_short("table_discard"));
+                    self.toast(Level::Warning, format!("Apply ({apply}) or discard ({discard}) pending changes first"));
                 } else {
                     self.fetch_table_page(idx, true);
                 }
@@ -2789,7 +2801,8 @@ impl App {
                     .map(|(k, v)| Item { label: k.clone(), category: String::new(), hint: v.lines().next().unwrap_or("").chars().take(40).collect(), value: Command::OpenFavorite(k.clone()) })
                     .collect();
                 if items.is_empty() {
-                    self.toast(Level::Info, "No favorites yet — Ctrl+S in a query tab saves one");
+                    let save = self.keymap.short(Action::SaveFavorite);
+                    self.toast(Level::Info, format!("No favorites yet — {save} in a query tab saves one"));
                 } else {
                     self.overlay = Some(Overlay::Commands(Palette::new("Favorites", "name…", items)));
                 }
