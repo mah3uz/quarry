@@ -89,7 +89,8 @@ font=${NERD_FONT:-/usr/share/fonts/TTF/JetBrainsMonoNerdFontMono-Regular.ttf}
 if command -v pyftsubset >/dev/null && [ -f "$font" ]; then
     cd "$theme"
     icons=$(python3 -c "import glob; print(','.join(sorted({'U+%X' % ord(c) for f in glob.glob('captures/*.ans') for c in open(f).read() if 0xE000 <= ord(c) <= 0xF8FF or ord(c) >= 0xF0000})))")
-    pyftsubset "$font" --unicodes="$icons" --flavor=woff2 --layout-features='' --no-hinting \
+    # PfEd is FontForge's own bookkeeping, which pyftsubset can only drop, and says so unless told to
+    pyftsubset "$font" --unicodes="$icons" --flavor=woff2 --layout-features='' --no-hinting --drop-tables+=PfEd \
         --output-file=fonts/NerdSymbols-subset.woff2
 else
     echo "captures.sh: pyftsubset or $font is missing, so fonts/NerdSymbols-subset.woff2 was not rebuilt" >&2

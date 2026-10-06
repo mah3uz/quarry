@@ -212,7 +212,8 @@ aur:
       exit 1
     fi
     url=$(sed -n "s/^url='\(.*\)'/\1/p" packaging/aur/quarry-sql/PKGBUILD)
-    if ! curl -fsIL -o /dev/null "$url/releases/download/v{{pkgver}}/quarry-{{pkgver}}-x86_64-unknown-linux-gnu.tar.gz"; then
+    # GitHub can take a few seconds to serve an asset it has just been given
+    if ! curl -fsIL --retry 6 --retry-delay 5 --retry-all-errors -o /dev/null "$url/releases/download/v{{pkgver}}/quarry-{{pkgver}}-x86_64-unknown-linux-gnu.tar.gz"; then
       echo "the v{{pkgver}} GitHub Release has no tarball yet, which quarry-sql-bin downloads" >&2
       exit 1
     fi
