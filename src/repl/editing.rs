@@ -148,6 +148,16 @@ pub fn is_sensitive(sql: &str) -> bool {
         || has_url_password(sql)
 }
 
+/// Text that spells out a credential: a statement that sets a password, or a URL carrying one.
+/// Narrower than [`is_sensitive`], which would also catch a query that only names a password column.
+pub fn has_credentials(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let quoted_after = |word: &str| {
+        lower.match_indices(word).any(|(i, _)| lower[i + word.len()..].trim_start_matches(|c: char| c.is_whitespace() || c == '=').starts_with('\''))
+    };
+    lower.contains("identified by") || lower.contains("set password") || quoted_after("password") || has_url_password(text)
+}
+
 /// A connection URL with a password in it (`scheme://user:password@host`), as typed after `\c`.
 fn has_url_password(text: &str) -> bool {
     text.match_indices("://").any(|(i, _)| {
@@ -235,6 +245,16 @@ mod tests {
         let offered = |r: CompletionResult| matches!(r, CompletionResult::Fresh { .. });
         assert!(offered(c.complete("\\nopag", 6)), "an unfinished word is offered its completion");
         assert!(!offered(c.complete("\\nopager", 8)), "Enter takes an open menu's item, so this would cost a second Enter");
+    }
+
+    #[test]
+    fn only_text_that_spells_out_a_credential_counts_as_one() {
+        assert!(has_credentials("create user bob identified by 'x'"));
+        assert!(has_credentials("ALTER ROLE bob WITH PASSWORD 'x';\nselect 1"));
+        assert!(has_credentials("alter user bob password = 'x'"));
+        assert!(has_credentials("-- psql postgres://me:hunter2@db/app"));
+        assert!(!has_credentials("select id, password_hash from users where password is null"), "naming a column is not a secret");
+        assert!(!has_credentials("select * from secrets"));
     }
 
     #[test]

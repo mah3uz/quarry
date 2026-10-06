@@ -35,9 +35,11 @@ links to pages that don't exist.
 
 ## Updating the terminal captures
 
-The captures are real quarry output. Recreate them in tmux with `COLORTERM=truecolor` and a clean
-`QUARRY_CONFIG_DIR` (so your own settings stay out), save them with `tmux capture-pane -e -p`, then
-rebuild the icon subset so any new icons render:
+The captures are real quarry output. `just docs-captures` remakes all three: it builds a small shop
+database, drives quarry in tmux with a clean config (so your own settings stay out), saves the
+screens, and rebuilds the icon subset so any new icons render. It needs tmux, `pyftsubset`
+(fonttools) and JetBrainsMono Nerd Font Mono. The steps are in `scripts/captures.sh`; the icon
+subset on its own is:
 
 ```sh
 cd docs/.vitepress/theme

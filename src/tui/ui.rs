@@ -194,7 +194,11 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
     let conn_label = app.active_tab().map(|t| app.tab_conn_label(t)).unwrap_or_default();
     let backend = app.active_tab().and_then(|t| t.conn).and_then(|c| app.conn(c)).map(|c| c.backend());
     let max_rows = app.max_rows;
-    let pending_keys = app.keymap.hints(&[("table_apply", "review"), ("table_discard", "discard")]).replace("  ", " · ");
+    let dotted = |actions: &[(&str, &str)]| app.keymap.hints(actions).replace("  ", " · ");
+    let pending_keys = dotted(&[("table_apply", "review"), ("table_discard", "discard")]);
+    let activity_keys = dotted(&[("activity_pause", "pause"), ("activity_refresh", "refresh"), ("activity_kill", "kill")]);
+    let text_keys = dotted(&[("text_copy", "copy"), ("text_to_editor", "open in editor")]);
+    let filter_key = app.keymap.pane_short("table_filter");
     let Some(tab) = app.tabs.get_mut(app.active) else {
         draw_welcome(buf, area, theme, &app.keymap);
         return None;
@@ -243,7 +247,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
         }
         TabKind::Table(t) => {
             let [tool, rest] = Layout::vertical([Constraint::Length(1), Constraint::Min(2)]).areas(area);
-            draw_table_toolbar(buf, tool, t, theme, spinner, backend, &pending_keys);
+            draw_table_toolbar(buf, tool, t, theme, spinner, backend, (&pending_keys, &filter_key));
             let block = pane_block(vec![], focused, theme);
             let inner = block.inner(rest);
             block.render(rest, buf);
@@ -305,7 +309,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
             let line = Line::from(vec![
                 Span::styled(format!(" {} Sessions ", icons::get().activity), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
                 Span::styled(format!("{} · {state} · {ago}", a.grid.row_count()), Style::default().fg(theme.muted)),
-                Span::styled("   p pause · r refresh · K kill · Enter details", Style::default().fg(theme.muted)),
+                Span::styled(format!("   {activity_keys} · Enter details"), Style::default().fg(theme.muted)),
             ]);
             line.render(tool, buf);
             let block = pane_block(vec![], focused, theme);
@@ -324,7 +328,7 @@ fn draw_main(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) -> Opti
                 focused,
                 theme,
             )
-            .title_bottom(Line::from(Span::styled(" y copy · e open in editor · j/k scroll ", Style::default().fg(theme.muted))).right_aligned());
+            .title_bottom(Line::from(Span::styled(format!(" {text_keys} · j/k scroll "), Style::default().fg(theme.muted))).right_aligned());
             let inner = block.inner(area);
             block.render(area, buf);
             render_text(&t.text, if t.sql { backend } else { None }, t.scroll, inner, buf, theme);
@@ -488,11 +492,11 @@ fn draw_messages(buf: &mut Buffer, area: Rect, q: &mut QueryTab, theme: &Theme) 
     Paragraph::new(lines).scroll((q.messages_scroll as u16, 0)).render(Rect { x: area.x + 1, width: area.width.saturating_sub(1), ..area }, buf);
 }
 
-fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme, spinner: &str, backend: Option<Backend>, pending_keys: &str) {
+fn draw_table_toolbar(buf: &mut Buffer, area: Rect, t: &TableTab, theme: &Theme, spinner: &str, backend: Option<Backend>, (pending_keys, filter_key): (&str, &str)) {
     let ic = icons::get();
     let mut spans = vec![Span::styled(format!(" {} {}.{} ", ic.table, t.schema, t.name), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))];
     if t.filter.is_empty() {
-        spans.push(Span::styled(format!(" {} no filter (f) ", ic.filter), Style::default().fg(theme.muted)));
+        spans.push(Span::styled(format!(" {} no filter ({filter_key}) ", ic.filter), Style::default().fg(theme.muted)));
     } else {
         spans.push(Span::styled(" WHERE ", Style::default().fg(theme.keyword).add_modifier(Modifier::BOLD)));
         spans.extend(highlight_spans(&truncate(&t.filter, 50), backend.unwrap_or(Backend::Postgres), theme));
@@ -680,7 +684,10 @@ fn draw_status(buf: &mut Buffer, area: Rect, app: &mut App, theme: &Theme) {
         ]),
         _ => format!("{} help", k(Action::Help)),
     };
-    let hints = hints.replace("Enter ", &format!("{} ", crate::icons::enter()));
+    let hints = match hints.strip_prefix("Enter ") {
+        Some(rest) => format!("{} {rest}", crate::icons::enter()),
+        None => hints,
+    };
     let hints = hints.as_str();
     let hw = hints.width() as u16;
     if rx > x + hw + 2 {

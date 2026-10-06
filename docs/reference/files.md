@@ -33,7 +33,7 @@ With `--config FILE`, `favorites.toml` and `themes/` are read from the directory
 | `history.txt` | Statement history, shared by the REPL and the TUI |
 | `quarry.log` | Every statement, when `log_queries = true` |
 | `credentials.toml` | API keys saved by `--setup-llm` |
-| `ui-state.toml` | The theme you last picked in the TUI, and each connection's query tabs with their text |
+| `ui-state.toml` | The theme you last picked in the TUI, and each connection's open tabs with the text of its query tabs (unless `restore_tabs = false`) |
 
 ## Permissions
 

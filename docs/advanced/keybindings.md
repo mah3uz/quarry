@@ -197,8 +197,21 @@ After the `explorer_script` key, the next key (<kbd>s</kbd> <kbd>i</kbd> <kbd>u<
 | `explorer_new_connection` | <kbd>n</kbd> | New connection |
 | `explorer_disconnect` | <kbd>Ctrl</kbd>+<kbd>X</kbd> | Disconnect |
 
+### Other tabs
+
+| Action | Default keys | Does |
+|---|---|---|
+| `structure_next_section` | <kbd>Tab</kbd>, <kbd>]</kbd> | Structure tab: next section |
+| `structure_prev_section` | <kbd>Shift</kbd>+<kbd>Tab</kbd>, <kbd>[</kbd> | Structure tab: previous section |
+| `activity_pause` | <kbd>p</kbd>, <kbd>Space</kbd> | Activity tab: pause or resume refreshing |
+| `activity_refresh` | <kbd>r</kbd> | Activity tab: refresh now |
+| `activity_kill` | <kbd>K</kbd> | Activity tab: kill the selected session |
+| `text_copy` | <kbd>y</kbd> | A definition or a table's DDL: copy the text |
+| `text_to_editor` | <kbd>e</kbd> | A definition or a table's DDL: open it in a query tab |
+
 A few keys stay fixed: arrows and the other typing keys in the editor, <kbd>Shift</kbd>+arrows
-to select in a grid, <kbd>Esc</kbd>, vim's keys, and the keys of dialogs and the other tabs.
+to select in a grid, scrolling in text and plan views, <kbd>Esc</kbd>, vim's keys, and the keys of
+dialogs. The grid actions apply to query results and table views.
 They're listed in [Keyboard shortcuts](/reference/keys). The hints in the status bar, in notices
 and in the empty editor follow your bindings.
 
@@ -222,8 +235,9 @@ it does without vim. The app-wide keys (run, explain, tabs, palette) work in eve
 | <kbd>0</kbd> <kbd>^</kbd> <kbd>$</kbd> | Line start, first non-blank, line end |
 | <kbd>g</kbd><kbd>g</kbd> <kbd>G</kbd> | First line, last line (`5G` goes to line 5) |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Ctrl</kbd>+<kbd>U</kbd> | Half a page down / up |
-| <kbd>/</kbd> + text, <kbd>Enter</kbd> | Search forward for the text (<kbd>Esc</kbd> cancels) |
-| <kbd>n</kbd> <kbd>N</kbd> | Next / previous match, wrapping round the text |
+| <kbd>/</kbd> or <kbd>?</kbd> + text, <kbd>Enter</kbd> | Search forward or backward for the text (<kbd>Esc</kbd> cancels) |
+| <kbd>n</kbd> <kbd>N</kbd> | The next match in the search's direction / the other way, wrapping round the text |
+| <kbd>.</kbd> | Repeat the last change: `dw`, `ciw` with what you typed, `3dd`, `p`, … |
 | <kbd>i</kbd> <kbd>a</kbd> <kbd>I</kbd> <kbd>A</kbd> | Insert before, after, at line start, at line end |
 | <kbd>o</kbd> <kbd>O</kbd> | New line below / above |
 | <kbd>d</kbd> <kbd>c</kbd> <kbd>y</kbd> <kbd>&gt;</kbd> <kbd>&lt;</kbd> + a motion | Delete, change, yank, indent, dedent: `dw`, `c$`, `y2j`, `>G` |
@@ -243,8 +257,9 @@ can paste them elsewhere, and text copied elsewhere pastes with <kbd>p</kbd>.
 A search is for the text as typed, not a pattern. All in lowercase it matches any case; with a
 capital letter in it, the case must match too.
 
-Not supported: backward search (`?`), search as a motion (`d/x`), marks, macros, registers other
-than the clipboard, `.` to repeat, and `:` commands.
+Not supported: search as a motion (`d/x`), marks, macros, registers other than the clipboard, and
+`:` commands. A SQL editor's commands are a key away already (run, format, explain, save), so
+quarry leaves those to vim itself.
 
 ## Related
 

@@ -52,9 +52,9 @@ The machine formats, `csv`, `tsv`, `json`, `jsonl`, `html`, `sql-insert` and `sq
 only the data. The table formats also print a status line such as `3 rows`. See
 [Output formats](/reference/output-formats) for all of them.
 
-`csv`, `tsv`, `jsonl`, `sql-insert` and `sql-update` are written row by row as the server sends
-them, so a result of any size uses little memory and `quarry … | head` stops the query early. The
-other formats need the whole result before they can print it.
+The machine formats are written as the server sends the rows, so a result of any size uses little
+memory and `quarry … | head` stops the query early. The table formats need the whole result first,
+to size their columns.
 
 In a script, quarry doesn't page, truncate long values, switch to vertical layout, ask before large
 results, or ask for confirmation before destructive statements. Colour is off when stdout isn't a

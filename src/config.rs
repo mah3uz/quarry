@@ -45,6 +45,8 @@ pub struct MainConfig {
     pub timing: bool,
     pub multi_line: bool,
     pub vi: bool,
+    /// The TUI reopens each connection's query tabs with their text.
+    pub restore_tabs: bool,
     pub smart_completion: bool,
     /// upper | lower | auto
     pub keyword_casing: String,
@@ -83,6 +85,7 @@ impl Default for MainConfig {
             timing: true,
             multi_line: true,
             vi: false,
+            restore_tabs: true,
             smart_completion: true,
             keyword_casing: "auto".into(),
             auto_suggest: true,
@@ -414,6 +417,10 @@ multi_line = true
 
 # Vi key bindings instead of Emacs.
 vi = false
+
+# The TUI reopens each connection's query tabs with what you typed in them. The text is kept in
+# ui-state.toml in the data directory, readable only by you. A tab that sets a password is never kept.
+restore_tabs = true
 
 # Context-aware completion (tables after FROM, columns after SELECT, …).
 smart_completion = true

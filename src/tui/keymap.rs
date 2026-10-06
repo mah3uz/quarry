@@ -150,6 +150,10 @@ pub enum Scope {
     Grid,
     Table,
     Explorer,
+    Structure,
+    Activity,
+    /// A definition or other read-only text, including a structure tab's DDL.
+    Text,
 }
 
 impl Scope {
@@ -159,12 +163,17 @@ impl Scope {
             Scope::Grid => "Results grid",
             Scope::Table => "Table view",
             Scope::Explorer => "Explorer",
+            Scope::Structure => "Structure tab",
+            Scope::Activity => "Activity tab",
+            Scope::Text => "Definition and DDL",
         }
     }
 
-    /// A table view is a grid too, so the two can't give one key two meanings.
+    /// A table view is a grid too, and a structure tab shows DDL as text, so each pair can't give
+    /// one key two meanings.
     fn overlaps(self, other: Scope) -> bool {
-        self == other || matches!((self, other), (Scope::Grid, Scope::Table) | (Scope::Table, Scope::Grid))
+        let together = |a, b| matches!((a, b), (Scope::Grid, Scope::Table) | (Scope::Structure, Scope::Text));
+        self == other || together(self, other) || together(other, self)
     }
 }
 
@@ -251,6 +260,13 @@ pub const PANE_ACTIONS: &[PaneAction] = &[
     pane("explorer_reload", Scope::Explorer, "Reload the schema", &["r", "f5"]),
     pane("explorer_new_connection", Scope::Explorer, "New connection", &["n"]),
     pane("explorer_disconnect", Scope::Explorer, "Disconnect", &["ctrl+x"]),
+    pane("structure_next_section", Scope::Structure, "Next section", &["tab", "]"]),
+    pane("structure_prev_section", Scope::Structure, "Previous section", &["shift+tab", "["]),
+    pane("activity_pause", Scope::Activity, "Pause or resume refreshing", &["p", "space"]),
+    pane("activity_refresh", Scope::Activity, "Refresh now", &["r"]),
+    pane("activity_kill", Scope::Activity, "Kill the selected session", &["K"]),
+    pane("text_copy", Scope::Text, "Copy the text", &["y"]),
+    pane("text_to_editor", Scope::Text, "Open the text in a query tab", &["e"]),
 ];
 
 macro_rules! actions {

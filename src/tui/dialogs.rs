@@ -332,6 +332,15 @@ pub const FIXED_KEYS: &[(&str, &[(&str, &str)])] = &[
     ("Explorer", &[
         ("s i u d c x n, after the script key", "Write a SELECT / INSERT / UPDATE / DELETE / CREATE / DROP / COUNT"),
     ]),
+    ("Structure tab", &[
+        ("1 … 7", "Jump to a section"),
+    ]),
+    ("Activity tab", &[
+        ("Enter", "Session details"),
+    ]),
+    ("Definition and DDL", &[
+        ("j k · PgUp PgDn · g G", "Scroll"),
+    ]),
     ("Mouse", &[
         ("Click", "Focus a pane, pick a tab, a row, a button or a list item"),
         ("Middle click on a tab", "Close it"),

@@ -269,7 +269,7 @@ impl Session {
                 }
             }
 
-        let live = (!self.interactive && self.opts.format.is_streamable() && !self.sinks.is_active())
+        let live = (!self.interactive && self.opts.format.is_machine() && !self.sinks.is_active())
             .then(|| self.plain_opts());
         let outcome = self.execute_streaming(sql, live);
         self.after_execute(sql, &outcome);
@@ -324,6 +324,7 @@ impl Session {
             let mut stdout_closed = false;
             let mut asked = false;
             let mut waited = Duration::ZERO;
+            let mut stream: Option<output::Stream> = None;
             loop {
                 tokio::select! {
                     r = &mut exec, if result.is_none() => result = Some(r),
@@ -331,7 +332,10 @@ impl Session {
                         None => rx_open = false,
                         Some(ExecEvent::Columns(columns)) => {
                             if let Some(opts) = &live {
-                                stdout_closed |= write_stdout(&output::render(&columns, &[], opts)).is_err();
+                                let ended = stream.take().map(output::Stream::close).unwrap_or_default();
+                                let (next, head) = output::Stream::open(columns.clone(), opts.clone());
+                                stream = Some(next);
+                                stdout_closed |= write_stdout(&(ended + &head)).is_err();
                             }
                             blocks.push(Block { columns, rows: Vec::new(), summary: Summary::default() });
                         }
@@ -343,8 +347,9 @@ impl Session {
                                 blocks.push(Block { columns: Vec::new(), rows: Vec::new(), summary: Summary::default() });
                             }
                             let b = blocks.last_mut().unwrap();
-                            if let Some(opts) = &live {
-                                stdout_closed |= write_stdout(&output::render_rows(&b.columns, &rows, opts)).is_err();
+                            if live.is_some() {
+                                let part = stream.as_mut().map(|s| s.rows(&rows)).unwrap_or_default();
+                                stdout_closed |= write_stdout(&part).is_err();
                                 // Nobody is reading any more (`| head`), so the rest isn't worth fetching.
                                 if stdout_closed {
                                     discard = true;
@@ -389,6 +394,9 @@ impl Session {
                 if result.is_some() && !rx_open {
                     break;
                 }
+            }
+            if let Some(s) = stream {
+                let _ = write_stdout(&s.close());
             }
             let mut result = result.unwrap_or(Ok(()));
             if (truncated.is_some() || stdout_closed)

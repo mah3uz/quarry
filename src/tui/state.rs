@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::tabs::{Scope, Tab, TabKind};
 use super::worker::ConnId;
+use crate::repl::editing::has_credentials;
 
 /// Larger editor text is not kept: the state file is rewritten whenever a tab changes.
 const MAX_TEXT: usize = 1 << 20;
@@ -13,7 +14,7 @@ const MAX_TEXT: usize = 1 << 20;
 #[derive(Default, Serialize, Deserialize)]
 pub struct UiState {
     pub theme: Option<String>,
-    /// The query tabs to reopen for a connection, by its name.
+    /// The tabs to reopen for a connection, by its saved name or else where it points.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub tabs: BTreeMap<String, SavedTabs>,
 }
@@ -27,12 +28,27 @@ pub struct SavedTabs {
     pub tabs: Vec<SavedTab>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SavedKind {
+    #[default]
+    Query,
+    Table,
+    Structure,
+}
+
+/// A query tab with its text, or a table or structure tab by the relation it shows (`schema`, `name`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SavedTab {
+    pub kind: SavedKind,
     pub title: String,
     pub text: String,
     pub database: Option<String>,
     pub schema: Option<String>,
+    pub name: Option<String>,
+    /// A table tab's WHERE filter.
+    pub filter: Option<String>,
     pub file: Option<PathBuf>,
 }
 
@@ -43,24 +59,43 @@ impl SavedTab {
 }
 
 impl SavedTabs {
-    /// The query tabs of `conn` worth reopening: those with text or a file.
+    /// The tabs of `conn` worth reopening: query tabs with text or a file, and table and structure
+    /// tabs. A query tab that spells out a credential is left out, as such a statement is left out
+    /// of the history.
     pub fn of(tabs: &[Tab], active: usize, conn: ConnId) -> SavedTabs {
         let mut saved = SavedTabs::default();
-        for (i, tab) in tabs.iter().enumerate() {
-            let TabKind::Query(q) = &tab.kind else { continue };
-            let text = q.editor.text();
-            if tab.conn != Some(conn) || text.len() > MAX_TEXT || (text.trim().is_empty() && q.file.is_none()) {
-                continue;
-            }
+        for (i, tab) in tabs.iter().enumerate().filter(|(_, t)| t.conn == Some(conn)) {
+            let title = tab.title.clone();
+            let relation = |kind, schema: &str, name: &str| SavedTab {
+                kind,
+                title: title.clone(),
+                schema: Some(schema.into()),
+                name: Some(name.into()),
+                ..Default::default()
+            };
+            let tab = match &tab.kind {
+                TabKind::Query(q) => {
+                    let text = q.editor.text();
+                    if text.len() > MAX_TEXT || (text.trim().is_empty() && q.file.is_none()) || has_credentials(&text) {
+                        continue;
+                    }
+                    let (database, schema) = match q.scope.clone() {
+                        Some(Scope::Database(d)) => (Some(d), None),
+                        Some(Scope::Schema(s)) => (None, Some(s)),
+                        None => (None, None),
+                    };
+                    SavedTab { title, text, database, schema, file: q.file.clone(), ..Default::default() }
+                }
+                TabKind::Table(t) => {
+                    SavedTab { filter: Some(t.filter.clone()).filter(|f| !f.is_empty()), ..relation(SavedKind::Table, &t.schema, &t.name) }
+                }
+                TabKind::Structure(s) => relation(SavedKind::Structure, &s.schema, &s.name),
+                _ => continue,
+            };
             if i <= active {
                 saved.active = saved.tabs.len();
             }
-            let (database, schema) = match q.scope.clone() {
-                Some(Scope::Database(d)) => (Some(d), None),
-                Some(Scope::Schema(s)) => (None, Some(s)),
-                None => (None, None),
-            };
-            saved.tabs.push(SavedTab { title: tab.title.clone(), text, database, schema, file: q.file.clone() });
+            saved.tabs.push(tab);
         }
         saved
     }
@@ -105,6 +140,11 @@ mod tests {
         assert_eq!(saved.tabs[0].scope(), Some(Scope::Schema("reports".into())));
         assert_eq!(saved.active, 0, "the tab in front is found again after the empty one is dropped");
         assert!(SavedTabs::of(&tabs[..1], 0, 0).tabs.is_empty());
+        let table = Tab { id: 0, conn: Some(0), title: "orders".into(), kind: TabKind::Table(Box::new(crate::tui::tabs::TableTab::new("shop", "orders"))) };
+        let saved = SavedTabs::of(&[table], 0, 0);
+        assert_eq!((saved.tabs[0].kind, saved.tabs[0].schema.as_deref(), saved.tabs[0].name.as_deref()), (SavedKind::Table, Some("shop"), Some("orders")));
+        let secret = [query_tab(0, "Query 1", "alter role app password 'hunter2'")];
+        assert!(SavedTabs::of(&secret, 0, 0).tabs.is_empty(), "a password must not end up in the state file");
     }
 
     #[test]
@@ -123,5 +163,7 @@ mod tests {
         let st: UiState = toml::from_str("theme = \"nord\"\n").unwrap();
         assert_eq!(st.theme.as_deref(), Some("nord"));
         assert!(st.tabs.is_empty());
+        let st: UiState = toml::from_str("[[tabs.db.tabs]]\ntitle = \"Query 1\"\ntext = \"select 1\"\n").unwrap();
+        assert_eq!(st.tabs["db"].tabs[0].kind, SavedKind::Query, "a tab saved before there were kinds is a query tab");
     }
 }

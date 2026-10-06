@@ -192,14 +192,16 @@ fn jsonl_is_one_object_per_line() {
 }
 
 #[test]
-fn a_streamable_format_printed_in_parts_is_the_whole_result() {
+fn a_machine_format_printed_in_parts_is_the_whole_result() {
     let (c, r) = sample();
-    for (_, format) in TableFormat::ALL.iter().filter(|(_, f)| f.is_streamable()) {
+    for (_, format) in TableFormat::ALL.iter().filter(|(_, f)| f.is_machine()) {
         let o = opts(*format);
-        let parts = render(&c, &[], &o) + &render_rows(&c, &r[..1], &o) + &render_rows(&c, &r[1..], &o);
+        let (mut stream, head) = Stream::open(c.clone(), o.clone());
+        let parts = head + &stream.rows(&r[..1]) + &stream.rows(&[]) + &stream.rows(&r[1..]) + &stream.close();
         assert_eq!(parts, render(&c, &r, &o), "{format:?}");
+        let (stream, head) = Stream::open(c.clone(), o.clone());
+        assert_eq!(head + &stream.close(), render(&c, &[], &o), "{format:?} with no rows");
     }
-    assert!(!TableFormat::Json.is_streamable(), "a JSON array needs its closing bracket after the last row");
 }
 
 #[test]

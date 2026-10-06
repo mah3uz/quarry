@@ -332,6 +332,11 @@ docs-og: docs-deps
     cd docs && chromium --headless=new --disable-gpu --hide-scrollbars --allow-file-access-from-files \
       --window-size=1200,630 --virtual-time-budget=3000 --screenshot="$PWD/public/og.png" "file://$PWD/.vitepress/og.html"
 
+# Remake the site's terminal captures from a real quarry session (needs tmux, pyftsubset and the Nerd Font)
+[group('docs')]
+docs-captures: build
+    scripts/captures.sh
+
 # Build the docs site and deploy it to Cloudflare (quarry.asmechanics.com); needs `wrangler login` once
 [group('docs')]
 docs-deploy: docs-build

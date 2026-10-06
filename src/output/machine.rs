@@ -14,6 +14,17 @@ pub(super) fn render(columns: &[Column], rows: &[Row], opts: &OutputOptions) -> 
     }
 }
 
+const HTML_TAIL: &str = "  </tbody>\n</table>\n";
+
+/// What a format writes after its last row.
+pub(super) fn tail(format: TableFormat) -> &'static str {
+    match format {
+        TableFormat::Json => "\n]\n",
+        TableFormat::Html => HTML_TAIL,
+        _ => "",
+    }
+}
+
 fn get(row: &Row, i: usize) -> &Value {
     row.get(i).unwrap_or(&Value::Null)
 }
@@ -208,7 +219,7 @@ fn html(columns: &[Column], rows: &[Row], null: &str) -> String {
         }
         out.push_str("</tr>\n");
     }
-    out.push_str("  </tbody>\n</table>\n");
+    out.push_str(HTML_TAIL);
     out
 }
 

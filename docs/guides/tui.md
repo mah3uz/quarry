@@ -205,10 +205,12 @@ transaction asks first, and the transaction is rolled back.
 
 ## Things to know
 
-- Your query tabs and what you typed in them come back the next time you open the same connection.
-  They are kept per connection, saved as you work, so a closed terminal doesn't lose them. Empty
-  tabs, results, and table and structure tabs aren't kept. The text is stored in `ui-state.toml`
-  (see [Files](/reference/files)), readable only by you.
+- Your tabs come back the next time you open the same connection: query tabs with what you typed,
+  and table and structure tabs (a table keeps its filter). They are kept per connection and saved
+  as you work, so a closed terminal doesn't lose them. Query results aren't kept, since showing
+  them again would mean running your statements for you. The text is stored in `ui-state.toml`
+  (see [Files](/reference/files)), readable only by you; a query tab that sets a password is never
+  stored. `restore_tabs = false` turns all of this off and deletes what was kept.
 - Quitting asks for confirmation if a query is running, a transaction is open, or a table view has
   unapplied edits.
 - `--theme`, `--icons` and `--no-color` apply to the TUI too. After `\tui`, the TUI keeps the

@@ -270,10 +270,14 @@ impl Editor {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> EditorEvent {
-        use EditorEvent::*;
         if key.kind == KeyEventKind::Release {
-            return Unhandled;
+            return EditorEvent::Unhandled;
         }
+        if self.vim.is_some() { self.vim_handle(key) } else { self.key_event(key) }
+    }
+
+    fn key_event(&mut self, key: KeyEvent) -> EditorEvent {
+        use EditorEvent::*;
         if self.vim.is_some()
             && let Some(ev) = self.vim_key(key)
         {
@@ -436,7 +440,7 @@ impl Editor {
 
     /// Terminal cell of the cursor inside `area`, or `None` when scrolled out of view.
     pub fn cursor_screen_position(&self, area: Rect) -> Option<(u16, u16)> {
-        if let Some(pattern) = self.vim_search() {
+        if let Some((_, pattern)) = self.vim_search() {
             let x = area.x + (1 + pattern.width() as u16).min(area.width.saturating_sub(1));
             return (area.height > 0).then(|| (x, area.bottom() - 1));
         }
@@ -558,10 +562,10 @@ impl Editor {
                 }
             }
         }
-        if let Some(pattern) = self.vim_search() {
+        if let Some((mark, pattern)) = self.vim_search() {
             let row = Rect::new(area.x, area.bottom() - 1, area.width, 1);
             buf.set_style(row, Style::default().fg(theme.fg).bg(theme.surface));
-            buf.set_stringn(row.x, row.y, format!("/{pattern:<w$}", w = row.width as usize), row.width as usize, Style::default());
+            buf.set_stringn(row.x, row.y, format!("{mark}{pattern:<w$}", w = row.width as usize), row.width as usize, Style::default());
         }
     }
 
@@ -1383,7 +1387,7 @@ mod tests {
         let text = "select id from users\nwhere ID > 1\n  and name = 'Id'";
         let mut e = vim(text, 0);
         vk(&mut e, "/id");
-        assert_eq!(e.vim_search(), Some("id"));
+        assert_eq!(e.vim_search(), Some(('/', "id")));
         assert_eq!(e.cursor_byte(), 0, "nothing moves until Enter");
         key(&mut e, KeyCode::Enter, NONE);
         assert_eq!((e.vim_search(), e.cursor_byte()), (None, 7));
@@ -1403,6 +1407,39 @@ mod tests {
         vk(&mut e, "/x\x1b");
         assert_eq!(e.vim_search(), None);
         assert_eq!(e.text(), text, "typing a pattern never edits the text");
+    }
+
+    #[test]
+    fn vim_question_mark_searches_backward_and_n_keeps_going_that_way() {
+        let text = "a id\nb id\nc id";
+        let mut e = vim(text, text.len() - 1);
+        vk(&mut e, "?id");
+        assert_eq!(e.vim_search(), Some(('?', "id")));
+        key(&mut e, KeyCode::Enter, NONE);
+        assert_eq!(e.cursor_byte(), 12, "the match on the cursor's own line, before it");
+        vk(&mut e, "n");
+        assert_eq!(e.cursor_byte(), 7, "n continues backward after ?");
+        vk(&mut e, "N");
+        assert_eq!(e.cursor_byte(), 12, "N goes the other way");
+    }
+
+    #[test]
+    fn vim_dot_repeats_the_last_change() {
+        let mut e = vim("one two three four", 0);
+        vk(&mut e, "dw.");
+        assert_eq!(e.text(), "three four", "a delete is repeated");
+        vk(&mut e, "ciwX\x1bw.");
+        assert_eq!(e.text(), "X X", "a change is repeated with the text that was typed");
+        vk(&mut e, "0.");
+        assert_eq!(e.text(), "X X", "moving the cursor is not a change, so the last change stays the one to repeat");
+
+        let mut e = vim("a\nb\nc\nd", 0);
+        vk(&mut e, "2dd");
+        vk(&mut e, "u.");
+        assert_eq!(e.text(), "c\nd", "undo is not what . repeats; the delete is");
+        let mut e = vim("x", 0);
+        vk(&mut e, ".");
+        assert_eq!(e.text(), "x", "nothing to repeat yet");
     }
 
     #[test]

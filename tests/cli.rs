@@ -348,12 +348,16 @@ fn a_failing_command_fails_the_run_like_failing_sql_does() {
 fn a_large_result_is_written_whole_as_it_arrives() {
     let dir = test_dir("stream");
     let sql = "with recursive n(i) as (select 1 union all select i + 1 from n where i < 50000) select i, 'r' || i as label from n";
-    for (format, lines) in [("tsv", 50001), ("csv", 50001), ("jsonl", 50000)] {
+    for (format, lines) in [("tsv", 50001), ("csv", 50001), ("jsonl", 50000), ("json", 50002)] {
         let o = quarry_in(&dir, &[":memory:", "-F", format, "-e", sql], "");
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         let out = stdout(&o);
         assert_eq!(out.lines().count(), lines, "{format}: one header at most, and no row lost between batches");
-        assert!(out.lines().last().unwrap().contains("r50000"), "{format}: {:?}", out.lines().last());
+        assert!(out.lines().rev().take(2).any(|l| l.contains("r50000")), "{format}: {:?}", out.lines().last());
+        if format == "json" {
+            let rows: Vec<serde_json::Value> = serde_json::from_str(&out).expect("batches joined into one valid array");
+            assert_eq!(rows.len(), 50000);
+        }
     }
 }
 

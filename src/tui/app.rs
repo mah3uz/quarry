@@ -12,7 +12,7 @@ use super::dialogs::{Confirm, ConnectEvent, ConnectForm, DialogResult, HelpRow, 
 use super::keymap::{Action, Keymap, PANE_ACTIONS, Scope as KeyScope};
 use super::palette::{Item, Palette, PaletteEvent};
 use super::sidebar::{self, Script, Sidebar};
-use super::state::{self, SavedTabs};
+use super::state::{self, SavedKind, SavedTabs};
 use super::tabs::*;
 use super::widgets::editor::{EditorEvent, VimMode};
 use super::widgets::grid::{CopyKind, GridEvent, GridState};
@@ -269,6 +269,14 @@ impl App {
         for w in warnings {
             app.toast(Level::Warning, w);
         }
+        // turning the setting off also forgets what was kept while it was on
+        if !app.config.main.restore_tabs {
+            let mut st = state::load();
+            if !st.tabs.is_empty() {
+                st.tabs.clear();
+                state::save(&st);
+            }
+        }
         app
     }
 
@@ -311,6 +319,9 @@ impl App {
     /// Writes the open connections' query tabs to the state file, if they changed.
     fn remember_tabs(&mut self) {
         self.remembered_at = Instant::now();
+        if !self.config.main.restore_tabs {
+            return;
+        }
         let open: Vec<(String, SavedTabs)> =
             self.conns.iter().flatten().map(|c| (self.tabs_key(c), SavedTabs::of(&self.tabs, self.active, c.id))).collect();
         if open == self.remembered {
@@ -330,20 +341,36 @@ impl App {
 
     /// Reopens the query tabs this connection had when it was last used. False when there were none.
     fn restore_tabs(&mut self, conn: ConnId) -> bool {
+        if !self.config.main.restore_tabs {
+            return false;
+        }
         let Some(key) = self.conn(conn).map(|c| self.tabs_key(c)) else { return false };
         let Some(saved) = state::load().tabs.remove(&key).filter(|s| !s.tabs.is_empty()) else { return false };
         let first = self.tabs.len();
         for t in &saved.tabs {
-            let idx = self.new_query_tab(Some(conn), Some(t.text.clone()));
-            let tab = &mut self.tabs[idx];
-            tab.title = t.title.clone();
-            if let TabKind::Query(q) = &mut tab.kind {
-                q.scope = t.scope();
-                q.file = t.file.clone();
+            match (t.kind, t.schema.clone(), t.name.clone()) {
+                (SavedKind::Table, Some(schema), Some(name)) => {
+                    self.open_table(conn, schema, name);
+                    if let Some(Tab { kind: TabKind::Table(table), .. }) = self.tabs.last_mut() {
+                        table.filter = t.filter.clone().unwrap_or_default();
+                    }
+                }
+                (SavedKind::Structure, Some(schema), Some(name)) => self.open_structure(conn, schema, name),
+                _ => {
+                    let idx = self.new_query_tab(Some(conn), Some(t.text.clone()));
+                    let tab = &mut self.tabs[idx];
+                    tab.title = t.title.clone();
+                    if let TabKind::Query(q) = &mut tab.kind {
+                        q.scope = t.scope();
+                        q.file = t.file.clone();
+                    }
+                }
             }
         }
-        self.active = first + saved.active.min(saved.tabs.len() - 1);
-        true
+        let restored = self.tabs.len() - first;
+        self.active = first + saved.active.min(restored.saturating_sub(1));
+        self.focus = Focus::Main;
+        restored > 0
     }
 
     pub fn shutdown(&mut self) {
@@ -2138,6 +2165,9 @@ impl App {
     }
 
     fn on_structure_key(&mut self, key: KeyEvent) {
+        let ddl = matches!(&self.tabs[self.active].kind, TabKind::Structure(s) if s.section == StructSection::Ddl);
+        let scopes: &[KeyScope] = if ddl { &[KeyScope::Structure, KeyScope::Text] } else { &[KeyScope::Structure] };
+        let Some(key) = self.keymap.pane_key(scopes, key, false) else { return };
         let tab_id = self.tabs[self.active].id;
         let backend = self.tabs[self.active].conn.and_then(|c| self.conn(c)).map(|c| c.backend()).unwrap_or(Backend::Postgres);
         let TabKind::Structure(s) = &mut self.tabs[self.active].kind else { return };
@@ -2180,6 +2210,7 @@ impl App {
     }
 
     fn on_activity_key(&mut self, key: KeyEvent) {
+        let Some(key) = self.keymap.pane_key(&[KeyScope::Activity], key, false) else { return };
         let tab_id = self.tabs[self.active].id;
         let backend = self.tabs[self.active].conn.and_then(|c| self.conn(c)).map(|c| c.backend()).unwrap_or(Backend::Postgres);
         let TabKind::Activity(a) = &mut self.tabs[self.active].kind else { return };
@@ -2216,6 +2247,7 @@ impl App {
     }
 
     fn on_text_key(&mut self, key: KeyEvent) {
+        let Some(key) = self.keymap.pane_key(&[KeyScope::Text], key, false) else { return };
         let conn = self.tabs[self.active].conn;
         let TabKind::Text(t) = &mut self.tabs[self.active].kind else { return };
         let lines = t.text.lines().count();

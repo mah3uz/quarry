@@ -1,5 +1,6 @@
 //! Vim-style modal editing for [`Editor`]: normal, insert, visual and visual-line modes with the
-//! common motions, operators (`d`, `c`, `y`, `>`, `<`), counts and `/` search. Insert mode is the ordinary editor.
+//! common motions, operators (`d`, `c`, `y`, `>`, `<`), counts, `/` and `?` search and `.` to repeat.
+//! Insert mode is the ordinary editor.
 
 use super::*;
 
@@ -33,10 +34,17 @@ pub struct Vim {
     prefix: Option<char>,
     /// The row visual-line mode started on.
     line_anchor: usize,
-    /// The pattern being typed after `/`.
+    /// The pattern being typed after `/` or `?`.
     search: Option<String>,
     /// The last pattern searched for, which `n` and `N` repeat.
     last_search: String,
+    /// The search goes backward: `?` rather than `/`.
+    backward: bool,
+    /// The keys of the command in progress, and whether it has changed the text.
+    keys: Vec<KeyEvent>,
+    changed: bool,
+    /// The keys of the last command that changed the text, which `.` types again.
+    last_change: Vec<KeyEvent>,
 }
 
 impl Vim {
@@ -69,9 +77,50 @@ impl Editor {
         self.vim.as_ref().map(|v| v.mode)
     }
 
-    /// The pattern being typed after `/`, for the editor to show.
-    pub fn vim_search(&self) -> Option<&str> {
-        self.vim.as_ref()?.search.as_deref()
+    /// The pattern being typed after `/` or `?`, with that character, for the editor to show.
+    pub fn vim_search(&self) -> Option<(char, &str)> {
+        let v = self.vim.as_ref()?;
+        Some((if v.backward { '?' } else { '/' }, v.search.as_deref()?))
+    }
+
+    /// In normal mode with no command half typed.
+    fn vim_idle(&self) -> bool {
+        self.vim.as_ref().is_some_and(|v| v.mode == VimMode::Normal && !v.pending() && v.search.is_none())
+    }
+
+    /// Handles `key` with vim on, keeping the keys of each command that changes the text so that
+    /// `.` can type them again.
+    pub(super) fn vim_handle(&mut self, key: KeyEvent) -> EditorEvent {
+        let starting = self.vim_idle();
+        let plain = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        if starting && plain && key.code == KeyCode::Char('.') {
+            let keys = self.vim.as_ref().map(|v| v.last_change.clone()).unwrap_or_default();
+            if self.read_only || keys.is_empty() {
+                return EditorEvent::Moved;
+            }
+            for k in keys {
+                self.key_event(k);
+            }
+            return EditorEvent::Changed;
+        }
+        let before = self.generation;
+        let ev = self.key_event(key);
+        let changed = self.generation != before;
+        let idle = self.vim_idle();
+        // undo and redo change the text too, but repeating them would only walk the history
+        let undo = starting && matches!(key.code, KeyCode::Char('u' | 'r'));
+        if let Some(v) = self.vim.as_mut() {
+            if starting {
+                v.keys.clear();
+                v.changed = false;
+            }
+            v.keys.push(key);
+            v.changed |= changed && !undo;
+            if idle && v.changed {
+                v.last_change = std::mem::take(&mut v.keys);
+            }
+        }
+        ev
     }
 
     fn search_key(&mut self, v: &mut Vim, key: KeyEvent) -> EditorEvent {
@@ -84,7 +133,7 @@ impl Editor {
                 if !pattern.is_empty() {
                     v.last_search = pattern;
                 }
-                self.search_jump(v, true, 1);
+                self.search_jump(v, !v.backward, 1);
             }
             KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => pattern.push(c),
             _ => {}
@@ -391,12 +440,14 @@ impl Editor {
             v.count = Some(v.count.unwrap_or(0) * 10 + c.to_digit(10).unwrap_or(0) as usize);
             return Moved;
         }
-        if v.op.is_none() && matches!(c, '/' | 'n' | 'N') {
+        if v.op.is_none() && matches!(c, '/' | '?' | 'n' | 'N') {
             let count = v.count.take().unwrap_or(1).max(1);
-            if c == '/' {
+            if matches!(c, '/' | '?') {
                 v.search = Some(String::new());
+                v.backward = c == '?';
             } else {
-                self.search_jump(v, c == 'n', count);
+                // n keeps the direction of the search, N turns it round
+                self.search_jump(v, (c == 'n') != v.backward, count);
             }
             return Moved;
         }

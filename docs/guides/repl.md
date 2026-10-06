@@ -47,7 +47,9 @@ changes it, and `delimiter ;` restores it.
 
 A menu of suggestions opens as you type. Take the highlighted one with <kbd>Tab</kbd> or
 <kbd>Enter</kbd>, move with <kbd>↑</kbd> / <kbd>↓</kbd>. While the menu is open <kbd>Enter</kbd>
-only completes; press it again to run the line.
+completes, and a second <kbd>Enter</kbd> runs the line. When the highlighted suggestion is exactly
+what you have typed there is nothing to complete, so <kbd>Enter</kbd> runs the line at once: `\d`
+runs even though `\dt` and `\df` are listed below it.
 
 What you get depends on where the cursor is:
 

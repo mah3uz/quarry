@@ -93,14 +93,6 @@ impl TableFormat {
                 | TableFormat::SqlInsert | TableFormat::SqlUpdate
         )
     }
-
-    /// Formats that write each row on its own, so a result can be printed as its rows arrive.
-    pub fn is_streamable(self) -> bool {
-        matches!(
-            self,
-            TableFormat::Csv | TableFormat::Tsv | TableFormat::JsonLines | TableFormat::SqlInsert | TableFormat::SqlUpdate
-        )
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -161,10 +153,50 @@ pub fn render(columns: &[Column], rows: &[Row], opts: &OutputOptions) -> String 
     table::render(columns, rows, opts)
 }
 
-/// The rows alone in a streamable format: what `render` writes after its header.
-pub fn render_rows(columns: &[Column], rows: &[Row], opts: &OutputOptions) -> String {
-    let header = render(columns, &[], opts).len();
-    render(columns, rows, opts).split_off(header)
+/// A result in a machine format, written in parts so it can be printed as its rows arrive. The
+/// parts together are exactly what [`render`] gives for the whole result.
+pub struct Stream {
+    columns: Vec<Column>,
+    opts: OutputOptions,
+    any_rows: bool,
+}
+
+impl Stream {
+    /// The stream, and what comes before the first row.
+    pub fn open(columns: Vec<Column>, opts: OutputOptions) -> (Stream, String) {
+        let head = match opts.format {
+            TableFormat::Json => String::new(),
+            _ => {
+                let mut empty = render(&columns, &[], &opts);
+                empty.truncate(empty.len() - machine::tail(opts.format).len());
+                empty
+            }
+        };
+        (Stream { columns, opts, any_rows: false }, head)
+    }
+
+    pub fn rows(&mut self, rows: &[Row]) -> String {
+        if rows.is_empty() || self.columns.is_empty() {
+            return String::new();
+        }
+        let all = render(&self.columns, rows, &self.opts);
+        let first = !std::mem::replace(&mut self.any_rows, true);
+        let tail = machine::tail(self.opts.format).len();
+        match self.opts.format {
+            // a JSON array has no bracket until it has a row, and a comma between rows, not after them
+            TableFormat::Json => format!("{}{}", if first { "[\n" } else { ",\n" }, &all["[\n".len()..all.len() - tail]),
+            _ => all[render(&self.columns, &[], &self.opts).len() - tail..all.len() - tail].to_string(),
+        }
+    }
+
+    /// What comes after the last row.
+    pub fn close(self) -> String {
+        match self.opts.format {
+            TableFormat::Json if !self.any_rows && !self.columns.is_empty() => "[]\n".into(),
+            _ if self.columns.is_empty() => String::new(),
+            format => machine::tail(format).into(),
+        }
+    }
 }
 
 /// Display text of one value, with NULL replaced by `null`. Shared with the TUI grid.

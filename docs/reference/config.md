@@ -43,6 +43,7 @@ optional: delete a line to get the default back.
 | `timing` | `true` | `true`, `false` | Show how long each statement took |
 | `multi_line` | `true` | `true`, `false` | <kbd>Enter</kbd> runs only finished statements |
 | `vi` | `false` | `true`, `false` | Vi keys in the REPL and [vim mode](/advanced/keybindings#vim-mode) in the TUI's editor |
+| `restore_tabs` | `true` | `true`, `false` | The TUI reopens each connection's query, table and structure tabs. `false` also deletes what was kept. |
 | `enable_pager` | `true` | `true`, `false` | Page output that doesn't fit the screen |
 | `pager` | not set | A command | Pager command. Not set: `$PAGER`, then `less -SRXF`. |
 | `history_size` | `10000` | Number (minimum 100) | History entries to keep |

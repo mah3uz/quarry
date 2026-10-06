@@ -1,5 +1,6 @@
 pub mod editing;
 pub mod highlight;
+mod menu;
 pub mod prompt;
 pub mod session;
 pub mod spinner;
@@ -189,7 +190,7 @@ fn build_editor(session: &Session, toggles: &Toggles) -> Result<Reedline> {
         .with_history(Box::new(SafeHistory { inner: history }))
         .with_highlighter(Box::new(hl))
         .with_completer(Box::new(ReplCompleter { state: session.edit.clone() }))
-        .with_menu(ReedlineMenu::EngineCompleter(Box::new(menu)))
+        .with_menu(ReedlineMenu::EngineCompleter(Box::new(menu::CompletionMenu::new(menu))))
         .with_validator(Box::new(ReplValidator { state: session.edit.clone() }))
         .with_edit_mode(edit_mode)
         .with_quick_completions(false)
@@ -203,7 +204,7 @@ fn build_editor(session: &Session, toggles: &Toggles) -> Result<Reedline> {
 
 fn add_bindings(kb: &mut Keybindings, complete_while_typing: bool) {
     // Tab takes the highlighted (best) match or opens the menu; Enter takes it too, and runs
-    // only when no menu has anything to offer.
+    // when no menu has anything to offer (`CompletionMenu` offers nothing that is already typed).
     kb.add_binding(
         KeyModifiers::NONE,
         KeyCode::Tab,
