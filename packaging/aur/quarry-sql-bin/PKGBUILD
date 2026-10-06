@@ -18,7 +18,7 @@ provides=('quarry-sql')
 conflicts=('quarry-sql' 'quarry')
 options=('!strip' '!debug')
 source=("$url/releases/download/v$pkgver/$_pkgname-$pkgver-x86_64-unknown-linux-gnu.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('4ad6a9021e9c54aa0a6344b6356d97a883a380c4d98d49402b13e6aad37d11de')
 
 package() {
   cd "$_pkgname-$pkgver-x86_64-unknown-linux-gnu"

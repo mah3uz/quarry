@@ -2,7 +2,7 @@ class Quarry < Formula
   desc "Fast SQL client and TUI for PostgreSQL, MySQL / MariaDB and SQLite"
   homepage "https://quarry.asmechanics.com"
   url "https://github.com/mah3uz/quarry/archive/refs/tags/v0.2.0.tar.gz"
-  sha256 "9125110845948fb586e13d3f9f28291bd979c1f6a33771788bbee1917cc1e0e3"
+  sha256 "8807b4193053bad2104d54212715ef37b95abcf85e8a15b29ad005a62e602550"
   license "MIT"
   head "https://github.com/mah3uz/quarry.git", branch: "main"
 

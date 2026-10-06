@@ -19,7 +19,7 @@ conflicts=('quarry')
 # makepkg's -flto turns the bundled C code (SQLite, aws-lc) into GCC LTO objects the Rust link can't resolve.
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('8807b4193053bad2104d54212715ef37b95abcf85e8a15b29ad005a62e602550')
 
 prepare() {
   cd "$_pkgname-$pkgver"
