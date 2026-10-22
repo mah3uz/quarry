@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useData, withBase } from 'vitepress'
 import Terminal from './Terminal.vue'
 
@@ -108,8 +108,97 @@ const flecks = Array.from({ length: 46 }, (_, i) => {
   }
 })
 
-// Off screen, the section's CSS animations pause.
+// Queries ride the seam into the terminal and their results ride out the other side. Short ones,
+// so a whole query fits beside the terminal on a laptop.
+const trips = [
+  ['select count(*) from users', '512'],
+  ['select max(id) from orders', '1284'],
+  ['select now()', '2026-10-22 09:14:07'],
+  ['select 6 * 7', '42'],
+  ['select version()', 'PostgreSQL 17.6'],
+  ['select name from users', 'Ada, Linus, Grace…'],
+  ['select * from orders', '{"id":1,"status":"paid"}'],
+  ['select sum(qty) from items', '9431'],
+  ['select status from orders', 'paid, shipped, paid…'],
+  ['select current_user', 'postgres'],
+]
+const query = ref('')
+const result = ref('')
+const veinPath = ref<SVGPathElement | null>(null)
+const inbound = ref<HTMLElement | null>(null)
+const outbound = ref<HTMLElement | null>(null)
+let trip = -1
+let rides: Animation[] = []
+
+// Points along the vein from x0 to x1 in page pixels, with the slope, as transform keyframes. The
+// seam stretches its viewBox to the section, so the vein is sampled in its own units and scaled.
+// The tilt is capped so the words stay readable where the vein hooks at the edge.
+function along(path: SVGPathElement, sx: number, sy: number, x0: number, x1: number): Keyframe[] {
+  const len = path.getTotalLength()
+  const pts: { x: number; y: number }[] = []
+  for (let i = 0; i <= 360; i++) {
+    const p = path.getPointAtLength((len * i) / 360)
+    const x = p.x * sx
+    if (x >= x0 && x <= x1) pts.push({ x, y: p.y * sy })
+  }
+  const first = pts[0].x
+  const span = pts[pts.length - 1].x - first
+  return pts.map((p, i) => {
+    const q = pts[Math.min(i + 1, pts.length - 1)]
+    const r = pts[Math.max(i - 1, 0)]
+    const angle = Math.max(-0.12, Math.min(0.12, Math.atan2(q.y - r.y, q.x - r.x)))
+    return { offset: (p.x - first) / span, transform: `translate(${p.x}px, ${p.y}px) rotate(${angle}rad)` }
+  })
+}
+
+function fade(frames: Keyframe[], into: boolean): Keyframe[] {
+  return frames.map((f) => {
+    const t = f.offset as number
+    return { ...f, opacity: into ? Math.min(1, t / 0.15) : Math.min(1, (1 - t) / 0.3) }
+  })
+}
+
+function nextTrip() {
+  let n = Math.floor(Math.random() * trips.length)
+  if (n === trip) n = (n + 1) % trips.length
+  result.value = trip < 0 ? '' : trips[trip][1]
+  trip = n
+  query.value = trips[n][0]
+}
+
+// The words hang to the left of the point that rides the vein: a query starts whole at the left
+// edge and rides until it is under the terminal; a result starts under it and rides out to the edge.
+function ride(el: HTMLElement, set: HTMLElement) {
+  rides.forEach((a) => a.cancel())
+  rides = []
+  const path = veinPath.value
+  const words = inbound.value?.firstElementChild as HTMLElement | null
+  const box = el.getBoundingClientRect()
+  const term = set.getBoundingClientRect()
+  const left = term.left - box.left
+  const right = term.right - box.left
+  el.classList.toggle('cramped', left < 190)
+  if (!path || !words || left < 190 || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  const w = words.offsetWidth
+  const sx = box.width / W
+  const sy = box.height / H
+  const duration = (left / 60) * 1000
+  const go = (to: HTMLElement | null, frames: Keyframe[]) =>
+    to?.animate(frames, { duration, endDelay: 700, easing: 'linear' })
+  const a = go(inbound.value, fade(along(path, sx, sy, w, left + w), true))
+  const b = go(outbound.value, fade(along(path, sx, sy, right - 6, box.width - 8), false))
+  if (!a || !b) return
+  rides = [a, b]
+  if (el.classList.contains('asleep')) rides.forEach((r) => r.pause())
+  a.onfinish = () => {
+    nextTrip()
+    nextTick(() => ride(el, set))
+  }
+}
+
+// Off screen, the section's animations pause.
 const face = ref<HTMLElement | null>(null)
+const setting = ref<HTMLElement | null>(null)
 // The server can't know the visitor's theme, so the toggle's label waits for the browser.
 const mounted = ref(false)
 let stopWatching = () => {}
@@ -118,10 +207,22 @@ onMounted(() => {
   chosen.value = installFor(navigator.userAgent)
   onWindows.value = /Windows/.test(navigator.userAgent)
   const el = face.value
-  if (!el) return
-  const seen = new IntersectionObserver(([entry]) => el.classList.toggle('asleep', !entry.isIntersecting))
+  const set = setting.value
+  if (!el || !set) return
+  const seen = new IntersectionObserver(([entry]) => {
+    el.classList.toggle('asleep', !entry.isIntersecting)
+    rides.forEach((r) => (entry.isIntersecting ? r.play() : r.pause()))
+  })
   seen.observe(el)
-  stopWatching = () => seen.disconnect()
+  nextTrip()
+  nextTrip()
+  const sized = new ResizeObserver(() => ride(el, set))
+  sized.observe(el)
+  stopWatching = () => {
+    seen.disconnect()
+    sized.disconnect()
+    rides.forEach((a) => a.cancel())
+  }
 })
 onBeforeUnmount(() => stopWatching())
 
@@ -219,13 +320,15 @@ const features = [
               <path v-for="f in flecks" :key="f.key" :d="f.d" :style="{ animationDelay: f.delay }" />
             </g>
             <path class="vein-glow" :d="vein" />
-            <path class="vein" :d="vein" />
+            <path ref="veinPath" class="vein" :d="vein" />
             <path class="pulse glow" :d="vein" pathLength="1" />
             <path class="pulse" :d="vein" pathLength="1" />
             <path class="pulse late" :d="vein" pathLength="1" />
           </svg>
+          <span ref="inbound" class="ride query"><span>{{ query }}</span></span>
+          <span ref="outbound" class="ride result"><span>{{ result }}</span></span>
         </div>
-        <div class="set">
+        <div ref="setting" class="set">
           <Terminal capture="repl" title="quarry shop.db"
             label="A quarry REPL session: a join query with a table of results, then column completion for an alias" />
         </div>
@@ -652,8 +755,51 @@ h1 {
 @keyframes twinkle {
   50% { opacity: 0.32; }
 }
-/* Light running along the seam, into the terminal and out the other side. */
+/* A query riding the seam into the terminal, and its result riding out, each pulling a streak of
+   light. The script moves the outer span along the vein; the words sit just above the wire. */
+.ride {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+.ride::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: -1.5px;
+  width: 90px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(to right, transparent, currentColor);
+}
+.ride > span {
+  position: absolute;
+  bottom: 6px;
+  right: -6px;
+  font: 500 11.5px/1 var(--vp-font-family-mono);
+  white-space: nowrap;
+}
+.query {
+  color: #0a78a8;
+}
+.result {
+  color: #a86b0c;
+}
+.dark .query {
+  color: #9be3ff;
+}
+.dark .result {
+  color: #e0af68;
+}
+.cramped .ride {
+  display: none;
+}
+/* Where a query can't fit beside the terminal, plain light runs along the seam instead. */
 .pulse {
+  display: none;
   fill: none;
   stroke: #0fa3d6;
   stroke-width: 3;
@@ -661,6 +807,9 @@ h1 {
   stroke-dasharray: 0.05 0.95;
   stroke-dashoffset: 1;
   animation: seam 7.5s linear infinite;
+}
+.cramped .pulse {
+  display: inline;
 }
 .dark .pulse {
   stroke: #c9f3ff;
@@ -913,8 +1062,9 @@ dd {
   .zoom {
     animation: none;
   }
+  .ride,
   .pulse {
-    display: none;
+    display: none !important;
   }
 }
 </style>
